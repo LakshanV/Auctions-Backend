@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Prisma generated client
+database/generated/
+**/.prisma/
+
+# Env & secrets (never commit real secrets — see docs/15)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Ephemeral local Postgres data dir used for verification
+.localdb/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

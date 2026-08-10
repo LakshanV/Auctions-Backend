@@ -1,0 +1,46 @@
+{
+  "name": "singha-auctions-backend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Singha Auctions V2 — backend (NestJS API + BullMQ worker). Supabase-backed, Railway-hostable.",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "build": "turbo run build --filter=@singha/api --filter=@singha/worker",
+    "start": "node apps/api/dist/main.js",
+    "start:worker": "node apps/worker/dist/main.js",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,js,mjs,cjs,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,mjs,cjs,json,md,yml,yaml}\"",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run test",
+    "db:generate": "pnpm --filter @singha/database run generate",
+    "db:migrate:deploy": "pnpm --filter @singha/database run migrate:deploy",
+    "supabase:deploy": "dotenv -e .env -- pnpm --filter @singha/database exec prisma migrate deploy",
+    "supabase:seed": "dotenv -e .env -- pnpm --filter @singha/database run seed",
+    "demo:seed": "dotenv -e .env -- pnpm --filter @singha/database run seed:demo",
+    "test:db": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm db:migrate:deploy && pnpm --filter @singha/database run test\"",
+    "test:e2e": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-data-core.mjs\"",
+    "test:auction": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-auction.mjs\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "dotenv-cli": "^7.4.4",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@singha/worker",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@singha/config": "workspace:*",
+    "@singha/contracts": "workspace:*",
+    "@singha/database": "workspace:*",
+    "@singha/domain": "workspace:*",
+    "@singha/observability": "workspace:*",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

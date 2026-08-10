@@ -1,0 +1,431 @@
+// Singha Auctions V2 — Phase 0 stable data core.
+// Non-negotiable rules (docs/04): permanent records survive app rewrites; IDs are
+// opaque ULIDs minted by the app; audit + financial history is append-only;
+// original media is immutable; integration is via a transactional outbox.
+//
+// Scope of this schema = Phase 0 foundations only: identity, inventory, media
+// provenance, audit, outbox and platform config. Later phases add auction, EOI,
+// commerce, live, etc. via ADDITIVE migrations (expand-migrate-verify-contract).
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Direct (non-pooled) connection for migrations — Supabase pooler-safe.
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum CustomerStatus {
+  prospect
+  active
+  suspended
+  closed
+}
+
+enum KycStatus {
+  none
+  pending
+  verified
+  rejected
+}
+
+enum ChannelType {
+  web
+  whatsapp
+  facebook
+  instagram
+  email
+  sms
+}
+
+enum OrgRole {
+  owner
+  admin
+  staff
+}
+
+enum AssetLifecycle {
+  draft
+  in_intake
+  available
+  reserved
+  sold
+  withdrawn
+  archived
+}
+
+enum SaleMethod {
+  TIMED_AUCTION
+  EXPRESSION_OF_INTEREST
+  BUY_NOW
+  MAKE_OFFER
+  SEALED_TENDER
+  LIVE_HYBRID
+}
+
+enum ListingStatus {
+  draft
+  submitted
+  review
+  changes_required
+  approved
+  scheduled
+  live
+  ended
+  sold
+  unsold
+  withdrawn
+}
+
+enum MediaKind {
+  image
+  video
+  document
+  video_thumbnail
+}
+
+enum MediaStatus {
+  uploading
+  processing
+  ready
+  failed
+  archived
+}
+
+enum ActorType {
+  customer
+  staff
+  system
+  ai
+}
+
+enum OutboxStatus {
+  pending
+  dispatched
+  failed
+}
+
+// ---------------------------------------------------------------------------
+// Identity (docs/05) — verified facts only; AI intelligence lives elsewhere.
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String         @id
+  status    CustomerStatus @default(prospect)
+  legalName String?        @map("legal_name")
+  email     String?        @unique
+  phone     String?        @unique
+  kycStatus KycStatus      @default(none) @map("kyc_status")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  externalIdentities   ExternalIdentity[]
+  organizationMembers  OrganizationMember[]
+  ownedAssets          Asset[]
+
+  @@map("customer")
+}
+
+// External channel identities NEVER replace customer_id (docs/05).
+model ExternalIdentity {
+  id         String      @id
+  customerId String      @map("customer_id")
+  channel    ChannelType
+  externalId String      @map("external_id")
+  verifiedAt DateTime?   @map("verified_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([channel, externalId])
+  @@index([customerId])
+  @@map("external_identity")
+}
+
+model Organization {
+  id            String   @id
+  legalName     String   @map("legal_name")
+  publicRef     String   @unique @map("public_ref")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  members OrganizationMember[]
+
+  @@map("organization")
+}
+
+model OrganizationMember {
+  id             String   @id
+  organizationId String   @map("organization_id")
+  customerId     String   @map("customer_id")
+  role           OrgRole  @default(staff)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+
+  @@unique([organizationId, customerId])
+  @@index([customerId])
+  @@map("organization_member")
+}
+
+// ---------------------------------------------------------------------------
+// Inventory & media (docs/04, docs/06) — Asset is enduring; Listing is a sale
+// attempt; original media is immutable, derivatives carry provenance.
+// ---------------------------------------------------------------------------
+
+model Asset {
+  id              String         @id
+  category        String
+  schemaVersion   Int            @default(1) @map("schema_version")
+  // Category-specific attributes, validated against the versioned category
+  // schema (docs/06). Nullable + additive so pre-existing assets stay valid.
+  attributes      Json?
+  lifecycle       AssetLifecycle @default(draft)
+  ownerCustomerId String?        @map("owner_customer_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  owner    Customer?     @relation(fields: [ownerCustomerId], references: [id])
+  listings Listing[]
+  media    MediaObject[]
+
+  @@index([category])
+  @@index([ownerCustomerId])
+  @@map("asset")
+}
+
+model Listing {
+  id         String        @id
+  assetId    String        @map("asset_id")
+  saleMethod SaleMethod    @map("sale_method")
+  status     ListingStatus @default(draft)
+  publicRef  String        @unique @map("public_ref")
+  title      String?
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  asset   Asset    @relation(fields: [assetId], references: [id])
+  auction Auction?
+
+  @@index([assetId])
+  @@index([status])
+  @@map("listing")
+}
+
+model MediaObject {
+  id         String      @id
+  assetId    String      @map("asset_id")
+  kind       MediaKind
+  storageKey String      @map("storage_key")
+  status     MediaStatus @default(uploading)
+  // Originals are immutable; this stays true and is enforced by convention +
+  // the derivative pointer below. Enhanced/processed media are separate rows.
+  isOriginal Boolean     @default(true) @map("is_original")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  asset       Asset             @relation(fields: [assetId], references: [id])
+  derivatives MediaDerivative[]
+
+  @@index([assetId])
+  @@map("media_object")
+}
+
+model MediaDerivative {
+  id            String   @id
+  sourceMediaId String   @map("source_media_id")
+  method        String
+  storageKey    String   @map("storage_key")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  source MediaObject @relation(fields: [sourceMediaId], references: [id])
+
+  @@index([sourceMediaId])
+  @@map("media_derivative")
+}
+
+// ---------------------------------------------------------------------------
+// Audit (docs/04, docs/15) — APPEND-ONLY business evidence. A database trigger
+// (see the audit_append_only migration) rejects UPDATE and DELETE.
+// ---------------------------------------------------------------------------
+
+model AuditEvent {
+  id            String    @id
+  actorType     ActorType @map("actor_type")
+  actorId       String?   @map("actor_id")
+  action        String
+  targetType    String    @map("target_type")
+  targetId      String    @map("target_id")
+  correlationId String    @map("correlation_id")
+  reason        String?
+  before        Json?
+  after         Json?
+  occurredAt    DateTime  @default(now()) @map("occurred_at")
+
+  @@index([targetType, targetId])
+  @@index([correlationId])
+  @@map("audit_event")
+}
+
+// ---------------------------------------------------------------------------
+// Transactional outbox + platform config (docs/16, docs/18, docs/20)
+// ---------------------------------------------------------------------------
+
+model OutboxEvent {
+  id             String       @id
+  eventId        String       @unique @map("event_id")
+  name           String
+  aggregateType  String       @map("aggregate_type")
+  aggregateId    String       @map("aggregate_id")
+  correlationId  String       @map("correlation_id")
+  causationId    String?      @map("causation_id")
+  payload        Json
+  payloadVersion Int          @default(1) @map("payload_version")
+  status         OutboxStatus @default(pending)
+  attempts       Int          @default(0)
+  occurredAt     DateTime     @map("occurred_at")
+  dispatchedAt   DateTime?    @map("dispatched_at")
+  lastError      String?      @map("last_error")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("outbox_event")
+}
+
+// Idempotency for bids/payments/purchases/publication (docs/16).
+model IdempotencyRecord {
+  id         String    @id
+  key        String    @unique
+  scope      String
+  resultHash String?   @map("result_hash")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  expiresAt  DateTime? @map("expires_at")
+
+  @@index([scope])
+  @@map("idempotency_record")
+}
+
+model FeatureFlag {
+  id          String   @id
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flag")
+}
+
+// Business config with an explicit "needs product-owner approval" marker (docs/20).
+model BusinessConfig {
+  id               String   @id
+  key              String   @unique
+  value            String
+  approvalRequired Boolean  @default(true) @map("approval_required")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("business_config")
+}
+
+// ---------------------------------------------------------------------------
+// Auction engine (docs/07) — server-authoritative. UI is never the source of
+// truth. The Bid ledger is append-only (a DB trigger rejects UPDATE/DELETE);
+// corrections are new reversal rows. Proxy maximums are PRIVATE and never
+// exposed. Money is integer minor units.
+// ---------------------------------------------------------------------------
+
+enum AuctionStatus {
+  scheduled
+  open
+  paused
+  closed
+  cancelled
+}
+
+enum BidSource {
+  online
+  floor
+  phone
+  absentee
+  proxy
+  auctioneer
+}
+
+enum BidStatus {
+  accepted
+  rejected
+  reversed
+}
+
+model Auction {
+  id                  String        @id
+  listingId           String        @unique @map("listing_id")
+  status              AuctionStatus @default(scheduled)
+  currency            String        @default("LKR")
+  startsAt            DateTime      @map("starts_at")
+  endsAt              DateTime      @map("ends_at")
+  openingBidMinor     BigInt        @map("opening_bid_minor")
+  reserveMinor        BigInt?       @map("reserve_minor")
+  reserveVisible      Boolean       @default(false) @map("reserve_visible")
+  incrementMinor      BigInt        @map("increment_minor")
+  softCloseTriggerSec Int           @default(10) @map("soft_close_trigger_sec")
+  softCloseExtendSec  Int           @default(20) @map("soft_close_extend_sec")
+  buyerPremiumPct     Float         @default(0) @map("buyer_premium_pct")
+  // Denormalized realtime projection (rebuildable from the ledger).
+  currentBidMinor     BigInt?       @map("current_bid_minor")
+  highBidderId        String?       @map("high_bidder_id")
+  highBidId           String?       @map("high_bid_id")
+  extendedCount       Int           @default(0) @map("extended_count")
+  version             Int           @default(0)
+  winnerCustomerId    String?       @map("winner_customer_id")
+  soldAt              DateTime?     @map("sold_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  listing Listing     @relation(fields: [listingId], references: [id])
+  bids    Bid[]
+  maxes   BidderMax[]
+
+  @@index([status, endsAt])
+  @@map("auction")
+}
+
+// Append-only bid ledger (docs/04). Each visible price the engine sets is a row.
+model Bid {
+  id             String    @id
+  auctionId      String    @map("auction_id")
+  sequence       Int
+  bidderId       String    @map("bidder_id")
+  amountMinor    BigInt    @map("amount_minor")
+  source         BidSource @default(online)
+  status         BidStatus @default(accepted)
+  idempotencyKey String?   @map("idempotency_key")
+  placedAt       DateTime  @default(now()) @map("placed_at")
+
+  auction Auction @relation(fields: [auctionId], references: [id])
+
+  @@unique([auctionId, sequence])
+  @@index([auctionId])
+  @@map("bid")
+}
+
+// Private per-bidder proxy maximum (never exposed to other bidders / analytics).
+model BidderMax {
+  id        String   @id
+  auctionId String   @map("auction_id")
+  bidderId  String   @map("bidder_id")
+  maxMinor  BigInt   @map("max_minor")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  auction Auction @relation(fields: [auctionId], references: [id])
+
+  @@unique([auctionId, bidderId])
+  @@index([auctionId])
+  @@map("bidder_max")
+}

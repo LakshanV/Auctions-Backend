@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+out
+coverage
+.turbo
+pnpm-lock.yaml
+database/generated
+database/prisma/migrations
+*.tsbuildinfo
+
+# Canonical AI development pack — kept verbatim as split from the source pack.
+CLAUDE.md
+docs/*.md

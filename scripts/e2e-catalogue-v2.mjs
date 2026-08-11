@@ -230,6 +230,13 @@ async function main() {
       dashAnon.status === 401 || dashAnon.status === 403,
       `dashboard requires auth (got ${dashAnon.status})`,
     );
+    // A non-Singha, non-Supabase bearer must fall through to anonymous (proves
+    // the two-issuer PrincipalMiddleware fallback path doesn't crash).
+    const dashGarbage = await v2('/me/dashboard', { token: 'not.a.valid.jwt' });
+    check(
+      dashGarbage.status === 401 || dashGarbage.status === 403,
+      `invalid bearer → anonymous, not 500 (got ${dashGarbage.status})`,
+    );
     const dash = await v2('/me/dashboard', { token: buyerToken });
     check(
       dash.status === 200 && !!dash.json?.strip && Array.isArray(dash.json?.groups),

@@ -17,6 +17,8 @@ export const DomainEventName = {
   AuctionClosed: 'AUCTION_CLOSED',
   SaleConfirmed: 'SALE_CONFIRMED',
   EoiSubmitted: 'EOI_SUBMITTED',
+  EoiReviewed: 'EOI_REVIEWED',
+  EoiWithdrawn: 'EOI_WITHDRAWN',
   EoiAccepted: 'EOI_ACCEPTED',
   InvoiceIssued: 'INVOICE_ISSUED',
   PaymentConfirmed: 'PAYMENT_CONFIRMED',

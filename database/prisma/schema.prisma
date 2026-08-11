@@ -126,9 +126,9 @@ model Customer {
   createdAt DateTime       @default(now()) @map("created_at")
   updatedAt DateTime       @updatedAt @map("updated_at")
 
-  externalIdentities   ExternalIdentity[]
-  organizationMembers  OrganizationMember[]
-  ownedAssets          Asset[]
+  externalIdentities  ExternalIdentity[]
+  organizationMembers OrganizationMember[]
+  ownedAssets         Asset[]
 
   @@map("customer")
 }
@@ -150,11 +150,11 @@ model ExternalIdentity {
 }
 
 model Organization {
-  id            String   @id
-  legalName     String   @map("legal_name")
-  publicRef     String   @unique @map("public_ref")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id        String   @id
+  legalName String   @map("legal_name")
+  publicRef String   @unique @map("public_ref")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   members OrganizationMember[]
 
@@ -214,6 +214,7 @@ model Listing {
 
   asset   Asset    @relation(fields: [assetId], references: [id])
   auction Auction?
+  eois    Eoi[]
 
   @@index([assetId])
   @@index([status])
@@ -428,4 +429,59 @@ model BidderMax {
   @@unique([auctionId, bidderId])
   @@index([auctionId])
   @@map("bidder_max")
+}
+
+enum EoiStatus {
+  submitted
+  under_review
+  shortlisted
+  negotiating
+  accepted
+  declined
+  withdrawn
+  expired
+}
+
+// Expression of Interest (docs/07). A PRIVATE structured submission: amount,
+// message and conditions are visible only to the submitter and authorised
+// staff, never to competing bidders. Status changes are appended to EoiEvent.
+model Eoi {
+  id          String    @id
+  listingId   String    @map("listing_id")
+  customerId  String    @map("customer_id")
+  status      EoiStatus @default(submitted)
+  amountMinor BigInt?   @map("amount_minor")
+  currency    String    @default("LKR")
+  message     String?
+  conditions  String?
+  expiresAt   DateTime? @map("expires_at")
+  reviewNote  String?   @map("review_note")
+  decidedAt   DateTime? @map("decided_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  listing Listing    @relation(fields: [listingId], references: [id])
+  events  EoiEvent[]
+
+  @@index([listingId])
+  @@index([customerId])
+  @@index([status])
+  @@map("eoi")
+}
+
+// Append-only status history for an EOI (immutable audit of negotiation).
+model EoiEvent {
+  id         String    @id
+  eoiId      String    @map("eoi_id")
+  fromStatus EoiStatus @map("from_status")
+  toStatus   EoiStatus @map("to_status")
+  note       String?
+  actorType  ActorType @map("actor_type")
+  actorId    String?   @map("actor_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  eoi Eoi @relation(fields: [eoiId], references: [id])
+
+  @@index([eoiId])
+  @@map("eoi_event")
 }

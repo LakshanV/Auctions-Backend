@@ -143,3 +143,31 @@ export const placeBidSchema = z.object({
   idempotencyKey: z.string().min(1).max(200).optional(),
 });
 export type PlaceBidInput = z.infer<typeof placeBidSchema>;
+
+// --- Expression of Interest (docs/07 — EOI) --------------------------------
+// A private, structured submission. Values are NEVER exposed to competing
+// bidders; only the submitter and authorised staff can read them.
+export const submitEoiSchema = z.object({
+  listingId: z.string().min(1),
+  /** Optional indicative amount (minor units). Some listings require it. */
+  amountMinor: z.number().int().positive().nullable().default(null),
+  currency: z.string().length(3).default('LKR'),
+  message: z.string().max(2000).optional(),
+  conditions: z.string().max(2000).optional(),
+  /** Optional expiry of the offer's validity. */
+  expiresAt: z.string().datetime().nullable().default(null),
+});
+export type SubmitEoiInput = z.infer<typeof submitEoiSchema>;
+
+export const eoiReviewDecisionValues = [
+  'review',
+  'shortlist',
+  'negotiate',
+  'accept',
+  'decline',
+] as const;
+export const reviewEoiSchema = z.object({
+  decision: z.enum(eoiReviewDecisionValues),
+  note: z.string().max(2000).optional(),
+});
+export type ReviewEoiInput = z.infer<typeof reviewEoiSchema>;

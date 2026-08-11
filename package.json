@@ -26,7 +26,8 @@
     "demo:seed": "dotenv -e .env -- pnpm --filter @singha/database run seed:demo",
     "test:db": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm db:migrate:deploy && pnpm --filter @singha/database run test\"",
     "test:e2e": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-data-core.mjs\"",
-    "test:auction": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-auction.mjs\""
+    "test:auction": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-auction.mjs\"",
+    "test:eoi": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-eoi.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

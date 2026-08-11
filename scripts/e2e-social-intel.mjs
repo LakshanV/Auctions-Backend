@@ -175,11 +175,12 @@ async function main() {
     );
 
     const comps = await get('/intelligence/comparables?category=vehicles', { token: staffToken });
+    // Range must span this test's two sales (2M, 3M); a shared DB may hold more.
     check(
       comps.json?.count >= 2 &&
-        comps.json?.suggestedRange?.minMinor === 2_000_000 &&
-        comps.json?.suggestedRange?.maxMinor === 3_000_000,
-      `comparables give a price range (min=${comps.json?.suggestedRange?.minMinor}, max=${comps.json?.suggestedRange?.maxMinor})`,
+        comps.json?.suggestedRange?.minMinor <= 2_000_000 &&
+        comps.json?.suggestedRange?.maxMinor >= 3_000_000,
+      `comparables give a price range spanning the sales (min=${comps.json?.suggestedRange?.minMinor}, max=${comps.json?.suggestedRange?.maxMinor})`,
     );
   } finally {
     child.kill('SIGKILL');

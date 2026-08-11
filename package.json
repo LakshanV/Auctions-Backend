@@ -33,7 +33,8 @@
     "test:connect": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-connect.mjs\"",
     "test:ai": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-ai.mjs\"",
     "test:social-intel": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-social-intel.mjs\"",
-    "test:live": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-live.mjs\""
+    "test:live": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-live.mjs\"",
+    "test:acceptance": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-data-core.mjs && node scripts/e2e-auction.mjs && node scripts/e2e-eoi.mjs && node scripts/e2e-exchange.mjs && node scripts/e2e-commerce.mjs && node scripts/e2e-connect.mjs && node scripts/e2e-ai.mjs && node scripts/e2e-social-intel.mjs && node scripts/e2e-live.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

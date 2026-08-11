@@ -1,74 +1,44 @@
 # IMPLEMENTATION STATUS
 
-_Phases 0–2 COMPLETE and verified._ (Phase 0 foundations, Phase 1 data core,
-Phase 2 timed auction engine.)
+_Phases 0–11 COMPLETE and verified; Phase 12 (hardening/launch) in progress._
+Backend (this repo) is **feature-complete** against the pack. Frontend Phases 4–5
+live in the `Auctions New` repo.
 
-## Phase 0 checklist
+## Phase gates
 
-- [x] Monorepo, tooling, CI, observability baseline, generated docs
-- [x] Domain-boundary scaffold; stable data-core schema; migrations; design system
+| Phase | Scope | Status | Gate |
+| ----- | ----- | ------ | ---- |
+| 0 | Monorepo, CI, observability, domain boundaries, design system | ✅ | checks |
+| 1 | Data core: identity/seller/asset/listing/media/audit/outbox + RBAC | ✅ | permissions + migration + `test:e2e` |
+| 2 | Timed auction engine (row-locked bids, proxy, soft-close, winner) | ✅ | `test:auction` |
+| 3 | EOI + Exchange (Buy Now / Make Offer / Sealed Tender) | ✅ | `test:eoi`, `test:exchange` |
+| 4 | Public site: AuctionFlow Cube/Grid/List + buyer dashboard | ✅ (web) | typecheck + `next build` |
+| 5 | Seller listing wizard, seller dashboard, admin approvals | ✅ (web) | typecheck + `next build` |
+| 6 | Commerce: invoice→payment→release→fulfilment→settlement, Evidence Pack | ✅ | `test:commerce` |
+| 7 | Singha Connect (omnichannel + mock adapters; rule-11 bid intents) | ✅ | `test:connect` |
+| 8 | Singha AI Core (mock provider, derived records, no domain bypass) | ✅ | `test:ai` |
+| 9 | Social Publisher (mock Meta publishing) | ✅ | `test:social-intel` |
+| 10 | Asset Intelligence / Market Pulse (derived read models) | ✅ | `test:social-intel` |
+| 11 | Singha Live (mock IVS/YouTube; one-ledger hybrid) | ✅ | `test:live` |
+| 12 | Hardening / load / security / V1 migration / launch | 🚧 | acceptance |
 
-## Phase 1 checklist (gate: permissions + migration tests)
+## Acceptance
 
-- [x] Identity/customer — register, read (self/permission), external identities, KYC
-- [x] Organizations/sellers — create org (owner member), add members (ownership-authorized)
-- [x] Assets — create/update with **versioned category-schema validation**
-- [x] Listings — create + guarded lifecycle (submit → review → publish)
-- [x] Category schemas — vehicles/machinery/gems/property/bulk/general (v1)
-- [x] Media/docs — register immutable original + derivative provenance
-- [x] Audit — every consequential command writes an append-only audit entry
-- [x] Outbox — domain events written **atomically** with state (unit of work)
-- [x] **Server-side RBAC** — JWT principal + permissions guard + ownership checks
-- [x] **Migration tests** — additive `asset.attributes`, upgrade-safety, trigger intact
-- [x] E2E — full seller→staff flow proving permission 403s + outbox/audit
+`pnpm test:acceptance` boots one throwaway Postgres, applies all migrations, and
+runs **every** E2E suite in sequence — all green:
+data-core, auction, EOI, exchange, commerce, connect, AI, social+intelligence, live.
 
-## Phase 2 checklist (gate: concurrency + soft-close E2E)
+## Credential-gated providers (mock adapters, swap via one DI binding)
 
-- [x] Auction config — configure/open/close from a listing (staff)
-- [x] **Append-only bid ledger** — DB trigger rejects UPDATE/DELETE
-- [x] Increments + reserve (+ visibility) + opening bid
-- [x] **Proxy / max bidding** — private maxima; deterministic visible price
-- [x] **Concurrency** — row-locked bids (`SELECT…FOR UPDATE`) serialize
-- [x] **Soft close** — bids in the trigger window extend the end time
-- [x] Realtime projection — privacy-safe poll endpoint (SSE/WS adapter later)
-- [x] Close + winner — reserve-met sale vs passed-in, events emitted
-- [x] E2E — concurrency (exactly-one-accepted burst), proxy, soft-close, winner
+- Connect channels (WhatsApp/Meta/SMS/email) → `MockChannelProvider`
+- AI text/vision → `MockAiProvider`
+- Social publishing (Meta Graph) → `MockSocialPublisher`
+- Live ingest/simulcast (Amazon IVS / YouTube) → `MockLiveStreamProvider`
 
-## API surface (all under `/api/v1`)
+## Phase 12 — remaining, and what needs escalation
 
-| Command               | Route                                     | AuthZ                          |
-| --------------------- | ----------------------------------------- | ------------------------------ |
-| registerCustomer      | `POST /customers`                         | public                         |
-| getCustomer           | `GET /customers/:id`                      | self or `customer:read`        |
-| linkExternalIdentity  | `POST /customers/:id/external-identities` | self or `customer:manage`      |
-| setKyc                | `POST /customers/:id/kyc`                 | `kyc:manage`                   |
-| createOrganization    | `POST /organizations`                     | `organization:create`          |
-| addOrganizationMember | `POST /organizations/:id/members`         | owner or `organization:manage` |
-| createAsset           | `POST /assets`                            | `asset:create`                 |
-| updateAssetAttributes | `PATCH /assets/:id/attributes`            | owner or `asset:manage`        |
-| createListing         | `POST /listings`                          | `listing:create`               |
-| submitListing         | `POST /listings/:id/submit`               | `listing:submit`               |
-| reviewListing         | `POST /listings/:id/review`               | `listing:review`               |
-| publishListing        | `POST /listings/:id/publish`              | `listing:publish`              |
-| registerMedia         | `POST /assets/:id/media`                  | `media:manage`                 |
-| addDerivative         | `POST /media/:id/derivatives`             | `media:manage`                 |
-| configureAuction      | `POST /auctions`                          | `auction:configure`            |
-| openAuction           | `POST /auctions/:id/open`                 | `auction:operate`              |
-| placeBid              | `POST /auctions/:id/bids`                 | `bid:place`                    |
-| closeAuction          | `POST /auctions/:id/close`                | `auction:operate`              |
-| auctionState          | `GET /auctions/:id/state`                 | public (privacy-safe)          |
-| devToken (non-prod)   | `POST /dev/token`                         | dev only                       |
-
-## Not started (later phases)
-
-EOI/Exchange (3), public site + AuctionFlow Cube (4),
-seller/admin UI (5), commerce/settlement (6), Singha Connect (7), AI Core (8),
-Social Publisher (9), Asset Intelligence (10), Singha Live (11), hardening +
-V1 migration + launch (12).
-
-## Gate status
-
-Phases 1 and 2 gates **passed** via `pnpm run check` (format, lint, typecheck,
-build, unit), `pnpm run test:db` (migrations and integration), `pnpm run test:e2e`
-(data-core permissions + outbox/audit) and `pnpm run test:auction` (concurrency,
-proxy, soft-close, winner). Ready for Phase 3 (EOI + Exchange).
+- Load testing (needs a target env), backup-restore drill, formal security review.
+- **V1 → V2 data migration** — requires V1 export/DB access (developer/owner escalation).
+- Real provider credentials (WhatsApp/Meta/AI/IVS/YouTube/payment gateway) —
+  vendor accounts + secrets (escalation); adapters are ready.
+- A production auth/IdP for staff/seller roles (dev uses `/dev/token` + demo login).

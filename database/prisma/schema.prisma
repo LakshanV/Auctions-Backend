@@ -912,3 +912,35 @@ model SocialPublication {
   @@index([status])
   @@map("social_publication")
 }
+
+// ---------------------------------------------------------------------------
+// Singha Live (docs/08) — live/hybrid auction broadcast. The ingest/simulcast
+// providers are behind an adapter (mock until IVS/YouTube access). Live/floor/
+// phone bids all enter the ONE authoritative bid ledger via the auction engine.
+// ---------------------------------------------------------------------------
+
+enum LiveStatus {
+  scheduled
+  live
+  paused
+  ended
+}
+
+model LiveEvent {
+  id             String     @id
+  auctionId      String?    @map("auction_id")
+  title          String
+  status         LiveStatus @default(scheduled)
+  ingestProvider String     @default("mock") @map("ingest_provider")
+  ingestUrl      String?    @map("ingest_url")
+  playbackUrl    String?    @map("playback_url")
+  simulcastUrl   String?    @map("simulcast_url")
+  recordingUrl   String?    @map("recording_url")
+  startedAt      DateTime?  @map("started_at")
+  endedAt        DateTime?  @map("ended_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  @@index([auctionId])
+  @@map("live_event")
+}

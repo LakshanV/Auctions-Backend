@@ -330,3 +330,22 @@ export const createPublicationSchema = z.object({
   scheduledAt: z.string().datetime().optional(),
 });
 export type CreatePublicationInput = z.infer<typeof createPublicationSchema>;
+
+// --- Singha Live (docs/08) -------------------------------------------------
+export const createLiveEventSchema = z.object({
+  title: z.string().min(1).max(200),
+  auctionId: z.string().min(1).optional(),
+});
+export type CreateLiveEventInput = z.infer<typeof createLiveEventSchema>;
+
+/**
+ * A clerk/auctioneer relays a floor/phone/absentee bid into the ONE ledger on
+ * behalf of a registered bidder (docs/07 — all sources, one ledger).
+ */
+export const floorBidSchema = z.object({
+  auctionId: z.string().min(1),
+  bidderCustomerId: z.string().min(1),
+  maxAmountMinor: z.number().int().positive(),
+  source: z.enum(['floor', 'phone', 'absentee', 'auctioneer']).default('floor'),
+});
+export type FloorBidInput = z.infer<typeof floorBidSchema>;

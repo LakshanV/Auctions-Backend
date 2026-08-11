@@ -44,6 +44,7 @@ export const Permission = {
   AiUse: 'ai:use',
   SocialOperate: 'social:operate',
   IntelligenceRead: 'intelligence:read',
+  LiveOperate: 'live:operate',
   AuditRead: 'audit:read',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -87,6 +88,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.AiUse,
     P.SocialOperate,
     P.IntelligenceRead,
+    P.LiveOperate,
   ],
   [Role.Accounts]: [P.CustomerRead, P.CommerceOperate],
   [Role.Support]: [P.CustomerRead, P.ConnectOperate],

@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { PLATFORM_CURRENCY } from '@singha/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { type Principal } from '../../shared/auth/principal';
 
@@ -196,9 +197,11 @@ export class MeService {
         activeBids: openMaxes.length,
         winning: winning.length,
         outbid: outbid.length,
+        // Single-currency total: valid only because the platform launches
+        // LKR-only (see PLATFORM_CURRENCY). Multi-currency must not sum here.
         paymentDueMinor,
         readyForPickup: readyPickup.length,
-        currency: 'LKR',
+        currency: PLATFORM_CURRENCY,
       },
       groups: groups.filter((g) => g.items.length > 0),
     };

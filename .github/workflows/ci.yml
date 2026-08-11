@@ -42,3 +42,14 @@ jobs:
       # A regression here fails the build.
       - name: Security regression suite (S01–S23)
         run: pnpm run test:security
+
+      # Catalogue scale acceptance (pack 01 doc 05): 2000-lot Rubik reachability +
+      # DB-side facets + no full-inventory download.
+      - name: Catalogue scale acceptance
+        run: pnpm run test:scale
+
+      # Public API contract gate (pack 01 doc 08): fails if a public response
+      # drifted from contracts/public-api.contract.json (the shape the frontend
+      # validates its DTOs against). Neither side can drift silently.
+      - name: Public API contract check
+        run: pnpm run contract:check

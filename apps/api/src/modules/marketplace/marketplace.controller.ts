@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
   type CreateListingInput,
   Permission,
@@ -23,6 +23,20 @@ export class MarketplaceController {
     @Body(new ZodBody(createListingSchema)) input: CreateListingInput,
   ) {
     return this.marketplace.createListing(principal, input);
+  }
+
+  /** Seller dashboard — the caller's own listings. */
+  @Get('mine')
+  @RequirePermissions(Permission.ListingCreate)
+  mine(@CurrentActor() principal: Principal) {
+    return this.marketplace.mine(principal);
+  }
+
+  /** Admin approvals — listings awaiting review/publish. */
+  @Get('review-queue')
+  @RequirePermissions(Permission.ListingReview)
+  reviewQueue() {
+    return this.marketplace.reviewQueue();
   }
 
   @Post(':id/submit')

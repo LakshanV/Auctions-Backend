@@ -41,6 +41,47 @@ export class MarketplaceService {
     });
   }
 
+  /** The caller's own listings (assets they own) — seller dashboard. */
+  async mine(principal: Principal) {
+    if (!principal.customerId) return [];
+    const rows = await this.prisma.listing.findMany({
+      where: { asset: { ownerCustomerId: principal.customerId } },
+      orderBy: { createdAt: 'desc' },
+      include: { asset: true },
+    });
+    return rows.map((l) => this.view(l));
+  }
+
+  /** Listings awaiting staff review/publish — admin approvals queue. */
+  async reviewQueue() {
+    const rows = await this.prisma.listing.findMany({
+      where: { status: { in: ['submitted', 'review', 'approved'] } },
+      orderBy: { createdAt: 'asc' },
+      include: { asset: true },
+    });
+    return rows.map((l) => this.view(l));
+  }
+
+  private view(l: {
+    id: string;
+    publicRef: string;
+    title: string | null;
+    saleMethod: string;
+    status: string;
+    createdAt: Date;
+    asset: { category: string };
+  }) {
+    return {
+      id: l.id,
+      publicRef: l.publicRef,
+      title: l.title,
+      saleMethod: l.saleMethod,
+      status: l.status,
+      category: l.asset.category,
+      createdAt: l.createdAt,
+    };
+  }
+
   async submit(principal: Principal, id: string) {
     const listing = await this.requireListing(id);
     assertListingTransition(listing.status, 'submitted');

@@ -107,10 +107,13 @@ export class MeService {
       ...extra,
     });
 
-    // --- Bidding split (open auctions the customer is participating in) -------
+    // --- Auction participation (open + closed) --------------------------------
     const openMaxes = maxes.filter((m) => m.auction.status === 'open');
     const winning = openMaxes.filter((m) => m.auction.highBidderId === customerId);
     const outbid = openMaxes.filter((m) => m.auction.highBidderId !== customerId);
+    const closedMaxes = maxes.filter((m) => m.auction.status === 'closed');
+    const won = closedMaxes.filter((m) => m.auction.winnerCustomerId === customerId);
+    const lost = closedMaxes.filter((m) => m.auction.winnerCustomerId !== customerId);
     const byEndsAsc = <T extends { auction: { endsAt: Date } }>(a: T, b: T) =>
       a.auction.endsAt.getTime() - b.auction.endsAt.getTime();
 
@@ -121,11 +124,27 @@ export class MeService {
         note: `Your max ${m.auction.currency} ${(Number(m.maxMinor) / 100).toLocaleString()}`,
       });
 
-    // --- Payment / pickup -----------------------------------------------------
+    // --- Payment / fulfilment -------------------------------------------------
     const paymentDue = invoices.filter((i) => i.status === 'issued');
+    const paid = invoices.filter((i) => i.status === 'paid');
     const readyPickup = fulfilments.filter((f) => f.state === 'ready_for_pickup');
+    const deliveryPending = fulfilments.filter((f) =>
+      ['pickup_booked', 'in_delivery'].includes(f.state),
+    );
     const paymentDueMinor = paymentDue.reduce((sum, i) => sum + Number(i.amountDueMinor), 0);
 
+    // EOIs surfaced per negotiation stage (pack 01 doc 09 — dedicated bands).
+    const eoiBand = (status: string, key: string, label: string) =>
+      band(
+        key,
+        label,
+        eois
+          .filter((e) => e.status === status)
+          .map((e) => lotOf(e.listing, { amountMinor: num(e.amountMinor) })),
+      );
+
+    // Full command-centre band set (pack 01 doc 09). Empty bands are dropped
+    // below, so a buyer only sees the ones that apply to them.
     const groups: DashboardGroup[] = [
       band(
         'WATCHING',
@@ -139,8 +158,11 @@ export class MeService {
           }),
         ),
       ),
+      band('BIDDING', 'Bidding', [...openMaxes].sort(byEndsAsc).map(auctionLot)),
       band('WINNING', 'Winning', [...winning].sort(byEndsAsc).map(auctionLot)),
       band('OUTBID', 'Outbid', [...outbid].sort(byEndsAsc).map(auctionLot)),
+      band('WON', 'Won at auction', won.map(auctionLot)),
+      band('LOST', 'Lost', lost.map(auctionLot)),
       band(
         'PAYMENT_DUE',
         'Payment due',
@@ -155,24 +177,26 @@ export class MeService {
           ),
       ),
       band(
+        'PAID',
+        'Paid',
+        paid.map((i) =>
+          lotOf(i.listing, { amountMinor: Number(i.amountDueMinor), note: `Invoice ${i.number}` }),
+        ),
+      ),
+      band(
         'READY_FOR_PICKUP',
         'Ready for pickup',
         readyPickup.map((f) => lotOf(f.listing)),
       ),
       band(
-        'EOI_SUBMITTED',
-        'Expressions of interest',
-        eois
-          .filter((e) =>
-            ['submitted', 'under_review', 'shortlisted', 'negotiating'].includes(e.status),
-          )
-          .map((e) =>
-            lotOf(e.listing, {
-              amountMinor: num(e.amountMinor),
-              note: e.status.replace(/_/g, ' '),
-            }),
-          ),
+        'DELIVERY_PENDING',
+        'Delivery pending',
+        deliveryPending.map((f) => lotOf(f.listing, { note: f.state.replace(/_/g, ' ') })),
       ),
+      eoiBand('submitted', 'EOI_SUBMITTED', 'EOI submitted'),
+      eoiBand('under_review', 'EOI_UNDER_REVIEW', 'EOI under review'),
+      eoiBand('shortlisted', 'EOI_SHORTLISTED', 'EOI shortlisted'),
+      eoiBand('negotiating', 'EOI_NEGOTIATING', 'EOI negotiating'),
       band(
         'OFFERS_ACTIVE',
         'Offers',
@@ -187,7 +211,7 @@ export class MeService {
       ),
       band(
         'PAST_PURCHASES',
-        'Won & purchased',
+        'Past purchases',
         sales.map((s) => lotOf(s.listing, { amountMinor: Number(s.amountMinor) })),
       ),
     ];

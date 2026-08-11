@@ -23,6 +23,31 @@ function check(cond, msg) {
   }
 }
 
+/** Open an SSE stream and resolve the first `data:` frame parsed as JSON. */
+async function firstSseFrame(url, timeoutMs = 6000) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers: { accept: 'text/event-stream' }, signal: ac.signal });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const line = buf.split('\n').find((l) => l.startsWith('data:'));
+      if (line) return JSON.parse(line.slice('data:'.length).trim());
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    ac.abort();
+  }
+}
+
 async function req(method, path, { token, body } = {}) {
   const res = await fetch(`${API}${path}`, {
     method,
@@ -168,6 +193,13 @@ async function main() {
       `price after burst = 510000 (got ${afterBurst.json?.currentBidMinor})`,
     );
     check(afterBurst.json?.bidCount === 2, `ledger has 2 rows (got ${afterBurst.json?.bidCount})`);
+
+    // Realtime SSE stream (doc 17): the first frame carries the live state.
+    const frame = await firstSseFrame(`${BASE}/api/v1/auctions/${auctionId}/stream`);
+    check(
+      frame?.id === auctionId && frame?.currentBidMinor === 510_000,
+      `SSE stream pushes live state (bid=${frame?.currentBidMinor})`,
+    );
 
     // Proxy: a higher B max still cannot beat A's larger hidden max.
     const b2 = await post(`/auctions/${auctionId}/bids`, {

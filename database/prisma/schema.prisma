@@ -222,6 +222,9 @@ model Listing {
   sale       Sale?
   offers     Offer[]
   tenderBids TenderBid[]
+  invoice    Invoice?
+  fulfilment Fulfilment?
+  settlement Settlement?
 
   @@index([assetId])
   @@index([status])
@@ -592,4 +595,141 @@ model EoiEvent {
 
   @@index([eoiId])
   @@map("eoi_event")
+}
+
+// ---------------------------------------------------------------------------
+// Commerce (docs/14) — invoice, append-only financial ledger, payment, release,
+// fulfilment and seller settlement. A won/accepted listing is NOT a completed
+// transaction; the platform continues through this pipeline.
+// ---------------------------------------------------------------------------
+
+enum InvoiceStatus {
+  issued
+  paid
+  void
+}
+
+model Invoice {
+  id                 String        @id
+  number             String        @unique
+  listingId          String        @unique @map("listing_id")
+  saleId             String        @map("sale_id")
+  buyerCustomerId    String        @map("buyer_customer_id")
+  currency           String        @default("LKR")
+  hammerMinor        BigInt        @map("hammer_minor")
+  buyerPremiumMinor  BigInt        @map("buyer_premium_minor")
+  taxMinor           BigInt        @map("tax_minor")
+  otherFeesMinor     BigInt        @default(0) @map("other_fees_minor")
+  depositAppliedMinor BigInt       @default(0) @map("deposit_applied_minor")
+  amountDueMinor     BigInt        @map("amount_due_minor")
+  status             InvoiceStatus @default(issued)
+  dueAt              DateTime      @map("due_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  listing  Listing        @relation(fields: [listingId], references: [id])
+  payments Payment[]
+  ledger   LedgerEntry[]
+
+  @@index([buyerCustomerId])
+  @@map("invoice")
+}
+
+enum LedgerEntryType {
+  deposit_received
+  sale_charge
+  buyer_premium
+  tax
+  payment_received
+  refund
+  credit_applied
+  settlement_disbursed
+}
+
+// APPEND-ONLY financial ledger (docs/14). We never model a mutable balance;
+// every money movement is an immutable event. A DB trigger rejects UPDATE/DELETE.
+model LedgerEntry {
+  id          String          @id
+  listingId   String          @map("listing_id")
+  invoiceId   String?         @map("invoice_id")
+  entryType   LedgerEntryType @map("entry_type")
+  amountMinor BigInt          @map("amount_minor")
+  currency    String          @default("LKR")
+  reference   String?
+  actorType   ActorType       @map("actor_type")
+  actorId     String?         @map("actor_id")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([listingId])
+  @@index([invoiceId])
+  @@map("ledger_entry")
+}
+
+enum PaymentStatus {
+  pending_verification
+  confirmed
+  rejected
+}
+
+// Manual bank transfer flow (docs/14): uploading proof is NEVER equivalent to
+// being paid — staff/accounts verify, then a ledger event records confirmation.
+model Payment {
+  id          String        @id
+  invoiceId   String        @map("invoice_id")
+  amountMinor BigInt        @map("amount_minor")
+  method      String        @default("bank_transfer")
+  status      PaymentStatus @default(pending_verification)
+  proofRef    String?       @map("proof_ref")
+  verifiedBy  String?       @map("verified_by")
+  verifiedAt  DateTime?     @map("verified_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("payment")
+}
+
+enum FulfilmentState {
+  payment_pending
+  payment_confirmed
+  release_approved
+  ready_for_pickup
+  pickup_booked
+  in_delivery
+  collected
+  delivered
+  completed
+}
+
+model Fulfilment {
+  id         String          @id
+  listingId  String          @unique @map("listing_id")
+  state      FulfilmentState @default(payment_pending)
+  releaseRef String?         @map("release_ref")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@map("fulfilment")
+}
+
+model Settlement {
+  id                String   @id
+  listingId         String   @unique @map("listing_id")
+  saleProceedsMinor BigInt   @map("sale_proceeds_minor")
+  commissionMinor   BigInt   @map("commission_minor")
+  commissionTaxMinor BigInt  @map("commission_tax_minor")
+  deductionsMinor   BigInt   @default(0) @map("deductions_minor")
+  netMinor          BigInt   @map("net_minor")
+  reference         String?
+  reason            String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@map("settlement")
 }

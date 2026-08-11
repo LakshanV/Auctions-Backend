@@ -244,6 +244,22 @@ export class AuctionService {
         },
       });
 
+      // A sold auction produces the authoritative Sale award (docs/14) that the
+      // commerce pipeline invoices. Unique per listing — cannot be created twice.
+      if (sold && winner) {
+        await ctx.tx.sale.create({
+          data: {
+            id: newId(),
+            listingId: auction.listingId,
+            buyerCustomerId: winner,
+            channel: 'auction',
+            amountMinor: BigInt(hammer as number),
+            currency: auction.currency,
+          },
+        });
+        await ctx.tx.listing.update({ where: { id: auction.listingId }, data: { status: 'sold' } });
+      }
+
       ctx.emit({
         name: DomainEventName.AuctionClosed,
         aggregateType: 'Auction',

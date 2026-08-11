@@ -210,3 +210,50 @@ export const submitTenderSchema = z.object({
   currency: z.string().length(3).default('LKR'),
 });
 export type SubmitTenderInput = z.infer<typeof submitTenderSchema>;
+
+// --- Commerce (docs/14) ----------------------------------------------------
+/** Staff issues an invoice for a confirmed sale. */
+export const issueInvoiceSchema = z.object({
+  listingId: z.string().min(1),
+  otherFeesMinor: z.number().int().nonnegative().default(0),
+  depositAppliedMinor: z.number().int().nonnegative().default(0),
+});
+export type IssueInvoiceInput = z.infer<typeof issueInvoiceSchema>;
+
+/** Buyer records a (manual) payment against an invoice; proof ≠ paid. */
+export const recordPaymentSchema = z.object({
+  amountMinor: money,
+  method: z.string().min(1).max(50).default('bank_transfer'),
+  proofRef: z.string().max(500).optional(),
+});
+export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+
+/** Accounts verifies (or rejects) a pending payment. */
+export const verifyPaymentSchema = z.object({
+  decision: z.enum(['confirm', 'reject']),
+  note: z.string().max(1000).optional(),
+});
+export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
+
+export const fulfilmentStateValues = [
+  'ready_for_pickup',
+  'pickup_booked',
+  'in_delivery',
+  'collected',
+  'delivered',
+  'completed',
+] as const;
+/** Staff advances the fulfilment state machine. */
+export const advanceFulfilmentSchema = z.object({
+  state: z.enum(fulfilmentStateValues),
+  note: z.string().max(1000).optional(),
+});
+export type AdvanceFulfilmentInput = z.infer<typeof advanceFulfilmentSchema>;
+
+/** Accounts disburses the seller settlement (append-only ledger event). */
+export const settleSchema = z.object({
+  deductionsMinor: z.number().int().nonnegative().default(0),
+  reference: z.string().max(200).optional(),
+  reason: z.string().max(1000).optional(),
+});
+export type SettleInput = z.infer<typeof settleSchema>;

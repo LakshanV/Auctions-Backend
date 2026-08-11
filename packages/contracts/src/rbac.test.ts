@@ -21,8 +21,9 @@ describe('rbac', () => {
     expect(hasPermission([Role.Customer], Permission.BidPlace)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.EoiSubmit)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.ExchangeParticipate)).toBe(true);
+    expect(hasPermission([Role.Customer], Permission.CommercePay)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.ListingCreate)).toBe(false);
-    expect(permissionsForRoles([Role.Customer]).size).toBe(3);
+    expect(permissionsForRoles([Role.Customer]).size).toBe(4);
   });
 
   it('unions permissions across multiple roles', () => {

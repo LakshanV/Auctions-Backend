@@ -156,7 +156,9 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  members OrganizationMember[]
+  members     OrganizationMember[]
+  sellerAssets Asset[]
+  sellerSales  Sale[]
 
   @@map("organization")
 }
@@ -190,15 +192,21 @@ model Asset {
   attributes      Json?
   lifecycle       AssetLifecycle @default(draft)
   ownerCustomerId String?        @map("owner_customer_id")
+  // Durable institutional-seller attribution (pack 01 doc 09). Captured at
+  // consignment time so history survives later org-membership changes — it is
+  // NOT derived from the owner's current membership. Nullable + additive.
+  sellerOrganizationId String? @map("seller_organization_id")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  owner    Customer?     @relation(fields: [ownerCustomerId], references: [id])
+  owner              Customer?     @relation(fields: [ownerCustomerId], references: [id])
+  sellerOrganization Organization? @relation(fields: [sellerOrganizationId], references: [id])
   listings Listing[]
   media    MediaObject[]
 
   @@index([category])
   @@index([ownerCustomerId])
+  @@index([sellerOrganizationId])
   @@map("asset")
 }
 
@@ -347,11 +355,17 @@ model Sale {
   channel         SaleChannel
   amountMinor     BigInt      @map("amount_minor")
   currency        String      @default("LKR")
+  // Durable seller-org attribution copied from the asset at award time (pack 01
+  // doc 09), so settlement/financial history stays attributed even if the
+  // consigning employee later leaves the organization. Nullable + additive.
+  sellerOrganizationId String? @map("seller_organization_id")
   createdAt       DateTime    @default(now()) @map("created_at")
 
-  listing Listing @relation(fields: [listingId], references: [id])
+  listing            Listing       @relation(fields: [listingId], references: [id])
+  sellerOrganization Organization? @relation(fields: [sellerOrganizationId], references: [id])
 
   @@index([buyerCustomerId])
+  @@index([sellerOrganizationId])
   @@map("sale")
 }
 

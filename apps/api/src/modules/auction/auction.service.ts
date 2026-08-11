@@ -24,6 +24,7 @@ import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 import { AuctionRealtimeGateway } from './auction-realtime.gateway';
+import { sellerOrgForListing } from '../../shared/persistence/seller-org';
 
 /**
  * Timed auction engine orchestration (docs/07). Server-authoritative: every bid
@@ -276,6 +277,7 @@ export class AuctionService {
             channel: 'auction',
             amountMinor: BigInt(hammer as number),
             currency: auction.currency,
+            sellerOrganizationId: await sellerOrgForListing(ctx.tx, auction.listingId),
           },
         });
         await ctx.tx.listing.update({ where: { id: auction.listingId }, data: { status: 'sold' } });

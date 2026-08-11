@@ -48,6 +48,11 @@ jobs:
       - name: Catalogue scale acceptance
         run: pnpm run test:scale
 
+      # Durable seller-org attribution + migration safety (pack 01 docs 09/11):
+      # attribution survives membership changes; backfill preserves data.
+      - name: Seller-org durability + migration safety
+        run: pnpm run test:seller-org
+
       # Public API contract gate (pack 01 doc 08): fails if a public response
       # drifted from contracts/public-api.contract.json (the shape the frontend
       # validates its DTOs against). Neither side can drift silently.

@@ -17,6 +17,7 @@ import { OFFER_RESPONSES, assertOfferTransition } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
+import { sellerOrgForListing } from '../../shared/persistence/seller-org';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 
@@ -103,6 +104,7 @@ export class ExchangeService {
           channel: 'buy_now',
           amountMinor: listing.buyNowPriceMinor,
           currency: listing.currency,
+          sellerOrganizationId: await sellerOrgForListing(ctx.tx, listingId),
         },
       });
       await ctx.tx.listing.update({ where: { id: listingId }, data: { status: 'sold' } });
@@ -201,6 +203,7 @@ export class ExchangeService {
             channel: 'make_offer',
             amountMinor: offer.amountMinor,
             currency: offer.currency,
+            sellerOrganizationId: await sellerOrgForListing(ctx.tx, offer.listingId),
           },
         });
         await ctx.tx.listing.update({ where: { id: offer.listingId }, data: { status: 'sold' } });
@@ -342,6 +345,7 @@ export class ExchangeService {
           channel: 'sealed_tender',
           amountMinor: winner.amountMinor,
           currency: winner.currency,
+          sellerOrganizationId: await sellerOrgForListing(ctx.tx, listingId),
         },
       });
       await ctx.tx.listing.update({ where: { id: listingId }, data: { status: 'sold' } });

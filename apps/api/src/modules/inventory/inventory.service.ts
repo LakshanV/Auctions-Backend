@@ -36,6 +36,13 @@ export class InventoryService {
     const ownerCustomerId = input.ownerCustomerId ?? principal.customerId ?? undefined;
 
     return this.uow.execute(actor, async (ctx) => {
+      // Durable seller-org attribution (pack 01 doc 09): capture the consigning
+      // organization NOW from the owner's sole membership, so the attribution
+      // survives later membership changes. Ambiguous (multi-org) or unaffiliated
+      // owners stay null — we never guess.
+      const sellerOrganizationId = ownerCustomerId
+        ? await this.resolveSoleOrganization(ctx.tx, ownerCustomerId)
+        : undefined;
       const asset = await ctx.tx.asset.create({
         data: {
           id,
@@ -43,6 +50,7 @@ export class InventoryService {
           schemaVersion: CURRENT_CATEGORY_VERSION,
           attributes: validation.data as unknown as Prisma.InputJsonValue,
           ownerCustomerId,
+          sellerOrganizationId,
           lifecycle: 'draft',
         },
       });
@@ -60,6 +68,23 @@ export class InventoryService {
     const asset = await this.prisma.asset.findUnique({ where: { id } });
     if (!asset) throw new NotFoundException('Asset not found');
     return asset;
+  }
+
+  /**
+   * The organization a customer unambiguously belongs to (exactly one active
+   * membership), or null. Used to capture durable seller-org attribution at
+   * consignment (pack 01 doc 09) without guessing for multi-org members.
+   */
+  private async resolveSoleOrganization(
+    tx: Prisma.TransactionClient,
+    customerId: string,
+  ): Promise<string | undefined> {
+    const memberships = await tx.organizationMember.findMany({
+      where: { customerId },
+      select: { organizationId: true },
+      take: 2,
+    });
+    return memberships.length === 1 ? memberships[0]!.organizationId : undefined;
   }
 
   async updateAttributes(principal: Principal, id: string, input: UpdateAssetAttributesInput) {

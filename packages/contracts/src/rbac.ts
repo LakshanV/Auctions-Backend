@@ -36,6 +36,8 @@ export const Permission = {
   BidPlace: 'bid:place',
   EoiSubmit: 'eoi:submit',
   EoiReview: 'eoi:review',
+  ExchangeParticipate: 'exchange:participate',
+  ExchangeOperate: 'exchange:operate',
   AuditRead: 'audit:read',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -51,10 +53,11 @@ const SELLER_PERMISSIONS: Permission[] = [
   P.MediaManage,
   P.BidPlace,
   P.EoiSubmit,
+  P.ExchangeParticipate,
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [Role.Customer]: [P.BidPlace, P.EoiSubmit],
+  [Role.Customer]: [P.BidPlace, P.EoiSubmit, P.ExchangeParticipate],
   [Role.Seller]: SELLER_PERMISSIONS,
   [Role.SellerStaff]: SELLER_PERMISSIONS,
   [Role.AuctionStaff]: [
@@ -70,6 +73,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.AuctionOperate,
     P.BidPlace,
     P.EoiReview,
+    P.ExchangeOperate,
   ],
   [Role.Accounts]: [P.CustomerRead],
   [Role.Support]: [P.CustomerRead],

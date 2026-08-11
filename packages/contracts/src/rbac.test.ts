@@ -16,11 +16,13 @@ describe('rbac', () => {
   it('gives admins every permission and customers only bidding', () => {
     expect(hasPermission([Role.Admin], Permission.KycManage)).toBe(true);
     expect(hasPermission([Role.Admin], Permission.AuditRead)).toBe(true);
-    // A plain customer can bid and submit an EOI, but has no staff/seller privileges.
+    // A plain customer can bid, submit an EOI and participate in the exchange
+    // (buy-now / offer / tender), but has no staff/seller privileges.
     expect(hasPermission([Role.Customer], Permission.BidPlace)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.EoiSubmit)).toBe(true);
+    expect(hasPermission([Role.Customer], Permission.ExchangeParticipate)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.ListingCreate)).toBe(false);
-    expect(permissionsForRoles([Role.Customer]).size).toBe(2);
+    expect(permissionsForRoles([Role.Customer]).size).toBe(3);
   });
 
   it('unions permissions across multiple roles', () => {

@@ -171,3 +171,42 @@ export const reviewEoiSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 export type ReviewEoiInput = z.infer<typeof reviewEoiSchema>;
+
+// --- Exchange scaffolds (docs/07: Buy Now / Make Offer / Sealed Tender) -----
+const money = z.number().int().positive();
+
+/** Staff sets the Buy Now price on a BUY_NOW listing. */
+export const setBuyNowPriceSchema = z.object({
+  amountMinor: money,
+  currency: z.string().length(3).default('LKR'),
+});
+export type SetBuyNowPriceInput = z.infer<typeof setBuyNowPriceSchema>;
+
+/** Buyer places an offer on a MAKE_OFFER listing. */
+export const makeOfferSchema = z.object({
+  amountMinor: money,
+  currency: z.string().length(3).default('LKR'),
+  note: z.string().max(2000).optional(),
+});
+export type MakeOfferInput = z.infer<typeof makeOfferSchema>;
+
+export const offerResponseValues = ['counter', 'accept', 'reject'] as const;
+/** Staff responds to an offer; `amountMinor` required only for a counter. */
+export const respondOfferSchema = z
+  .object({
+    response: z.enum(offerResponseValues),
+    amountMinor: money.optional(),
+    note: z.string().max(2000).optional(),
+  })
+  .refine((v) => v.response !== 'counter' || v.amountMinor != null, {
+    message: 'A counter requires amountMinor',
+    path: ['amountMinor'],
+  });
+export type RespondOfferInput = z.infer<typeof respondOfferSchema>;
+
+/** Buyer submits a sealed tender bid. */
+export const submitTenderSchema = z.object({
+  amountMinor: money,
+  currency: z.string().length(3).default('LKR'),
+});
+export type SubmitTenderInput = z.infer<typeof submitTenderSchema>;

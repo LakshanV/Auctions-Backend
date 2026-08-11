@@ -11,6 +11,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { AuctionModule } from './modules/auction/auction.module';
 import { EoiModule } from './modules/eoi/eoi.module';
+import { ExchangeModule } from './modules/exchange/exchange.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
@@ -36,6 +37,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     MarketplaceModule,
     AuctionModule,
     EoiModule,
+    ExchangeModule,
     CatalogueModule,
     AuthModule,
     MediaModule,

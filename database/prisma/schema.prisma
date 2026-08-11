@@ -212,13 +212,121 @@ model Listing {
   createdAt  DateTime      @default(now()) @map("created_at")
   updatedAt  DateTime      @updatedAt @map("updated_at")
 
-  asset   Asset    @relation(fields: [assetId], references: [id])
-  auction Auction?
-  eois    Eoi[]
+  // Buy Now price (set by staff for BUY_NOW listings). Nullable + additive.
+  buyNowPriceMinor BigInt? @map("buy_now_price_minor")
+  currency         String  @default("LKR")
+
+  asset      Asset       @relation(fields: [assetId], references: [id])
+  auction    Auction?
+  eois       Eoi[]
+  sale       Sale?
+  offers     Offer[]
+  tenderBids TenderBid[]
 
   @@index([assetId])
   @@index([status])
   @@map("listing")
+}
+
+// A completed award for a listing, from any sale channel. UNIQUE per listing —
+// a unique asset cannot sell twice (docs/07 Buy Now). Phase 6 commerce invoices
+// reference this record.
+enum SaleChannel {
+  auction
+  eoi
+  buy_now
+  make_offer
+  sealed_tender
+  live
+}
+
+model Sale {
+  id              String      @id
+  listingId       String      @unique @map("listing_id")
+  buyerCustomerId String      @map("buyer_customer_id")
+  channel         SaleChannel
+  amountMinor     BigInt      @map("amount_minor")
+  currency        String      @default("LKR")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@index([buyerCustomerId])
+  @@map("sale")
+}
+
+enum OfferStatus {
+  open
+  countered
+  accepted
+  rejected
+  withdrawn
+  expired
+}
+
+// Make Offer (docs/07): the current negotiation state; full history is appended
+// to OfferEvent. `amountMinor` is the amount currently on the table.
+model Offer {
+  id          String      @id
+  listingId   String      @map("listing_id")
+  customerId  String      @map("customer_id")
+  status      OfferStatus @default(open)
+  amountMinor BigInt      @map("amount_minor")
+  currency    String      @default("LKR")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  listing Listing      @relation(fields: [listingId], references: [id])
+  events  OfferEvent[]
+
+  @@index([listingId])
+  @@index([customerId])
+  @@map("offer")
+}
+
+enum OfferEventType {
+  offer
+  counter
+  accept
+  reject
+  withdraw
+  expire
+}
+
+// Append-only offer/counter history (docs/07 Make Offer).
+model OfferEvent {
+  id          String         @id
+  offerId     String         @map("offer_id")
+  type        OfferEventType
+  amountMinor BigInt?        @map("amount_minor")
+  note        String?
+  actorType   ActorType      @map("actor_type")
+  actorId     String?        @map("actor_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  offer Offer @relation(fields: [offerId], references: [id])
+
+  @@index([offerId])
+  @@map("offer_event")
+}
+
+// Sealed Tender (docs/07): private submissions, revealed only on a controlled
+// staff-triggered open. `openedAt` is null while sealed; competitor values are
+// never returned before the open.
+model TenderBid {
+  id          String    @id
+  listingId   String    @map("listing_id")
+  customerId  String    @map("customer_id")
+  amountMinor BigInt    @map("amount_minor")
+  currency    String    @default("LKR")
+  openedAt    DateTime? @map("opened_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@unique([listingId, customerId])
+  @@index([listingId])
+  @@map("tender_bid")
 }
 
 model MediaObject {

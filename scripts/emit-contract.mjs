@@ -149,8 +149,11 @@ async function main() {
 
     const generated = JSON.stringify(contract, null, 2) + '\n';
     if (CHECK) {
+      // Compare parsed content, not raw bytes, so whitespace/formatting (e.g.
+      // prettier normalising the committed file) is not mistaken for API drift.
+      const canon = (s) => JSON.stringify(JSON.parse(s));
       const committed = existsSync(OUT) ? readFileSync(OUT, 'utf8') : '';
-      if (committed !== generated) {
+      if (!committed || canon(committed) !== canon(generated)) {
         console.error(
           '✗ Public API contract drift: live responses differ from contracts/public-api.contract.json.',
         );

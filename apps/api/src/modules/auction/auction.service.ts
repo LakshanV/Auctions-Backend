@@ -23,6 +23,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
+import { AuctionRealtimeGateway } from './auction-realtime.gateway';
 
 /**
  * Timed auction engine orchestration (docs/07). Server-authoritative: every bid
@@ -36,7 +37,22 @@ export class AuctionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uow: UnitOfWork,
+    private readonly realtime: AuctionRealtimeGateway,
   ) {}
+
+  /**
+   * Fan out the authoritative post-commit state to all realtime subscribers
+   * (pack 01 doc 07). Called AFTER the unit-of-work commits so realtime never
+   * races or decides state. Failure to publish must never fail the command —
+   * subscribers still get the truth from the reconnect snapshot / fallback poll.
+   */
+  private async publishState(auctionId: string): Promise<void> {
+    try {
+      this.realtime.publish(auctionId, await this.getState(auctionId));
+    } catch {
+      /* realtime is best-effort; the DB remains authoritative */
+    }
+  }
 
   async createAuction(principal: Principal, input: CreateAuctionInput) {
     const listing = await this.prisma.listing.findUnique({ where: { id: input.listingId } });
@@ -80,7 +96,7 @@ export class AuctionService {
     const auction = await this.requireAuction(id);
     if (auction.status !== 'scheduled') throw new ConflictException('Auction is not scheduled');
     const actor = toActor(principal);
-    return this.uow.execute(actor, async (ctx) => {
+    const result = await this.uow.execute(actor, async (ctx) => {
       const updated = await ctx.tx.auction.update({ where: { id }, data: { status: 'open' } });
       ctx.emit({
         name: DomainEventName.AuctionOpened,
@@ -91,6 +107,8 @@ export class AuctionService {
       ctx.audit({ action: 'AUCTION_OPENED', targetType: 'Auction', targetId: id });
       return this.publicAuction(updated);
     });
+    await this.publishState(id);
+    return result;
   }
 
   async placeBid(principal: Principal, auctionId: string, input: PlaceBidInput) {
@@ -98,7 +116,7 @@ export class AuctionService {
     if (!bidderId) throw new ForbiddenException('Bidder must be an authenticated customer');
 
     const actor = toActor(principal);
-    return this.uow.execute(
+    const result = await this.uow.execute(
       actor,
       async (ctx) => {
         await ctx.tx.$queryRawUnsafe('SELECT id FROM auction WHERE id = $1 FOR UPDATE', auctionId);
@@ -219,6 +237,9 @@ export class AuctionService {
       },
       { timeout: 20000, maxWait: 20000 },
     );
+    // Fan out the new authoritative state to all viewers (after commit).
+    await this.publishState(auctionId);
+    return result;
   }
 
   async close(principal: Principal, id: string) {
@@ -227,7 +248,7 @@ export class AuctionService {
     if (auction.status !== 'open') throw new ConflictException('Auction is not open');
 
     const actor = toActor(principal);
-    return this.uow.execute(actor, async (ctx) => {
+    const result = await this.uow.execute(actor, async (ctx) => {
       const hammer = auction.currentBidMinor == null ? null : Number(auction.currentBidMinor);
       const sold =
         hammer != null &&
@@ -292,6 +313,8 @@ export class AuctionService {
       });
       return this.publicAuction(updated);
     });
+    await this.publishState(id);
+    return result;
   }
 
   /** Public, privacy-safe auction state (no reserve, leader identity, or maxima). */
@@ -302,6 +325,8 @@ export class AuctionService {
     return {
       id: a.id,
       listingId: a.listingId,
+      // Monotonic sequence for realtime ordering/dedupe + reconnect (doc 07).
+      version: a.version,
       status: a.status,
       currency: a.currency,
       openingBidMinor: Number(a.openingBidMinor),

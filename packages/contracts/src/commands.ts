@@ -80,9 +80,32 @@ export const reviewListingSchema = z.object({
 });
 export type ReviewListingInput = z.infer<typeof reviewListingSchema>;
 
+// Constrained media visibility (pack FIX-06): documents/evidence are never an
+// unconstrained free-text access class. Only `public` media is exposed on the
+// public catalogue; `private`/`internal` require an authorized access path.
+export const mediaVisibilityValues = ['public', 'private', 'internal'] as const;
+export type MediaVisibility = (typeof mediaVisibilityValues)[number];
+
+/**
+ * Register a previously-uploaded object as media (pack FIX-04/05/06). The
+ * `storageKey` MUST be a backend-issued, asset-scoped path returned by
+ * `createUploadUrl` — the backend re-validates the namespace and verifies the
+ * object actually exists before it is ever marked ready. Metadata is additive
+ * and optional so existing callers keep working.
+ */
 export const registerMediaSchema = z.object({
   kind: z.enum(mediaKindValues),
   storageKey: z.string().min(1).max(500),
+  visibility: z.enum(mediaVisibilityValues).optional(),
+  caption: z.string().max(500).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+  isCover: z.boolean().optional(),
+  mimeType: z.string().max(200).optional(),
+  sizeBytes: z.number().int().min(0).optional(),
+  width: z.number().int().min(0).optional(),
+  height: z.number().int().min(0).optional(),
+  durationMs: z.number().int().min(0).optional(),
+  checksum: z.string().max(200).optional(),
 });
 export type RegisterMediaInput = z.infer<typeof registerMediaSchema>;
 
@@ -95,6 +118,8 @@ export type AddDerivativeInput = z.infer<typeof addDerivativeSchema>;
 export const createUploadUrlSchema = z.object({
   filename: z.string().min(1).max(200),
   kind: z.enum(mediaKindValues).default('image'),
+  contentType: z.string().max(200).optional(),
+  sizeBytes: z.number().int().min(0).optional(),
 });
 export type CreateUploadUrlInput = z.infer<typeof createUploadUrlSchema>;
 
@@ -108,6 +133,9 @@ export type DemoLoginInput = z.infer<typeof demoLoginSchema>;
 export const devTokenSchema = z.object({
   customerId: z.string().optional(),
   roles: z.array(z.enum(ALL_ROLES)).default([]),
+  // Assurance level for the dev token (pack FIX-08). Defaults to aal2 so local
+  // staff flows work; request 'aal1' to reproduce the MFA-required denial path.
+  aal: z.enum(['aal1', 'aal2']).default('aal2'),
 });
 export type DevTokenInput = z.infer<typeof devTokenSchema>;
 

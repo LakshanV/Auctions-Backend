@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # format + lint + typecheck + build + unit tests (includes the production
+      # fail-closed invariants and the media/authz unit specs).
+      - name: Check (format, lint, typecheck, build, unit)
+        run: pnpm run check
+
+      # Each of these spins its own ephemeral Postgres via scripts/with-ephemeral-db.mjs.
+      - name: E2E (data core — permissions, outbox, audit)
+        run: pnpm run test:e2e
+
+      - name: E2E (auction engine — concurrency, soft-close, winner)
+        run: pnpm run test:auction
+
+      # MANDATORY security gate (pack P1 #13): the P0 negative regression suite —
+      # privacy, media IDOR, storage integrity, AAL2/MFA and public-state leakage.
+      # A regression here fails the build.
+      - name: Security regression suite (S01–S23)
+        run: pnpm run test:security

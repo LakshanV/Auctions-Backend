@@ -20,6 +20,7 @@ export async function provisionCustomer(
   prisma: PrismaService,
   sub: string,
   email: string | null,
+  emailVerified: boolean,
 ): Promise<{ customerId: string; roles: Role[] }> {
   const externalId = key(sub);
 
@@ -31,16 +32,27 @@ export async function provisionCustomer(
   if (existing) {
     customerId = existing.customerId;
   } else {
-    const linked = email ? await prisma.customer.findUnique({ where: { email } }) : null;
+    // FIX-10 — an unverified email must NEVER link to (take over) an existing
+    // customer. Only a verified email may claim a pre-existing account; otherwise
+    // we mint a fresh customer with NO email attached (so we neither take over nor
+    // collide on the unique email). The email is bound later once verified.
+    const linked =
+      email && emailVerified ? await prisma.customer.findUnique({ where: { email } }) : null;
     const customer =
       linked ??
       (await prisma.customer.create({
-        data: { id: newId(), status: 'active', email: email ?? undefined },
+        data: {
+          id: newId(),
+          status: 'active',
+          email: emailVerified ? (email ?? undefined) : undefined,
+        },
       }));
     customerId = customer.id;
-    // Ignore a race where a concurrent request created the identity first.
-    await prisma.externalIdentity
-      .create({
+    // Race-safe: if a concurrent request created the identity first, the unique
+    // (channel, externalId) constraint rejects our insert — re-read the winner so
+    // both requests resolve to the SAME durable customer id.
+    try {
+      await prisma.externalIdentity.create({
         data: {
           id: newId(),
           customerId,
@@ -48,8 +60,13 @@ export async function provisionCustomer(
           externalId,
           verifiedAt: new Date(),
         },
-      })
-      .catch(() => undefined);
+      });
+    } catch {
+      const winner = await prisma.externalIdentity.findUnique({
+        where: { channel_externalId: { channel: SUPABASE_CHANNEL, externalId } },
+      });
+      if (winner) customerId = winner.customerId;
+    }
   }
 
   const memberships = await prisma.organizationMember.findMany({ where: { customerId } });

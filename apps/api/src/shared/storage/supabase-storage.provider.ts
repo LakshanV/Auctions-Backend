@@ -1,5 +1,5 @@
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
-import { type SignedUpload, type StorageProvider } from './storage.provider';
+import { type SignedUpload, type StoredObject, type StorageProvider } from './storage.provider';
 
 /**
  * Supabase Storage implementation. Uses the server-only key; never exposed.
@@ -41,5 +41,24 @@ export class SupabaseStorageProvider implements StorageProvider {
       .createSignedUrl(path, expiresInSec);
     if (error || !data) throw new Error(`Supabase signed URL failed: ${error?.message}`);
     return data.signedUrl;
+  }
+
+  /**
+   * Verify object existence by listing the immediate parent folder and matching
+   * the exact object name (pack FIX-04). Supabase Storage has no cheap single-key
+   * HEAD, so we search the prefix. Metadata (size/mime) is returned when present.
+   */
+  async statObject(path: string): Promise<StoredObject> {
+    const slash = path.lastIndexOf('/');
+    const prefix = slash === -1 ? '' : path.slice(0, slash);
+    const name = slash === -1 ? path : path.slice(slash + 1);
+    const { data, error } = await this.client.storage
+      .from(this.bucket)
+      .list(prefix, { limit: 100, search: name });
+    if (error) throw new Error(`Supabase stat failed: ${error.message}`);
+    const match = (data ?? []).find((o) => o.name === name);
+    if (!match) return { exists: false };
+    const meta = (match.metadata ?? {}) as { size?: number; mimetype?: string };
+    return { exists: true, sizeBytes: meta.size, mimeType: meta.mimetype };
   }
 }

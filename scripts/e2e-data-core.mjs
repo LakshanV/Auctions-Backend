@@ -145,20 +145,36 @@ async function main() {
     const republish = await post(`/listings/${listingId}/publish`, { token: staffToken });
     check(republish.status === 409, `re-publish -> 409 conflict (got ${republish.status})`);
 
-    const media = await post(`/assets/${assetId}/media`, {
+    // Pack FIX-04: an arbitrary / non-namespace storageKey is rejected outright —
+    // only a backend-issued, asset-scoped path (from the upload grant) is valid.
+    const badMedia = await post(`/assets/${assetId}/media`, {
       token: staffToken,
       body: { kind: 'image', storageKey: 's3://bucket/original.jpg' },
     });
-    check(media.status === 201, `register media -> 201 (got ${media.status})`);
-    const derivative = await post(`/media/${media.json?.id}/derivatives`, {
-      token: staffToken,
-      body: { method: 'enhance-neutral-bg', storageKey: 's3://bucket/enhanced.jpg' },
-    });
-    check(derivative.status === 201, `add media derivative -> 201 (got ${derivative.status})`);
+    check(badMedia.status === 400, `register arbitrary storageKey -> 400 (got ${badMedia.status})`);
 
     // Verify the transactional outbox + append-only audit were written atomically.
     const prisma = new PrismaClient();
     try {
+      // Seed a properly-registered original (as if uploaded to the asset-scoped
+      // path and verified), then exercise the derivative + provenance path.
+      const seededMedia = await prisma.mediaObject.create({
+        data: {
+          id: `med_${Date.now()}`,
+          assetId,
+          kind: 'image',
+          storageKey: `assets/${assetId}/original.jpg`,
+          status: 'ready',
+          isOriginal: true,
+          visibility: 'public',
+        },
+      });
+      const derivative = await post(`/media/${seededMedia.id}/derivatives`, {
+        token: staffToken,
+        body: { method: 'enhance-neutral-bg', storageKey: `assets/${assetId}/enhanced.jpg` },
+      });
+      check(derivative.status === 201, `add media derivative -> 201 (got ${derivative.status})`);
+
       const outbox = await prisma.outboxEvent.findMany({ where: { aggregateId: listingId } });
       const names = outbox.map((o) => o.name);
       check(

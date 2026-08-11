@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+/**
+ * The insecure development default for signing secrets. Production MUST override
+ * it (enforced by assertProductionInvariants). Kept as a named constant so the
+ * startup gate can detect it exactly.
+ */
+export const DEV_DEFAULT_SECRET = 'dev-only-insecure-change-me';
+
+/** Minimum length policy for production signing secrets (pack FIX-09). */
+export const MIN_PROD_SECRET_LENGTH = 32;
+
 /** Coerce common truthy string forms to boolean for env-var flags. */
 const boolFromEnv = z.preprocess((v) => {
   if (typeof v === 'boolean') return v;
@@ -33,8 +43,8 @@ export const envSchema = z.object({
   DIRECT_URL: z.string().default(''),
   REDIS_URL: z.string().default(''),
 
-  JWT_SECRET: z.string().min(1).default('dev-only-insecure-change-me'),
-  SESSION_SECRET: z.string().min(1).default('dev-only-insecure-change-me'),
+  JWT_SECRET: z.string().min(1).default(DEV_DEFAULT_SECRET),
+  SESSION_SECRET: z.string().min(1).default(DEV_DEFAULT_SECRET),
 
   DEFAULT_CURRENCY: z.string().min(1).default('LKR'),
   DEFAULT_LOCALE: z.string().min(1).default('en'),
@@ -82,6 +92,49 @@ export const envSchema = z.object({
 
 export type RawEnv = z.infer<typeof envSchema>;
 
+/**
+ * Fail-closed production invariants (pack FIX-09 / doc 02). In production the
+ * process MUST refuse to start on any insecure default. This is a hard gate: it
+ * throws, and the caller (loadConfig) does not catch it. Non-production
+ * environments are unaffected so local/dev/test/e2e keep working.
+ */
+export function assertProductionInvariants(env: RawEnv): void {
+  if (env.NODE_ENV !== 'production') return;
+
+  const problems: string[] = [];
+  const weak = (secret: string, name: string): void => {
+    if (secret === DEV_DEFAULT_SECRET) problems.push(`${name} is the insecure development default`);
+    else if (secret.length < MIN_PROD_SECRET_LENGTH)
+      problems.push(`${name} is shorter than the ${MIN_PROD_SECRET_LENGTH}-char minimum`);
+  };
+
+  if (env.DEMO_AUTH_ENABLED) {
+    problems.push('DEMO_AUTH_ENABLED must be false in production');
+  }
+  weak(env.JWT_SECRET, 'JWT_SECRET');
+  weak(env.SESSION_SECRET, 'SESSION_SECRET');
+
+  const origins = env.CORS_ORIGINS.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (origins.length === 0 || origins.includes('*')) {
+    problems.push('CORS_ORIGINS must be an explicit allowlist (no wildcard) in production');
+  }
+
+  // Real production auth verifies Supabase sessions, so the project URL is
+  // mandatory (demo/dev token paths are disabled in production).
+  if (env.SUPABASE_URL.trim().length === 0) {
+    problems.push('SUPABASE_URL is required in production (real session verification)');
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      'Refusing to start: insecure production configuration:\n' +
+        problems.map((p) => `  - ${p}`).join('\n'),
+    );
+  }
+}
+
 /** Parse + validate an environment record. Throws a readable aggregate error. */
 export function parseEnv(
   source: NodeJS.ProcessEnv | Record<string, unknown> = process.env,
@@ -93,5 +146,6 @@ export function parseEnv(
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
+  assertProductionInvariants(result.data);
   return result.data;
 }

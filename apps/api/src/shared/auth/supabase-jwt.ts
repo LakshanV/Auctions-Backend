@@ -10,6 +10,10 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 export interface SupabaseClaims {
   sub: string;
   email: string | null;
+  /** Assurance level from the session (pack FIX-08). 'aal2' = MFA step-up done. */
+  aal: 'aal1' | 'aal2';
+  /** Whether the IdP asserts the email is verified (pack FIX-10 safe linking). */
+  emailVerified: boolean;
 }
 
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -38,5 +42,13 @@ export async function verifySupabaseToken(
   const sub = typeof payload.sub === 'string' ? payload.sub : '';
   if (!sub) throw new Error('Supabase token has no subject');
   const email = typeof payload.email === 'string' ? payload.email : null;
-  return { sub, email };
+  const aal = payload.aal === 'aal2' ? 'aal2' : 'aal1';
+  // Supabase surfaces verification in different places across versions; treat the
+  // email as verified only if the token explicitly asserts it.
+  const meta = (payload.user_metadata ?? {}) as Record<string, unknown>;
+  const emailVerified =
+    payload.email_verified === true ||
+    meta.email_verified === true ||
+    (typeof payload.email_confirmed_at === 'string' && payload.email_confirmed_at.length > 0);
+  return { sub, email, aal, emailVerified };
 }

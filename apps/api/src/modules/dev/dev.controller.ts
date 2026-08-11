@@ -17,9 +17,9 @@ export class DevController {
     const cfg = this.config.get();
     if (cfg.isProduction) throw new NotFoundException();
     const token = await signPrincipal(
-      { customerId: input.customerId ?? null, roles: input.roles },
+      { customerId: input.customerId ?? null, roles: input.roles, aal: input.aal },
       cfg.security.jwtSecret,
     );
-    return { token, roles: input.roles, customerId: input.customerId ?? null };
+    return { token, roles: input.roles, customerId: input.customerId ?? null, aal: input.aal };
   }
 }

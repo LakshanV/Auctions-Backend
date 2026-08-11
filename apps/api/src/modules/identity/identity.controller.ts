@@ -11,6 +11,7 @@ import {
 import { IdentityService } from './identity.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
+import { RequireAssurance } from '../../shared/auth/require-assurance.decorator';
 import { type Principal } from '../../shared/auth/principal';
 import { ZodBody } from '../../shared/validation/zod.pipe';
 
@@ -43,6 +44,7 @@ export class IdentityController {
 
   @Post(':id/kyc')
   @RequirePermissions(Permission.KycManage)
+  @RequireAssurance()
   setKyc(
     @CurrentActor() principal: Principal,
     @Param('id') id: string,

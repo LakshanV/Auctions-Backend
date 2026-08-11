@@ -70,8 +70,12 @@ export class CatalogueV2Service {
   }
 
   async get(listingId: string) {
-    const listing = (await this.prisma.listing.findUnique({
-      where: { id: listingId },
+    // FIX-01 — public single-lot privacy. A public caller may only resolve a
+    // listing that is in a PUBLIC status. Draft/submitted/review/approved/
+    // withdrawn/unsold listings return 404 (not "forbidden", which would confirm
+    // existence). Authorized staff detail belongs on a separate guarded path.
+    const listing = (await this.prisma.listing.findFirst({
+      where: { id: listingId, status: { in: [...PUBLIC_STATUSES] as never } },
       include: this.include(),
     })) as FullListing | null;
     if (!listing) throw new NotFoundException('Lot not found');
@@ -220,9 +224,21 @@ export class CatalogueV2Service {
     }
   }
 
+  /**
+   * FIX-02 — the single source of truth for "media a public caller may see".
+   * Internal/private (`visibility !== 'public'`) and not-ready
+   * (uploading/processing/failed/archived) media never appear publicly, so a
+   * private or still-processing object can never leak as a cover, gallery frame
+   * or `videoAvailable` signal.
+   */
+  private publicReady<T extends { visibility: string; status: string }>(media: T[]): T[] {
+    return media.filter((m) => m.visibility === 'public' && m.status === 'ready');
+  }
+
   private coverMedia(l: FullListing) {
-    const media = l.asset.media ?? [];
-    const cover = media.find((m) => m.isCover) ?? media.find((m) => m.kind === 'image');
+    const media = this.publicReady(l.asset.media ?? []);
+    const images = media.filter((m) => m.kind === 'image');
+    const cover = images.find((m) => m.isCover) ?? images[0];
     return {
       cover: cover ? this.publicMedia(cover) : undefined,
       videoAvailable: media.some((m) => m.kind === 'video'),
@@ -230,8 +246,10 @@ export class CatalogueV2Service {
   }
 
   private mediaList(l: FullListing) {
-    return (l.asset.media ?? [])
-      .filter((m) => m.visibility === 'public')
+    // Gallery = public-ready visual media only; documents have their own
+    // authorized access path and never render in the public gallery.
+    return this.publicReady(l.asset.media ?? [])
+      .filter((m) => m.kind !== 'document')
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((m) => this.publicMedia(m));
   }

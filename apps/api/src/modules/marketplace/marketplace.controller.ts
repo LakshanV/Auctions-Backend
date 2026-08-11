@@ -12,6 +12,7 @@ import { Patch } from '@nestjs/common';
 import { MarketplaceService } from './marketplace.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
+import { RequireAssurance } from '../../shared/auth/require-assurance.decorator';
 import { type Principal } from '../../shared/auth/principal';
 import { ZodBody } from '../../shared/validation/zod.pipe';
 
@@ -61,6 +62,7 @@ export class MarketplaceController {
 
   @Post(':id/review')
   @RequirePermissions(Permission.ListingReview)
+  @RequireAssurance()
   review(
     @CurrentActor() principal: Principal,
     @Param('id') id: string,
@@ -71,6 +73,7 @@ export class MarketplaceController {
 
   @Post(':id/publish')
   @RequirePermissions(Permission.ListingPublish)
+  @RequireAssurance()
   publish(@CurrentActor() principal: Principal, @Param('id') id: string) {
     return this.marketplace.publish(principal, id);
   }

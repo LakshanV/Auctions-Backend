@@ -22,10 +22,11 @@ export class MediaController {
   @Post('assets/:assetId/media/upload-url')
   @RequirePermissions(Permission.MediaManage)
   uploadUrl(
+    @CurrentActor() principal: Principal,
     @Param('assetId') assetId: string,
     @Body(new ZodBody(createUploadUrlSchema)) input: CreateUploadUrlInput,
   ) {
-    return this.media.createUploadUrl(assetId, input);
+    return this.media.createUploadUrl(principal, assetId, input);
   }
 
   @Post('assets/:assetId/media')

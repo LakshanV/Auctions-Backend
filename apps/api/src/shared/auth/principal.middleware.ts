@@ -39,13 +39,19 @@ export class PrincipalMiddleware implements NestMiddleware {
       try {
         // 1) Singha-issued token.
         const claims = await verifyPrincipalToken(token, cfg.security.jwtSecret);
-        req.principal = makePrincipal(claims.customerId, claims.roles);
+        req.principal = makePrincipal(claims.customerId, claims.roles, claims.aal);
       } catch {
-        // 2) Real Supabase session token → map to a Singha Customer.
+        // 2) Real Supabase session token → map to a Singha Customer. Assurance
+        // level and email-verification come from the trusted token, not a header.
         try {
           const sb = await verifySupabaseToken(token, cfg.supabase.url);
-          const { customerId, roles } = await provisionCustomer(this.prisma, sb.sub, sb.email);
-          req.principal = makePrincipal(customerId, roles);
+          const { customerId, roles } = await provisionCustomer(
+            this.prisma,
+            sb.sub,
+            sb.email,
+            sb.emailVerified,
+          );
+          req.principal = makePrincipal(customerId, roles, sb.aal);
         } catch {
           req.principal = ANONYMOUS;
         }

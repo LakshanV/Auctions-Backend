@@ -15,6 +15,7 @@ import {
 import { CommerceService } from './commerce.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
+import { RequireAssurance } from '../../shared/auth/require-assurance.decorator';
 import { type Principal } from '../../shared/auth/principal';
 import { ZodBody } from '../../shared/validation/zod.pipe';
 
@@ -52,6 +53,7 @@ export class CommerceController {
 
   @Post('payments/:id/verify')
   @RequirePermissions(Permission.CommerceOperate)
+  @RequireAssurance()
   verifyPayment(
     @CurrentActor() principal: Principal,
     @Param('id') id: string,
@@ -62,6 +64,7 @@ export class CommerceController {
 
   @Post('listings/:id/release')
   @RequirePermissions(Permission.CommerceOperate)
+  @RequireAssurance()
   release(@CurrentActor() principal: Principal, @Param('id') id: string) {
     return this.commerce.release(principal, id);
   }
@@ -78,6 +81,7 @@ export class CommerceController {
 
   @Post('listings/:id/settlement')
   @RequirePermissions(Permission.CommerceOperate)
+  @RequireAssurance()
   settle(
     @CurrentActor() principal: Principal,
     @Param('id') id: string,

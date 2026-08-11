@@ -11,6 +11,7 @@ import {
 import { AuctionService } from './auction.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
+import { RequireAssurance } from '../../shared/auth/require-assurance.decorator';
 import { type Principal } from '../../shared/auth/principal';
 import { ZodBody } from '../../shared/validation/zod.pipe';
 
@@ -29,6 +30,7 @@ export class AuctionController {
 
   @Post(':id/open')
   @RequirePermissions(Permission.AuctionOperate)
+  @RequireAssurance()
   open(@CurrentActor() principal: Principal, @Param('id') id: string) {
     return this.auctions.open(principal, id);
   }
@@ -45,6 +47,7 @@ export class AuctionController {
 
   @Post(':id/close')
   @RequirePermissions(Permission.AuctionOperate)
+  @RequireAssurance()
   close(@CurrentActor() principal: Principal, @Param('id') id: string) {
     return this.auctions.close(principal, id);
   }

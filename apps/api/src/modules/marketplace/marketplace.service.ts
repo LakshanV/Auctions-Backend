@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   type CreateListingInput,
   DomainEventName,
+  Permission,
   type ReviewListingInput,
+  type UpdateListingContentInput,
   newId,
 } from '@singha/contracts';
 import { assertListingTransition } from '@singha/domain';
@@ -38,6 +40,66 @@ export class MarketplaceService {
       });
       ctx.audit({ action: 'LISTING_CREATED', targetType: 'Listing', targetId: id });
       return listing;
+    });
+  }
+
+  /**
+   * Edit a listing's public content + sale-mode display config (docs 06/07).
+   * Owner (the asset's seller) or staff with listing:content. Never touches
+   * commercial state (auction/bids) — pure presentation.
+   */
+  async updateContent(principal: Principal, id: string, input: UpdateListingContentInput) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id },
+      include: { asset: true },
+    });
+    if (!listing) throw new NotFoundException('Listing not found');
+    const isStaff = principal.permissions.has(Permission.ListingReview);
+    const isOwner = listing.asset.ownerCustomerId === principal.customerId;
+    if (!isStaff && !isOwner) {
+      throw new ForbiddenException('Only the seller or staff can edit this listing');
+    }
+    // Only staff may set the editorial `featured` flag.
+    const featured = isStaff ? input.featured : undefined;
+
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      const updated = await ctx.tx.listing.update({
+        where: { id },
+        data: {
+          shortDescription: input.shortDescription,
+          fullDescription: input.fullDescription,
+          locationCity: input.locationCity,
+          locationRegion: input.locationRegion,
+          inspectionSummary: input.inspectionSummary,
+          collectionSummary: input.collectionSummary,
+          seoTitle: input.seoTitle,
+          seoDescription: input.seoDescription,
+          publicTermsRef: input.publicTermsRef,
+          featured,
+          guidePriceMinor:
+            input.guidePriceMinor === undefined
+              ? undefined
+              : input.guidePriceMinor === null
+                ? null
+                : BigInt(input.guidePriceMinor),
+          showGuidePrice: input.showGuidePrice,
+          opensAt:
+            input.opensAt === undefined
+              ? undefined
+              : input.opensAt
+                ? new Date(input.opensAt)
+                : null,
+          closesAt:
+            input.closesAt === undefined
+              ? undefined
+              : input.closesAt
+                ? new Date(input.closesAt)
+                : null,
+        },
+      });
+      ctx.audit({ action: 'LISTING_CONTENT_UPDATED', targetType: 'Listing', targetId: id });
+      return { id: updated.id, featured: updated.featured, showGuidePrice: updated.showGuidePrice };
     });
   }
 

@@ -19,6 +19,7 @@ import { SocialModule } from './modules/social/social.module';
 import { IntelligenceModule } from './modules/intelligence/intelligence.module';
 import { LiveModule } from './modules/live/live.module';
 import { WatchModule } from './modules/watch/watch.module';
+import { EventsModule } from './modules/events/events.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
@@ -52,6 +53,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     IntelligenceModule,
     LiveModule,
     WatchModule,
+    EventsModule,
     CatalogueModule,
     AuthModule,
     MediaModule,

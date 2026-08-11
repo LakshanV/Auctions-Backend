@@ -3,9 +3,12 @@ import {
   type CreateListingInput,
   Permission,
   type ReviewListingInput,
+  type UpdateListingContentInput,
   createListingSchema,
   reviewListingSchema,
+  updateListingContentSchema,
 } from '@singha/contracts';
+import { Patch } from '@nestjs/common';
 import { MarketplaceService } from './marketplace.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
@@ -37,6 +40,17 @@ export class MarketplaceController {
   @RequirePermissions(Permission.ListingReview)
   reviewQueue() {
     return this.marketplace.reviewQueue();
+  }
+
+  /** Edit public content + sale-mode display config (owner or staff). */
+  @Patch(':id/content')
+  @RequirePermissions(Permission.ListingContent)
+  updateContent(
+    @CurrentActor() principal: Principal,
+    @Param('id') id: string,
+    @Body(new ZodBody(updateListingContentSchema)) input: UpdateListingContentInput,
+  ) {
+    return this.marketplace.updateContent(principal, id, input);
   }
 
   @Post(':id/submit')

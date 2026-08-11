@@ -354,6 +354,48 @@ export type FloorBidInput = z.infer<typeof floorBidSchema>;
 export const watchSchema = z.object({ listingId: z.string().min(1) });
 export type WatchInput = z.infer<typeof watchSchema>;
 
+/** Edit a listing's public content + sale-mode display config (docs 06/07). */
+export const updateListingContentSchema = z.object({
+  shortDescription: z.string().max(400).optional(),
+  fullDescription: z.string().max(8000).optional(),
+  locationCity: z.string().max(80).optional(),
+  locationRegion: z.string().max(80).optional(),
+  inspectionSummary: z.string().max(2000).optional(),
+  collectionSummary: z.string().max(2000).optional(),
+  seoTitle: z.string().max(200).optional(),
+  seoDescription: z.string().max(400).optional(),
+  publicTermsRef: z.string().max(200).optional(),
+  featured: z.boolean().optional(),
+  guidePriceMinor: z.number().int().positive().nullable().optional(),
+  showGuidePrice: z.boolean().optional(),
+  opensAt: z.string().datetime().nullable().optional(),
+  closesAt: z.string().datetime().nullable().optional(),
+});
+export type UpdateListingContentInput = z.infer<typeof updateListingContentSchema>;
+
+// --- Auction events (consolidated pack doc 06) -----------------------------
+export const auctionEventTypeValues = ['timed', 'live', 'hybrid', 'sequential'] as const;
+export const createAuctionEventSchema = z.object({
+  publicRef,
+  title: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  eventType: z.enum(auctionEventTypeValues).default('timed'),
+  startsAt: z.string().datetime().optional(),
+  venue: z.string().max(200).optional(),
+  locationCity: z.string().max(80).optional(),
+  liveEnabled: z.boolean().default(false),
+  featured: z.boolean().default(false),
+});
+export type CreateAuctionEventInput = z.infer<typeof createAuctionEventSchema>;
+
+export const addEventLotSchema = z.object({
+  listingId: z.string().min(1),
+  sequence: z.number().int().min(1),
+  lane: z.string().max(40).optional(),
+  scheduledStart: z.string().datetime().optional(),
+});
+export type AddEventLotInput = z.infer<typeof addEventLotSchema>;
+
 /** Query for the enriched v2 catalogue (facets/pagination/search). */
 export const catalogueQuerySchema = z.object({
   category: z.string().max(40).optional(),

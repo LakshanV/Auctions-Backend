@@ -216,7 +216,25 @@ model Listing {
   buyNowPriceMinor BigInt? @map("buy_now_price_minor")
   currency         String  @default("LKR")
 
-  asset      Asset       @relation(fields: [assetId], references: [id])
+  // Public content (consolidated pack doc 06) — additive; do NOT overload asset
+  // attributes with public copy. All nullable so existing rows stay valid.
+  shortDescription  String? @map("short_description")
+  fullDescription   String? @map("full_description")
+  locationCity      String? @map("location_city")
+  locationRegion    String? @map("location_region")
+  inspectionSummary String? @map("inspection_summary")
+  collectionSummary String? @map("collection_summary")
+  seoTitle          String? @map("seo_title")
+  seoDescription    String? @map("seo_description")
+  publicTermsRef    String? @map("public_terms_ref")
+  featured          Boolean @default(false)
+  // Sale-mode display config (guide price + non-auction sale window).
+  guidePriceMinor BigInt?   @map("guide_price_minor")
+  showGuidePrice  Boolean   @default(false) @map("show_guide_price")
+  opensAt         DateTime? @map("opens_at")
+  closesAt        DateTime? @map("closes_at")
+
+  asset      Asset            @relation(fields: [assetId], references: [id])
   auction    Auction?
   eois       Eoi[]
   sale       Sale?
@@ -225,10 +243,89 @@ model Listing {
   invoice    Invoice?
   fulfilment Fulfilment?
   settlement Settlement?
+  watches    Watch[]
+  eventLots  AuctionEventLot[]
 
   @@index([assetId])
   @@index([status])
+  @@index([featured])
   @@map("listing")
+}
+
+// Authoritative watchlist (consolidated pack doc 06) — one row per
+// customer/listing pair. Replaces the frontend's localStorage-only watchlist.
+model Watch {
+  id         String   @id
+  customerId String   @map("customer_id")
+  listingId  String   @map("listing_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@unique([customerId, listingId])
+  @@index([customerId])
+  @@index([listingId])
+  @@map("watch")
+}
+
+// A curated event ABOVE individual lots/auctions (consolidated pack doc 06):
+// physical/live multi-lot events, sequential/group timed sales, event pages.
+// Individual Auction/Bid records remain authoritative.
+enum AuctionEventType {
+  timed
+  live
+  hybrid
+  sequential
+}
+
+enum AuctionEventStatus {
+  draft
+  scheduled
+  live
+  ended
+  cancelled
+}
+
+model AuctionEvent {
+  id                  String             @id
+  publicRef           String             @unique @map("public_ref")
+  title               String
+  description         String?
+  eventType           AuctionEventType   @default(timed) @map("event_type")
+  status              AuctionEventStatus @default(draft)
+  startsAt            DateTime?          @map("starts_at")
+  venue               String?
+  locationCity        String?            @map("location_city")
+  heroMediaId         String?            @map("hero_media_id")
+  termsRef            String?            @map("terms_ref")
+  inspectionInfo      String?            @map("inspection_info")
+  liveEnabled         Boolean            @default(false) @map("live_enabled")
+  featured            Boolean            @default(false)
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  lots AuctionEventLot[]
+
+  @@index([status])
+  @@index([featured])
+  @@map("auction_event")
+}
+
+model AuctionEventLot {
+  id             String    @id
+  auctionEventId String    @map("auction_event_id")
+  listingId      String    @map("listing_id")
+  sequence       Int
+  lane           String?
+  scheduledStart DateTime? @map("scheduled_start")
+
+  event   AuctionEvent @relation(fields: [auctionEventId], references: [id])
+  listing Listing      @relation(fields: [listingId], references: [id])
+
+  @@unique([auctionEventId, listingId])
+  @@unique([auctionEventId, sequence])
+  @@index([listingId])
+  @@map("auction_event_lot")
 }
 
 // A completed award for a listing, from any sale channel. UNIQUE per listing —
@@ -343,10 +440,23 @@ model MediaObject {
   isOriginal Boolean     @default(true) @map("is_original")
   createdAt  DateTime    @default(now()) @map("created_at")
 
+  // Presentation + processing metadata (consolidated pack doc 06/08). Additive.
+  sortOrder  Int      @default(0) @map("sort_order")
+  isCover    Boolean  @default(false) @map("is_cover")
+  caption    String?
+  visibility String   @default("public")
+  mimeType   String?  @map("mime_type")
+  sizeBytes  Int?     @map("size_bytes")
+  width      Int?
+  height     Int?
+  durationMs Int?     @map("duration_ms")
+  checksum   String?
+
   asset       Asset             @relation(fields: [assetId], references: [id])
   derivatives MediaDerivative[]
 
   @@index([assetId])
+  @@index([assetId, sortOrder])
   @@map("media_object")
 }
 

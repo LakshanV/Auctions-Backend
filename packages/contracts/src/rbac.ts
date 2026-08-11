@@ -45,6 +45,7 @@ export const Permission = {
   SocialOperate: 'social:operate',
   IntelligenceRead: 'intelligence:read',
   LiveOperate: 'live:operate',
+  WatchManage: 'watch:manage',
   AuditRead: 'audit:read',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -66,7 +67,7 @@ const SELLER_PERMISSIONS: Permission[] = [
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [Role.Customer]: [P.BidPlace, P.EoiSubmit, P.ExchangeParticipate, P.CommercePay],
+  [Role.Customer]: [P.BidPlace, P.EoiSubmit, P.ExchangeParticipate, P.CommercePay, P.WatchManage],
   [Role.Seller]: SELLER_PERMISSIONS,
   [Role.SellerStaff]: SELLER_PERMISSIONS,
   [Role.AuctionStaff]: [

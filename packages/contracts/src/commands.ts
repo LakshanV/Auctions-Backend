@@ -349,3 +349,23 @@ export const floorBidSchema = z.object({
   source: z.enum(['floor', 'phone', 'absentee', 'auctioneer']).default('floor'),
 });
 export type FloorBidInput = z.infer<typeof floorBidSchema>;
+
+// --- Watchlist + enriched catalogue (consolidated pack docs 06/07) ----------
+export const watchSchema = z.object({ listingId: z.string().min(1) });
+export type WatchInput = z.infer<typeof watchSchema>;
+
+/** Query for the enriched v2 catalogue (facets/pagination/search). */
+export const catalogueQuerySchema = z.object({
+  category: z.string().max(40).optional(),
+  saleMethod: z.enum(saleMethodValues).optional(),
+  status: z.string().max(20).optional(),
+  search: z.string().max(120).optional(),
+  location: z.string().max(80).optional(),
+  featured: z.coerce.boolean().optional(),
+  endingSoon: z.coerce.boolean().optional(),
+  auctionEventId: z.string().min(1).optional(),
+  sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('newest'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(60).default(24),
+});
+export type CatalogueQuery = z.infer<typeof catalogueQuerySchema>;

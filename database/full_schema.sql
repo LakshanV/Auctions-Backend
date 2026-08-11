@@ -62,6 +62,16 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
 DO $$ BEGIN
+  CREATE TYPE "AuctionEventType" AS ENUM ('timed', 'live', 'hybrid', 'sequential');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
+DO $$ BEGIN
+  CREATE TYPE "AuctionEventStatus" AS ENUM ('draft', 'scheduled', 'live', 'ended', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- CreateEnum
+DO $$ BEGIN
   CREATE TYPE "SaleChannel" AS ENUM ('auction', 'eoi', 'buy_now', 'make_offer', 'sealed_tender', 'live');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -234,8 +244,66 @@ CREATE TABLE IF NOT EXISTS "listing" (
     "updated_at" TIMESTAMP(3) NOT NULL,
     "buy_now_price_minor" BIGINT,
     "currency" TEXT NOT NULL DEFAULT 'LKR',
+    "short_description" TEXT,
+    "full_description" TEXT,
+    "location_city" TEXT,
+    "location_region" TEXT,
+    "inspection_summary" TEXT,
+    "collection_summary" TEXT,
+    "seo_title" TEXT,
+    "seo_description" TEXT,
+    "public_terms_ref" TEXT,
+    "featured" BOOLEAN NOT NULL DEFAULT false,
+    "guide_price_minor" BIGINT,
+    "show_guide_price" BOOLEAN NOT NULL DEFAULT false,
+    "opens_at" TIMESTAMP(3),
+    "closes_at" TIMESTAMP(3),
 
     CONSTRAINT "listing_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "watch" (
+    "id" TEXT NOT NULL,
+    "customer_id" TEXT NOT NULL,
+    "listing_id" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "watch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "auction_event" (
+    "id" TEXT NOT NULL,
+    "public_ref" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "event_type" "AuctionEventType" NOT NULL DEFAULT 'timed',
+    "status" "AuctionEventStatus" NOT NULL DEFAULT 'draft',
+    "starts_at" TIMESTAMP(3),
+    "venue" TEXT,
+    "location_city" TEXT,
+    "hero_media_id" TEXT,
+    "terms_ref" TEXT,
+    "inspection_info" TEXT,
+    "live_enabled" BOOLEAN NOT NULL DEFAULT false,
+    "featured" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "auction_event_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "auction_event_lot" (
+    "id" TEXT NOT NULL,
+    "auction_event_id" TEXT NOT NULL,
+    "listing_id" TEXT NOT NULL,
+    "sequence" INTEGER NOT NULL,
+    "lane" TEXT,
+    "scheduled_start" TIMESTAMP(3),
+
+    CONSTRAINT "auction_event_lot_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -301,6 +369,16 @@ CREATE TABLE IF NOT EXISTS "media_object" (
     "status" "MediaStatus" NOT NULL DEFAULT 'uploading',
     "is_original" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sort_order" INTEGER NOT NULL DEFAULT 0,
+    "is_cover" BOOLEAN NOT NULL DEFAULT false,
+    "caption" TEXT,
+    "visibility" TEXT NOT NULL DEFAULT 'public',
+    "mime_type" TEXT,
+    "size_bytes" INTEGER,
+    "width" INTEGER,
+    "height" INTEGER,
+    "duration_ms" INTEGER,
+    "checksum" TEXT,
 
     CONSTRAINT "media_object_pkey" PRIMARY KEY ("id")
 );
@@ -705,6 +783,36 @@ CREATE INDEX IF NOT EXISTS "listing_asset_id_idx" ON "listing"("asset_id");
 CREATE INDEX IF NOT EXISTS "listing_status_idx" ON "listing"("status");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "listing_featured_idx" ON "listing"("featured");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "watch_customer_id_idx" ON "watch"("customer_id");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "watch_listing_id_idx" ON "watch"("listing_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "watch_customer_id_listing_id_key" ON "watch"("customer_id", "listing_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "auction_event_public_ref_key" ON "auction_event"("public_ref");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "auction_event_status_idx" ON "auction_event"("status");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "auction_event_featured_idx" ON "auction_event"("featured");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "auction_event_lot_listing_id_idx" ON "auction_event_lot"("listing_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "auction_event_lot_auction_event_id_listing_id_key" ON "auction_event_lot"("auction_event_id", "listing_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "auction_event_lot_auction_event_id_sequence_key" ON "auction_event_lot"("auction_event_id", "sequence");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "sale_listing_id_key" ON "sale"("listing_id");
 
 -- CreateIndex
@@ -727,6 +835,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "tender_bid_listing_id_customer_id_key" ON "te
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "media_object_asset_id_idx" ON "media_object"("asset_id");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "media_object_asset_id_sort_order_idx" ON "media_object"("asset_id", "sort_order");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "media_derivative_source_media_id_idx" ON "media_derivative"("source_media_id");
@@ -865,6 +976,21 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- AddForeignKey
 DO $$ BEGIN
   ALTER TABLE "listing" ADD CONSTRAINT "listing_asset_id_fkey" FOREIGN KEY ("asset_id") REFERENCES "asset"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+  ALTER TABLE "watch" ADD CONSTRAINT "watch_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+  ALTER TABLE "auction_event_lot" ADD CONSTRAINT "auction_event_lot_auction_event_id_fkey" FOREIGN KEY ("auction_event_id") REFERENCES "auction_event"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+  ALTER TABLE "auction_event_lot" ADD CONSTRAINT "auction_event_lot_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey

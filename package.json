@@ -5,7 +5,7 @@
   "description": "Singha Auctions V2 — backend (NestJS API + BullMQ worker). Supabase-backed, Railway-hostable.",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20",
+    "node": ">=22",
     "pnpm": ">=9"
   },
   "scripts": {

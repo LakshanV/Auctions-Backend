@@ -1,5 +1,7 @@
-# Railway builds this Dockerfile. Node 20 (Debian slim) + OpenSSL for Prisma.
-FROM node:20-slim
+# Railway builds this Dockerfile. Node 22 (Debian slim) + OpenSSL for Prisma.
+# Node 22 is required: @supabase/supabase-js initialises a realtime client that
+# needs a native WebSocket, which ships by default only in Node 22+.
+FROM node:22-slim
 
 RUN corepack enable \
   && apt-get update -y \

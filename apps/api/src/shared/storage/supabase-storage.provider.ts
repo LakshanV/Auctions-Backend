@@ -1,17 +1,32 @@
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 import { type SignedUpload, type StorageProvider } from './storage.provider';
 
-/** Supabase Storage implementation. Uses the server-only key; never exposed. */
+/**
+ * Supabase Storage implementation. Uses the server-only key; never exposed.
+ *
+ * The Supabase client is created lazily on first use rather than in the
+ * constructor: `createClient` eagerly initialises a RealtimeClient that needs a
+ * native `WebSocket` (Node 22+). We only use Storage, so deferring construction
+ * keeps app boot (and `/healthz`) independent of realtime/WebSocket support.
+ */
 export class SupabaseStorageProvider implements StorageProvider {
   readonly configured = true;
-  private readonly client: SupabaseClient;
+  private cached: SupabaseClient | undefined;
 
   constructor(
-    url: string,
-    serviceKey: string,
+    private readonly url: string,
+    private readonly serviceKey: string,
     private readonly bucket: string,
-  ) {
-    this.client = createClient(url, serviceKey, { auth: { persistSession: false } });
+  ) {}
+
+  private get client(): SupabaseClient {
+    if (!this.cached) {
+      this.cached = createClient(this.url, this.serviceKey, {
+        auth: { persistSession: false },
+        realtime: { params: {} },
+      });
+    }
+    return this.cached;
   }
 
   async createSignedUploadUrl(path: string): Promise<SignedUpload> {

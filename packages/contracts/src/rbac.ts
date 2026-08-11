@@ -41,6 +41,7 @@ export const Permission = {
   CommercePay: 'commerce:pay',
   CommerceOperate: 'commerce:operate',
   ConnectOperate: 'connect:operate',
+  AiUse: 'ai:use',
   AuditRead: 'audit:read',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -57,6 +58,7 @@ const SELLER_PERMISSIONS: Permission[] = [
   P.BidPlace,
   P.EoiSubmit,
   P.ExchangeParticipate,
+  P.AiUse,
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -79,6 +81,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.ExchangeOperate,
     P.CommerceOperate,
     P.ConnectOperate,
+    P.AiUse,
   ],
   [Role.Accounts]: [P.CustomerRead, P.CommerceOperate],
   [Role.Support]: [P.CustomerRead, P.ConnectOperate],

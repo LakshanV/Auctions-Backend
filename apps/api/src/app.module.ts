@@ -14,6 +14,7 @@ import { EoiModule } from './modules/eoi/eoi.module';
 import { ExchangeModule } from './modules/exchange/exchange.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
+import { AiModule } from './modules/ai/ai.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
@@ -42,6 +43,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     ExchangeModule,
     CommerceModule,
     ConnectModule,
+    AiModule,
     CatalogueModule,
     AuthModule,
     MediaModule,

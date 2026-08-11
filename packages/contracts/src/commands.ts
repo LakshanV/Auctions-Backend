@@ -290,3 +290,23 @@ export const createBidIntentSchema = z.object({
   channel: z.enum(channelValues).default('web'),
 });
 export type CreateBidIntentInput = z.infer<typeof createBidIntentSchema>;
+
+// --- Singha AI Core (docs/10) ----------------------------------------------
+// AI outputs are DERIVED records; a human explicitly applies a draft (rule 3).
+export const draftListingSchema = z.object({
+  assetId: z.string().min(1),
+  locale: z.string().min(2).max(10).default('en'),
+});
+export type DraftListingInput = z.infer<typeof draftListingSchema>;
+
+export const assistSchema = z.object({
+  prompt: z.string().min(1).max(2000),
+  context: z.record(z.unknown()).optional(),
+});
+export type AssistInput = z.infer<typeof assistSchema>;
+
+/** Human applies an AI listing draft onto a listing (explicit, authorised). */
+export const applyDraftSchema = z.object({
+  listingId: z.string().min(1),
+});
+export type ApplyDraftInput = z.infer<typeof applyDraftSchema>;

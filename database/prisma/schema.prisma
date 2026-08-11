@@ -820,3 +820,38 @@ model BidIntent {
   @@index([auctionId])
   @@map("bid_intent")
 }
+
+// ---------------------------------------------------------------------------
+// Singha AI Core (docs/10) — AI outputs are DERIVED records (rule 3): they never
+// overwrite original facts/media/bids/finance. Every AI invocation is recorded
+// with provenance for governance; a human explicitly APPLIES a draft.
+// ---------------------------------------------------------------------------
+
+enum AiTaskType {
+  listing_draft
+  media_caption
+  assistant
+  translation
+  recommendation
+  support
+}
+
+model AiRun {
+  id          String     @id
+  taskType    AiTaskType @map("task_type")
+  model       String
+  provider    String     @default("mock")
+  actorId     String?    @map("actor_id")
+  subjectType String?    @map("subject_type")
+  subjectId   String?    @map("subject_id")
+  prompt      String?
+  output      Json
+  confidence  Float?
+  applied     Boolean    @default(false)
+  appliedBy   String?    @map("applied_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  @@index([subjectType, subjectId])
+  @@index([taskType])
+  @@map("ai_run")
+}

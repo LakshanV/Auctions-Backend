@@ -27,6 +27,8 @@ export const DomainEventName = {
   InboundMessageReceived: 'INBOUND_MESSAGE_RECEIVED',
   BidIntentCreated: 'BID_INTENT_CREATED',
   BidIntentConfirmed: 'BID_INTENT_CONFIRMED',
+  AiRunRecorded: 'AI_RUN_RECORDED',
+  AiDraftApplied: 'AI_DRAFT_APPLIED',
   InvoiceIssued: 'INVOICE_ISSUED',
   PaymentConfirmed: 'PAYMENT_CONFIRMED',
   ReleaseApproved: 'RELEASE_APPROVED',

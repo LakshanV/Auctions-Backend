@@ -1,105 +1,167 @@
 -- ============================================================================
--- Singha Auctions V2 — COMPLETE schema in ONE script.
--- Run once against an EMPTY Postgres/Supabase database (psql or SQL editor).
--- Equals applying every Prisma migration + the append-only triggers
--- (audit_event, bid, ledger_entry) that guarantee immutable history.
+-- Singha Auctions V2 — COMPLETE schema, IDEMPOTENT.
+-- Safe to run on an EMPTY database OR one that already has (some of) it:
+-- enums/constraints are guarded, tables/indexes use IF NOT EXISTS, triggers
+-- are dropped-then-created. Running it twice is a no-op the second time.
 -- ============================================================================
 
 -- CreateEnum
-CREATE TYPE "CustomerStatus" AS ENUM ('prospect', 'active', 'suspended', 'closed');
+DO $$ BEGIN
+  CREATE TYPE "CustomerStatus" AS ENUM ('prospect', 'active', 'suspended', 'closed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "KycStatus" AS ENUM ('none', 'pending', 'verified', 'rejected');
+DO $$ BEGIN
+  CREATE TYPE "KycStatus" AS ENUM ('none', 'pending', 'verified', 'rejected');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "ChannelType" AS ENUM ('web', 'whatsapp', 'facebook', 'instagram', 'email', 'sms');
+DO $$ BEGIN
+  CREATE TYPE "ChannelType" AS ENUM ('web', 'whatsapp', 'facebook', 'instagram', 'email', 'sms');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "OrgRole" AS ENUM ('owner', 'admin', 'staff');
+DO $$ BEGIN
+  CREATE TYPE "OrgRole" AS ENUM ('owner', 'admin', 'staff');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "AssetLifecycle" AS ENUM ('draft', 'in_intake', 'available', 'reserved', 'sold', 'withdrawn', 'archived');
+DO $$ BEGIN
+  CREATE TYPE "AssetLifecycle" AS ENUM ('draft', 'in_intake', 'available', 'reserved', 'sold', 'withdrawn', 'archived');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "SaleMethod" AS ENUM ('TIMED_AUCTION', 'EXPRESSION_OF_INTEREST', 'BUY_NOW', 'MAKE_OFFER', 'SEALED_TENDER', 'LIVE_HYBRID');
+DO $$ BEGIN
+  CREATE TYPE "SaleMethod" AS ENUM ('TIMED_AUCTION', 'EXPRESSION_OF_INTEREST', 'BUY_NOW', 'MAKE_OFFER', 'SEALED_TENDER', 'LIVE_HYBRID');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "ListingStatus" AS ENUM ('draft', 'submitted', 'review', 'changes_required', 'approved', 'scheduled', 'live', 'ended', 'sold', 'unsold', 'withdrawn');
+DO $$ BEGIN
+  CREATE TYPE "ListingStatus" AS ENUM ('draft', 'submitted', 'review', 'changes_required', 'approved', 'scheduled', 'live', 'ended', 'sold', 'unsold', 'withdrawn');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "MediaKind" AS ENUM ('image', 'video', 'document', 'video_thumbnail');
+DO $$ BEGIN
+  CREATE TYPE "MediaKind" AS ENUM ('image', 'video', 'document', 'video_thumbnail');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "MediaStatus" AS ENUM ('uploading', 'processing', 'ready', 'failed', 'archived');
+DO $$ BEGIN
+  CREATE TYPE "MediaStatus" AS ENUM ('uploading', 'processing', 'ready', 'failed', 'archived');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "ActorType" AS ENUM ('customer', 'staff', 'system', 'ai');
+DO $$ BEGIN
+  CREATE TYPE "ActorType" AS ENUM ('customer', 'staff', 'system', 'ai');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "OutboxStatus" AS ENUM ('pending', 'dispatched', 'failed');
+DO $$ BEGIN
+  CREATE TYPE "OutboxStatus" AS ENUM ('pending', 'dispatched', 'failed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "SaleChannel" AS ENUM ('auction', 'eoi', 'buy_now', 'make_offer', 'sealed_tender', 'live');
+DO $$ BEGIN
+  CREATE TYPE "SaleChannel" AS ENUM ('auction', 'eoi', 'buy_now', 'make_offer', 'sealed_tender', 'live');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "OfferStatus" AS ENUM ('open', 'countered', 'accepted', 'rejected', 'withdrawn', 'expired');
+DO $$ BEGIN
+  CREATE TYPE "OfferStatus" AS ENUM ('open', 'countered', 'accepted', 'rejected', 'withdrawn', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "OfferEventType" AS ENUM ('offer', 'counter', 'accept', 'reject', 'withdraw', 'expire');
+DO $$ BEGIN
+  CREATE TYPE "OfferEventType" AS ENUM ('offer', 'counter', 'accept', 'reject', 'withdraw', 'expire');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "AuctionStatus" AS ENUM ('scheduled', 'open', 'paused', 'closed', 'cancelled');
+DO $$ BEGIN
+  CREATE TYPE "AuctionStatus" AS ENUM ('scheduled', 'open', 'paused', 'closed', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "BidSource" AS ENUM ('online', 'floor', 'phone', 'absentee', 'proxy', 'auctioneer');
+DO $$ BEGIN
+  CREATE TYPE "BidSource" AS ENUM ('online', 'floor', 'phone', 'absentee', 'proxy', 'auctioneer');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "BidStatus" AS ENUM ('accepted', 'rejected', 'reversed');
+DO $$ BEGIN
+  CREATE TYPE "BidStatus" AS ENUM ('accepted', 'rejected', 'reversed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "EoiStatus" AS ENUM ('submitted', 'under_review', 'shortlisted', 'negotiating', 'accepted', 'declined', 'withdrawn', 'expired');
+DO $$ BEGIN
+  CREATE TYPE "EoiStatus" AS ENUM ('submitted', 'under_review', 'shortlisted', 'negotiating', 'accepted', 'declined', 'withdrawn', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "InvoiceStatus" AS ENUM ('issued', 'paid', 'void');
+DO $$ BEGIN
+  CREATE TYPE "InvoiceStatus" AS ENUM ('issued', 'paid', 'void');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "LedgerEntryType" AS ENUM ('deposit_received', 'sale_charge', 'buyer_premium', 'tax', 'payment_received', 'refund', 'credit_applied', 'settlement_disbursed');
+DO $$ BEGIN
+  CREATE TYPE "LedgerEntryType" AS ENUM ('deposit_received', 'sale_charge', 'buyer_premium', 'tax', 'payment_received', 'refund', 'credit_applied', 'settlement_disbursed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "PaymentStatus" AS ENUM ('pending_verification', 'confirmed', 'rejected');
+DO $$ BEGIN
+  CREATE TYPE "PaymentStatus" AS ENUM ('pending_verification', 'confirmed', 'rejected');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "FulfilmentState" AS ENUM ('payment_pending', 'payment_confirmed', 'release_approved', 'ready_for_pickup', 'pickup_booked', 'in_delivery', 'collected', 'delivered', 'completed');
+DO $$ BEGIN
+  CREATE TYPE "FulfilmentState" AS ENUM ('payment_pending', 'payment_confirmed', 'release_approved', 'ready_for_pickup', 'pickup_booked', 'in_delivery', 'collected', 'delivered', 'completed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "ConversationStatus" AS ENUM ('open', 'pending', 'closed');
+DO $$ BEGIN
+  CREATE TYPE "ConversationStatus" AS ENUM ('open', 'pending', 'closed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound');
+DO $$ BEGIN
+  CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "MessageProvenance" AS ENUM ('customer', 'staff', 'ai', 'system');
+DO $$ BEGIN
+  CREATE TYPE "MessageProvenance" AS ENUM ('customer', 'staff', 'ai', 'system');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "BidIntentStatus" AS ENUM ('pending', 'confirmed', 'placed', 'rejected', 'expired');
+DO $$ BEGIN
+  CREATE TYPE "BidIntentStatus" AS ENUM ('pending', 'confirmed', 'placed', 'rejected', 'expired');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "AiTaskType" AS ENUM ('listing_draft', 'media_caption', 'assistant', 'translation', 'recommendation', 'support');
+DO $$ BEGIN
+  CREATE TYPE "AiTaskType" AS ENUM ('listing_draft', 'media_caption', 'assistant', 'translation', 'recommendation', 'support');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "SocialPlatform" AS ENUM ('facebook', 'instagram');
+DO $$ BEGIN
+  CREATE TYPE "SocialPlatform" AS ENUM ('facebook', 'instagram');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "SocialPublicationStatus" AS ENUM ('draft', 'scheduled', 'published', 'failed');
+DO $$ BEGIN
+  CREATE TYPE "SocialPublicationStatus" AS ENUM ('draft', 'scheduled', 'published', 'failed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "SocialCampaignType" AS ENUM ('individual', 'group');
+DO $$ BEGIN
+  CREATE TYPE "SocialCampaignType" AS ENUM ('individual', 'group');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "LiveStatus" AS ENUM ('scheduled', 'live', 'paused', 'ended');
+DO $$ BEGIN
+  CREATE TYPE "LiveStatus" AS ENUM ('scheduled', 'live', 'paused', 'ended');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateTable
-CREATE TABLE "customer" (
+CREATE TABLE IF NOT EXISTS "customer" (
     "id" TEXT NOT NULL,
     "status" "CustomerStatus" NOT NULL DEFAULT 'prospect',
     "legal_name" TEXT,
@@ -113,7 +175,7 @@ CREATE TABLE "customer" (
 );
 
 -- CreateTable
-CREATE TABLE "external_identity" (
+CREATE TABLE IF NOT EXISTS "external_identity" (
     "id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
     "channel" "ChannelType" NOT NULL,
@@ -125,7 +187,7 @@ CREATE TABLE "external_identity" (
 );
 
 -- CreateTable
-CREATE TABLE "organization" (
+CREATE TABLE IF NOT EXISTS "organization" (
     "id" TEXT NOT NULL,
     "legal_name" TEXT NOT NULL,
     "public_ref" TEXT NOT NULL,
@@ -136,7 +198,7 @@ CREATE TABLE "organization" (
 );
 
 -- CreateTable
-CREATE TABLE "organization_member" (
+CREATE TABLE IF NOT EXISTS "organization_member" (
     "id" TEXT NOT NULL,
     "organization_id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
@@ -147,7 +209,7 @@ CREATE TABLE "organization_member" (
 );
 
 -- CreateTable
-CREATE TABLE "asset" (
+CREATE TABLE IF NOT EXISTS "asset" (
     "id" TEXT NOT NULL,
     "category" TEXT NOT NULL,
     "schema_version" INTEGER NOT NULL DEFAULT 1,
@@ -161,7 +223,7 @@ CREATE TABLE "asset" (
 );
 
 -- CreateTable
-CREATE TABLE "listing" (
+CREATE TABLE IF NOT EXISTS "listing" (
     "id" TEXT NOT NULL,
     "asset_id" TEXT NOT NULL,
     "sale_method" "SaleMethod" NOT NULL,
@@ -177,7 +239,7 @@ CREATE TABLE "listing" (
 );
 
 -- CreateTable
-CREATE TABLE "sale" (
+CREATE TABLE IF NOT EXISTS "sale" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "buyer_customer_id" TEXT NOT NULL,
@@ -190,7 +252,7 @@ CREATE TABLE "sale" (
 );
 
 -- CreateTable
-CREATE TABLE "offer" (
+CREATE TABLE IF NOT EXISTS "offer" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
@@ -204,7 +266,7 @@ CREATE TABLE "offer" (
 );
 
 -- CreateTable
-CREATE TABLE "offer_event" (
+CREATE TABLE IF NOT EXISTS "offer_event" (
     "id" TEXT NOT NULL,
     "offer_id" TEXT NOT NULL,
     "type" "OfferEventType" NOT NULL,
@@ -218,7 +280,7 @@ CREATE TABLE "offer_event" (
 );
 
 -- CreateTable
-CREATE TABLE "tender_bid" (
+CREATE TABLE IF NOT EXISTS "tender_bid" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
@@ -231,7 +293,7 @@ CREATE TABLE "tender_bid" (
 );
 
 -- CreateTable
-CREATE TABLE "media_object" (
+CREATE TABLE IF NOT EXISTS "media_object" (
     "id" TEXT NOT NULL,
     "asset_id" TEXT NOT NULL,
     "kind" "MediaKind" NOT NULL,
@@ -244,7 +306,7 @@ CREATE TABLE "media_object" (
 );
 
 -- CreateTable
-CREATE TABLE "media_derivative" (
+CREATE TABLE IF NOT EXISTS "media_derivative" (
     "id" TEXT NOT NULL,
     "source_media_id" TEXT NOT NULL,
     "method" TEXT NOT NULL,
@@ -255,7 +317,7 @@ CREATE TABLE "media_derivative" (
 );
 
 -- CreateTable
-CREATE TABLE "audit_event" (
+CREATE TABLE IF NOT EXISTS "audit_event" (
     "id" TEXT NOT NULL,
     "actor_type" "ActorType" NOT NULL,
     "actor_id" TEXT,
@@ -272,7 +334,7 @@ CREATE TABLE "audit_event" (
 );
 
 -- CreateTable
-CREATE TABLE "outbox_event" (
+CREATE TABLE IF NOT EXISTS "outbox_event" (
     "id" TEXT NOT NULL,
     "event_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -293,7 +355,7 @@ CREATE TABLE "outbox_event" (
 );
 
 -- CreateTable
-CREATE TABLE "idempotency_record" (
+CREATE TABLE IF NOT EXISTS "idempotency_record" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "scope" TEXT NOT NULL,
@@ -305,7 +367,7 @@ CREATE TABLE "idempotency_record" (
 );
 
 -- CreateTable
-CREATE TABLE "feature_flag" (
+CREATE TABLE IF NOT EXISTS "feature_flag" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
@@ -316,7 +378,7 @@ CREATE TABLE "feature_flag" (
 );
 
 -- CreateTable
-CREATE TABLE "business_config" (
+CREATE TABLE IF NOT EXISTS "business_config" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "value" TEXT NOT NULL,
@@ -327,7 +389,7 @@ CREATE TABLE "business_config" (
 );
 
 -- CreateTable
-CREATE TABLE "auction" (
+CREATE TABLE IF NOT EXISTS "auction" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "status" "AuctionStatus" NOT NULL DEFAULT 'scheduled',
@@ -355,7 +417,7 @@ CREATE TABLE "auction" (
 );
 
 -- CreateTable
-CREATE TABLE "bid" (
+CREATE TABLE IF NOT EXISTS "bid" (
     "id" TEXT NOT NULL,
     "auction_id" TEXT NOT NULL,
     "sequence" INTEGER NOT NULL,
@@ -370,7 +432,7 @@ CREATE TABLE "bid" (
 );
 
 -- CreateTable
-CREATE TABLE "bidder_max" (
+CREATE TABLE IF NOT EXISTS "bidder_max" (
     "id" TEXT NOT NULL,
     "auction_id" TEXT NOT NULL,
     "bidder_id" TEXT NOT NULL,
@@ -381,7 +443,7 @@ CREATE TABLE "bidder_max" (
 );
 
 -- CreateTable
-CREATE TABLE "eoi" (
+CREATE TABLE IF NOT EXISTS "eoi" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
@@ -400,7 +462,7 @@ CREATE TABLE "eoi" (
 );
 
 -- CreateTable
-CREATE TABLE "eoi_event" (
+CREATE TABLE IF NOT EXISTS "eoi_event" (
     "id" TEXT NOT NULL,
     "eoi_id" TEXT NOT NULL,
     "from_status" "EoiStatus" NOT NULL,
@@ -414,7 +476,7 @@ CREATE TABLE "eoi_event" (
 );
 
 -- CreateTable
-CREATE TABLE "invoice" (
+CREATE TABLE IF NOT EXISTS "invoice" (
     "id" TEXT NOT NULL,
     "number" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
@@ -436,7 +498,7 @@ CREATE TABLE "invoice" (
 );
 
 -- CreateTable
-CREATE TABLE "ledger_entry" (
+CREATE TABLE IF NOT EXISTS "ledger_entry" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "invoice_id" TEXT,
@@ -452,7 +514,7 @@ CREATE TABLE "ledger_entry" (
 );
 
 -- CreateTable
-CREATE TABLE "payment" (
+CREATE TABLE IF NOT EXISTS "payment" (
     "id" TEXT NOT NULL,
     "invoice_id" TEXT NOT NULL,
     "amount_minor" BIGINT NOT NULL,
@@ -467,7 +529,7 @@ CREATE TABLE "payment" (
 );
 
 -- CreateTable
-CREATE TABLE "fulfilment" (
+CREATE TABLE IF NOT EXISTS "fulfilment" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "state" "FulfilmentState" NOT NULL DEFAULT 'payment_pending',
@@ -479,7 +541,7 @@ CREATE TABLE "fulfilment" (
 );
 
 -- CreateTable
-CREATE TABLE "settlement" (
+CREATE TABLE IF NOT EXISTS "settlement" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT NOT NULL,
     "sale_proceeds_minor" BIGINT NOT NULL,
@@ -495,7 +557,7 @@ CREATE TABLE "settlement" (
 );
 
 -- CreateTable
-CREATE TABLE "conversation" (
+CREATE TABLE IF NOT EXISTS "conversation" (
     "id" TEXT NOT NULL,
     "customer_id" TEXT,
     "channel" "ChannelType" NOT NULL,
@@ -510,7 +572,7 @@ CREATE TABLE "conversation" (
 );
 
 -- CreateTable
-CREATE TABLE "message" (
+CREATE TABLE IF NOT EXISTS "message" (
     "id" TEXT NOT NULL,
     "conversation_id" TEXT NOT NULL,
     "direction" "MessageDirection" NOT NULL,
@@ -525,7 +587,7 @@ CREATE TABLE "message" (
 );
 
 -- CreateTable
-CREATE TABLE "bid_intent" (
+CREATE TABLE IF NOT EXISTS "bid_intent" (
     "id" TEXT NOT NULL,
     "customer_id" TEXT NOT NULL,
     "auction_id" TEXT NOT NULL,
@@ -540,7 +602,7 @@ CREATE TABLE "bid_intent" (
 );
 
 -- CreateTable
-CREATE TABLE "ai_run" (
+CREATE TABLE IF NOT EXISTS "ai_run" (
     "id" TEXT NOT NULL,
     "task_type" "AiTaskType" NOT NULL,
     "model" TEXT NOT NULL,
@@ -559,7 +621,7 @@ CREATE TABLE "ai_run" (
 );
 
 -- CreateTable
-CREATE TABLE "social_campaign" (
+CREATE TABLE IF NOT EXISTS "social_campaign" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "type" "SocialCampaignType" NOT NULL DEFAULT 'individual',
@@ -569,7 +631,7 @@ CREATE TABLE "social_campaign" (
 );
 
 -- CreateTable
-CREATE TABLE "social_publication" (
+CREATE TABLE IF NOT EXISTS "social_publication" (
     "id" TEXT NOT NULL,
     "listing_id" TEXT,
     "campaign_id" TEXT,
@@ -588,7 +650,7 @@ CREATE TABLE "social_publication" (
 );
 
 -- CreateTable
-CREATE TABLE "live_event" (
+CREATE TABLE IF NOT EXISTS "live_event" (
     "id" TEXT NOT NULL,
     "auction_id" TEXT,
     "title" TEXT NOT NULL,
@@ -607,305 +669,329 @@ CREATE TABLE "live_event" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "customer_email_key" ON "customer"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "customer_email_key" ON "customer"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "customer_phone_key" ON "customer"("phone");
+CREATE UNIQUE INDEX IF NOT EXISTS "customer_phone_key" ON "customer"("phone");
 
 -- CreateIndex
-CREATE INDEX "external_identity_customer_id_idx" ON "external_identity"("customer_id");
+CREATE INDEX IF NOT EXISTS "external_identity_customer_id_idx" ON "external_identity"("customer_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "external_identity_channel_external_id_key" ON "external_identity"("channel", "external_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "external_identity_channel_external_id_key" ON "external_identity"("channel", "external_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "organization_public_ref_key" ON "organization"("public_ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "organization_public_ref_key" ON "organization"("public_ref");
 
 -- CreateIndex
-CREATE INDEX "organization_member_customer_id_idx" ON "organization_member"("customer_id");
+CREATE INDEX IF NOT EXISTS "organization_member_customer_id_idx" ON "organization_member"("customer_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "organization_member_organization_id_customer_id_key" ON "organization_member"("organization_id", "customer_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "organization_member_organization_id_customer_id_key" ON "organization_member"("organization_id", "customer_id");
 
 -- CreateIndex
-CREATE INDEX "asset_category_idx" ON "asset"("category");
+CREATE INDEX IF NOT EXISTS "asset_category_idx" ON "asset"("category");
 
 -- CreateIndex
-CREATE INDEX "asset_owner_customer_id_idx" ON "asset"("owner_customer_id");
+CREATE INDEX IF NOT EXISTS "asset_owner_customer_id_idx" ON "asset"("owner_customer_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "listing_public_ref_key" ON "listing"("public_ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "listing_public_ref_key" ON "listing"("public_ref");
 
 -- CreateIndex
-CREATE INDEX "listing_asset_id_idx" ON "listing"("asset_id");
+CREATE INDEX IF NOT EXISTS "listing_asset_id_idx" ON "listing"("asset_id");
 
 -- CreateIndex
-CREATE INDEX "listing_status_idx" ON "listing"("status");
+CREATE INDEX IF NOT EXISTS "listing_status_idx" ON "listing"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sale_listing_id_key" ON "sale"("listing_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "sale_listing_id_key" ON "sale"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "sale_buyer_customer_id_idx" ON "sale"("buyer_customer_id");
+CREATE INDEX IF NOT EXISTS "sale_buyer_customer_id_idx" ON "sale"("buyer_customer_id");
 
 -- CreateIndex
-CREATE INDEX "offer_listing_id_idx" ON "offer"("listing_id");
+CREATE INDEX IF NOT EXISTS "offer_listing_id_idx" ON "offer"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "offer_customer_id_idx" ON "offer"("customer_id");
+CREATE INDEX IF NOT EXISTS "offer_customer_id_idx" ON "offer"("customer_id");
 
 -- CreateIndex
-CREATE INDEX "offer_event_offer_id_idx" ON "offer_event"("offer_id");
+CREATE INDEX IF NOT EXISTS "offer_event_offer_id_idx" ON "offer_event"("offer_id");
 
 -- CreateIndex
-CREATE INDEX "tender_bid_listing_id_idx" ON "tender_bid"("listing_id");
+CREATE INDEX IF NOT EXISTS "tender_bid_listing_id_idx" ON "tender_bid"("listing_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tender_bid_listing_id_customer_id_key" ON "tender_bid"("listing_id", "customer_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "tender_bid_listing_id_customer_id_key" ON "tender_bid"("listing_id", "customer_id");
 
 -- CreateIndex
-CREATE INDEX "media_object_asset_id_idx" ON "media_object"("asset_id");
+CREATE INDEX IF NOT EXISTS "media_object_asset_id_idx" ON "media_object"("asset_id");
 
 -- CreateIndex
-CREATE INDEX "media_derivative_source_media_id_idx" ON "media_derivative"("source_media_id");
+CREATE INDEX IF NOT EXISTS "media_derivative_source_media_id_idx" ON "media_derivative"("source_media_id");
 
 -- CreateIndex
-CREATE INDEX "audit_event_target_type_target_id_idx" ON "audit_event"("target_type", "target_id");
+CREATE INDEX IF NOT EXISTS "audit_event_target_type_target_id_idx" ON "audit_event"("target_type", "target_id");
 
 -- CreateIndex
-CREATE INDEX "audit_event_correlation_id_idx" ON "audit_event"("correlation_id");
+CREATE INDEX IF NOT EXISTS "audit_event_correlation_id_idx" ON "audit_event"("correlation_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "outbox_event_event_id_key" ON "outbox_event"("event_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "outbox_event_event_id_key" ON "outbox_event"("event_id");
 
 -- CreateIndex
-CREATE INDEX "outbox_event_status_created_at_idx" ON "outbox_event"("status", "created_at");
+CREATE INDEX IF NOT EXISTS "outbox_event_status_created_at_idx" ON "outbox_event"("status", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idempotency_record_key_key" ON "idempotency_record"("key");
+CREATE UNIQUE INDEX IF NOT EXISTS "idempotency_record_key_key" ON "idempotency_record"("key");
 
 -- CreateIndex
-CREATE INDEX "idempotency_record_scope_idx" ON "idempotency_record"("scope");
+CREATE INDEX IF NOT EXISTS "idempotency_record_scope_idx" ON "idempotency_record"("scope");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "feature_flag_key_key" ON "feature_flag"("key");
+CREATE UNIQUE INDEX IF NOT EXISTS "feature_flag_key_key" ON "feature_flag"("key");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "business_config_key_key" ON "business_config"("key");
+CREATE UNIQUE INDEX IF NOT EXISTS "business_config_key_key" ON "business_config"("key");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "auction_listing_id_key" ON "auction"("listing_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "auction_listing_id_key" ON "auction"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "auction_status_ends_at_idx" ON "auction"("status", "ends_at");
+CREATE INDEX IF NOT EXISTS "auction_status_ends_at_idx" ON "auction"("status", "ends_at");
 
 -- CreateIndex
-CREATE INDEX "bid_auction_id_idx" ON "bid"("auction_id");
+CREATE INDEX IF NOT EXISTS "bid_auction_id_idx" ON "bid"("auction_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "bid_auction_id_sequence_key" ON "bid"("auction_id", "sequence");
+CREATE UNIQUE INDEX IF NOT EXISTS "bid_auction_id_sequence_key" ON "bid"("auction_id", "sequence");
 
 -- CreateIndex
-CREATE INDEX "bidder_max_auction_id_idx" ON "bidder_max"("auction_id");
+CREATE INDEX IF NOT EXISTS "bidder_max_auction_id_idx" ON "bidder_max"("auction_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "bidder_max_auction_id_bidder_id_key" ON "bidder_max"("auction_id", "bidder_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "bidder_max_auction_id_bidder_id_key" ON "bidder_max"("auction_id", "bidder_id");
 
 -- CreateIndex
-CREATE INDEX "eoi_listing_id_idx" ON "eoi"("listing_id");
+CREATE INDEX IF NOT EXISTS "eoi_listing_id_idx" ON "eoi"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "eoi_customer_id_idx" ON "eoi"("customer_id");
+CREATE INDEX IF NOT EXISTS "eoi_customer_id_idx" ON "eoi"("customer_id");
 
 -- CreateIndex
-CREATE INDEX "eoi_status_idx" ON "eoi"("status");
+CREATE INDEX IF NOT EXISTS "eoi_status_idx" ON "eoi"("status");
 
 -- CreateIndex
-CREATE INDEX "eoi_event_eoi_id_idx" ON "eoi_event"("eoi_id");
+CREATE INDEX IF NOT EXISTS "eoi_event_eoi_id_idx" ON "eoi_event"("eoi_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "invoice_number_key" ON "invoice"("number");
+CREATE UNIQUE INDEX IF NOT EXISTS "invoice_number_key" ON "invoice"("number");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "invoice_listing_id_key" ON "invoice"("listing_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "invoice_listing_id_key" ON "invoice"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "invoice_buyer_customer_id_idx" ON "invoice"("buyer_customer_id");
+CREATE INDEX IF NOT EXISTS "invoice_buyer_customer_id_idx" ON "invoice"("buyer_customer_id");
 
 -- CreateIndex
-CREATE INDEX "ledger_entry_listing_id_idx" ON "ledger_entry"("listing_id");
+CREATE INDEX IF NOT EXISTS "ledger_entry_listing_id_idx" ON "ledger_entry"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "ledger_entry_invoice_id_idx" ON "ledger_entry"("invoice_id");
+CREATE INDEX IF NOT EXISTS "ledger_entry_invoice_id_idx" ON "ledger_entry"("invoice_id");
 
 -- CreateIndex
-CREATE INDEX "payment_invoice_id_idx" ON "payment"("invoice_id");
+CREATE INDEX IF NOT EXISTS "payment_invoice_id_idx" ON "payment"("invoice_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "fulfilment_listing_id_key" ON "fulfilment"("listing_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "fulfilment_listing_id_key" ON "fulfilment"("listing_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "settlement_listing_id_key" ON "settlement"("listing_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "settlement_listing_id_key" ON "settlement"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "conversation_customer_id_idx" ON "conversation"("customer_id");
+CREATE INDEX IF NOT EXISTS "conversation_customer_id_idx" ON "conversation"("customer_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "conversation_channel_external_thread_id_key" ON "conversation"("channel", "external_thread_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "conversation_channel_external_thread_id_key" ON "conversation"("channel", "external_thread_id");
 
 -- CreateIndex
-CREATE INDEX "message_conversation_id_idx" ON "message"("conversation_id");
+CREATE INDEX IF NOT EXISTS "message_conversation_id_idx" ON "message"("conversation_id");
 
 -- CreateIndex
-CREATE INDEX "bid_intent_customer_id_idx" ON "bid_intent"("customer_id");
+CREATE INDEX IF NOT EXISTS "bid_intent_customer_id_idx" ON "bid_intent"("customer_id");
 
 -- CreateIndex
-CREATE INDEX "bid_intent_auction_id_idx" ON "bid_intent"("auction_id");
+CREATE INDEX IF NOT EXISTS "bid_intent_auction_id_idx" ON "bid_intent"("auction_id");
 
 -- CreateIndex
-CREATE INDEX "ai_run_subject_type_subject_id_idx" ON "ai_run"("subject_type", "subject_id");
+CREATE INDEX IF NOT EXISTS "ai_run_subject_type_subject_id_idx" ON "ai_run"("subject_type", "subject_id");
 
 -- CreateIndex
-CREATE INDEX "ai_run_task_type_idx" ON "ai_run"("task_type");
+CREATE INDEX IF NOT EXISTS "ai_run_task_type_idx" ON "ai_run"("task_type");
 
 -- CreateIndex
-CREATE INDEX "social_publication_listing_id_idx" ON "social_publication"("listing_id");
+CREATE INDEX IF NOT EXISTS "social_publication_listing_id_idx" ON "social_publication"("listing_id");
 
 -- CreateIndex
-CREATE INDEX "social_publication_campaign_id_idx" ON "social_publication"("campaign_id");
+CREATE INDEX IF NOT EXISTS "social_publication_campaign_id_idx" ON "social_publication"("campaign_id");
 
 -- CreateIndex
-CREATE INDEX "social_publication_status_idx" ON "social_publication"("status");
+CREATE INDEX IF NOT EXISTS "social_publication_status_idx" ON "social_publication"("status");
 
 -- CreateIndex
-CREATE INDEX "live_event_auction_id_idx" ON "live_event"("auction_id");
+CREATE INDEX IF NOT EXISTS "live_event_auction_id_idx" ON "live_event"("auction_id");
 
 -- AddForeignKey
-ALTER TABLE "external_identity" ADD CONSTRAINT "external_identity_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "external_identity" ADD CONSTRAINT "external_identity_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "asset" ADD CONSTRAINT "asset_owner_customer_id_fkey" FOREIGN KEY ("owner_customer_id") REFERENCES "customer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "asset" ADD CONSTRAINT "asset_owner_customer_id_fkey" FOREIGN KEY ("owner_customer_id") REFERENCES "customer"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "listing" ADD CONSTRAINT "listing_asset_id_fkey" FOREIGN KEY ("asset_id") REFERENCES "asset"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "listing" ADD CONSTRAINT "listing_asset_id_fkey" FOREIGN KEY ("asset_id") REFERENCES "asset"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "sale" ADD CONSTRAINT "sale_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "sale" ADD CONSTRAINT "sale_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "offer" ADD CONSTRAINT "offer_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "offer" ADD CONSTRAINT "offer_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "offer_event" ADD CONSTRAINT "offer_event_offer_id_fkey" FOREIGN KEY ("offer_id") REFERENCES "offer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "offer_event" ADD CONSTRAINT "offer_event_offer_id_fkey" FOREIGN KEY ("offer_id") REFERENCES "offer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "tender_bid" ADD CONSTRAINT "tender_bid_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "tender_bid" ADD CONSTRAINT "tender_bid_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "media_object" ADD CONSTRAINT "media_object_asset_id_fkey" FOREIGN KEY ("asset_id") REFERENCES "asset"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "media_object" ADD CONSTRAINT "media_object_asset_id_fkey" FOREIGN KEY ("asset_id") REFERENCES "asset"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "media_derivative" ADD CONSTRAINT "media_derivative_source_media_id_fkey" FOREIGN KEY ("source_media_id") REFERENCES "media_object"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "media_derivative" ADD CONSTRAINT "media_derivative_source_media_id_fkey" FOREIGN KEY ("source_media_id") REFERENCES "media_object"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "auction" ADD CONSTRAINT "auction_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "auction" ADD CONSTRAINT "auction_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "bid" ADD CONSTRAINT "bid_auction_id_fkey" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "bid" ADD CONSTRAINT "bid_auction_id_fkey" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "bidder_max" ADD CONSTRAINT "bidder_max_auction_id_fkey" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "bidder_max" ADD CONSTRAINT "bidder_max_auction_id_fkey" FOREIGN KEY ("auction_id") REFERENCES "auction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "eoi" ADD CONSTRAINT "eoi_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "eoi" ADD CONSTRAINT "eoi_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "eoi_event" ADD CONSTRAINT "eoi_event_eoi_id_fkey" FOREIGN KEY ("eoi_id") REFERENCES "eoi"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "eoi_event" ADD CONSTRAINT "eoi_event_eoi_id_fkey" FOREIGN KEY ("eoi_id") REFERENCES "eoi"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "invoice" ADD CONSTRAINT "invoice_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "invoice" ADD CONSTRAINT "invoice_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ledger_entry" ADD CONSTRAINT "ledger_entry_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoice"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "ledger_entry" ADD CONSTRAINT "ledger_entry_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoice"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "payment" ADD CONSTRAINT "payment_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoice"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "payment" ADD CONSTRAINT "payment_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoice"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "fulfilment" ADD CONSTRAINT "fulfilment_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "fulfilment" ADD CONSTRAINT "fulfilment_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "settlement" ADD CONSTRAINT "settlement_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "settlement" ADD CONSTRAINT "settlement_listing_id_fkey" FOREIGN KEY ("listing_id") REFERENCES "listing"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "message" ADD CONSTRAINT "message_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "message" ADD CONSTRAINT "message_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "social_publication" ADD CONSTRAINT "social_publication_campaign_id_fkey" FOREIGN KEY ("campaign_id") REFERENCES "social_campaign"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "social_publication" ADD CONSTRAINT "social_publication_campaign_id_fkey" FOREIGN KEY ("campaign_id") REFERENCES "social_campaign"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 
 
 -- ---------------------------------------------------------------------------
 -- Append-only guarantees (docs/04, docs/14, docs/15): reject UPDATE/DELETE.
 -- ---------------------------------------------------------------------------
 
--- Append-only audit log (docs/04, docs/15): audit_event is business evidence.
--- Reject UPDATE and DELETE at the database so no application path — and no
--- ordinary admin — can rewrite or erase audit history. New rows only.
-
 CREATE OR REPLACE FUNCTION singha_audit_append_only()
 RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION 'audit_event is append-only: % is not permitted', TG_OP
-    USING ERRCODE = 'check_violation';
+  RAISE EXCEPTION 'audit_event is append-only: % is not permitted', TG_OP USING ERRCODE = 'check_violation';
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER audit_event_no_update
-  BEFORE UPDATE ON "audit_event"
-  FOR EACH ROW EXECUTE FUNCTION singha_audit_append_only();
-
-CREATE TRIGGER audit_event_no_delete
-  BEFORE DELETE ON "audit_event"
-  FOR EACH ROW EXECUTE FUNCTION singha_audit_append_only();
-
--- Append-only bid ledger (docs/04, docs/07): accepted bids are never silently
--- rewritten. Reject UPDATE and DELETE on the bid table; corrections are new
--- reversal rows. Mirrors the audit_event append-only guarantee.
+DROP TRIGGER IF EXISTS audit_event_no_update ON "audit_event";
+CREATE TRIGGER audit_event_no_update BEFORE UPDATE ON "audit_event" FOR EACH ROW EXECUTE FUNCTION singha_audit_append_only();
+DROP TRIGGER IF EXISTS audit_event_no_delete ON "audit_event";
+CREATE TRIGGER audit_event_no_delete BEFORE DELETE ON "audit_event" FOR EACH ROW EXECUTE FUNCTION singha_audit_append_only();
 
 CREATE OR REPLACE FUNCTION singha_bid_append_only()
 RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION 'bid ledger is append-only: % is not permitted', TG_OP
-    USING ERRCODE = 'check_violation';
+  RAISE EXCEPTION 'bid ledger is append-only: % is not permitted', TG_OP USING ERRCODE = 'check_violation';
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER bid_no_update
-  BEFORE UPDATE ON "bid"
-  FOR EACH ROW EXECUTE FUNCTION singha_bid_append_only();
-
-CREATE TRIGGER bid_no_delete
-  BEFORE DELETE ON "bid"
-  FOR EACH ROW EXECUTE FUNCTION singha_bid_append_only();
+DROP TRIGGER IF EXISTS bid_no_update ON "bid";
+CREATE TRIGGER bid_no_update BEFORE UPDATE ON "bid" FOR EACH ROW EXECUTE FUNCTION singha_bid_append_only();
+DROP TRIGGER IF EXISTS bid_no_delete ON "bid";
+CREATE TRIGGER bid_no_delete BEFORE DELETE ON "bid" FOR EACH ROW EXECUTE FUNCTION singha_bid_append_only();
 
 CREATE OR REPLACE FUNCTION singha_ledger_append_only()
 RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION 'financial ledger is append-only: % is not permitted', TG_OP
-    USING ERRCODE = 'check_violation';
+  RAISE EXCEPTION 'financial ledger is append-only: % is not permitted', TG_OP USING ERRCODE = 'check_violation';
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER ledger_entry_no_update
-  BEFORE UPDATE ON "ledger_entry"
-  FOR EACH ROW EXECUTE FUNCTION singha_ledger_append_only();
-
-CREATE TRIGGER ledger_entry_no_delete
-  BEFORE DELETE ON "ledger_entry"
-  FOR EACH ROW EXECUTE FUNCTION singha_ledger_append_only();
+DROP TRIGGER IF EXISTS ledger_entry_no_update ON "ledger_entry";
+CREATE TRIGGER ledger_entry_no_update BEFORE UPDATE ON "ledger_entry" FOR EACH ROW EXECUTE FUNCTION singha_ledger_append_only();
+DROP TRIGGER IF EXISTS ledger_entry_no_delete ON "ledger_entry";
+CREATE TRIGGER ledger_entry_no_delete BEFORE DELETE ON "ledger_entry" FOR EACH ROW EXECUTE FUNCTION singha_ledger_append_only();

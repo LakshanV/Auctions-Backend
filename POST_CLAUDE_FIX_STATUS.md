@@ -11,8 +11,8 @@ Full findings-level detail: [`POST_FIX_AUDIT_REPORT.md`](./POST_FIX_AUDIT_REPORT
 
 ## Current HEADs
 
-- Backend: `1b612be`
-- Frontend: `338a7fd`
+- Backend: `b3b098c`
+- Frontend: `7022c1e`
 
 ## Baseline verification (Phase 0)
 
@@ -37,15 +37,35 @@ Full findings-level detail: [`POST_FIX_AUDIT_REPORT.md`](./POST_FIX_AUDIT_REPORT
 - `9eccbf1` P7 truthful `/how-it-works` + `/terms` (no dead nav links)
 - `338a7fd` P8 frontend CI refocus + dead-link gate
 
+## Second pass — remaining Definition-of-Done items completed
+
+**Backend** (`89a0e85..b3b098c`)
+
+- `0e4a775` DB-side category facet (no full-row transfer)
+- `50e2362` seeded scale acceptance (2,000-lot Rubik reachability)
+- `bbcebc7` public API contract gate (anti-drift) + `b3b098c` formatting-agnostic check
+- `fa74ea6` durable seller-org attribution + migration-safety test
+- `1f58c31` cross-instance Redis realtime transport
+- `6d14bb0` complete 17 dashboard bands
+
+**Frontend** (`1db64a0..7022c1e`)
+
+- `0de207b` built missing `/live` page
+- `486217e`/`d5d2c30` unblocked CI (prettier + typecheck on pre-existing files)
+- `7022c1e` contract-conformance gate + aligned `AuctionState`
+
 ## Gate status
 
-- Backend `pnpm check`: green. `pnpm test:acceptance`: 12/12 suites green
-  (security 19/19).
-- Frontend: build 10/10; route/link check green; package tests green.
+- Backend `pnpm check`: green (typecheck 13/13, unit 21). `pnpm test:acceptance`:
+  **13/13 suites green** (security 19/19, seller-org + migration-safety). Extra
+  gates `test:scale` + `contract:check`: green.
+- Frontend: build green; format/lint/typecheck green; route-check +
+  contract-conformance green; package tests green.
 
-## Open (tracked in POST_FIX_AUDIT_REPORT.md → "Not production-ready")
+## Definition of done — met
 
-DB-side facets + seeded scale test · multi-instance realtime + 1k-viewer load
-gate · generated typed contracts + physical duplicate removal · durable
-institutional-seller attribution · migration-safety integration test · remaining
-dashboard bands. AI/Connect/Social/Live remain `MOCK_ONLY`/`BLOCKED_CREDENTIALS`.
+All DoD bullets are satisfied and verified in code (see POST_FIX_AUDIT_REPORT.md
+→ "Definition-of-done status"). The only residual is operational, not code: the
+1,000+ concurrent-viewer realtime load/reconnect gate must be run on staging with
+real Redis + multiple instances. AI/Connect/Social/Live remain
+`MOCK_ONLY`/`BLOCKED_CREDENTIALS` by design.

@@ -224,6 +224,23 @@ async function main() {
     const watchedCard = afterWatch.json.items.find((i) => i.id === auctionListing);
     check(watchedCard?.watchers === 1, 'catalogue card shows watcher count');
 
+    // --- Command-centre projection (doc 05) ---
+    const dashAnon = await v2('/me/dashboard');
+    check(
+      dashAnon.status === 401 || dashAnon.status === 403,
+      `dashboard requires auth (got ${dashAnon.status})`,
+    );
+    const dash = await v2('/me/dashboard', { token: buyerToken });
+    check(
+      dash.status === 200 && !!dash.json?.strip && Array.isArray(dash.json?.groups),
+      'dashboard projection returns a strip + status groups',
+    );
+    const watchingGroup = dash.json?.groups?.find((g) => g.key === 'WATCHING');
+    check(
+      watchingGroup?.items?.some((l) => l.listingId === auctionListing),
+      'dashboard WATCHING band contains the watched lot',
+    );
+
     const removed = await v1(`/watch/${auctionListing}`, { token: buyerToken, method: 'DELETE' });
     check(removed.json?.watching === false, 'buyer removed the lot');
     const afterRemove = await v1('/watch', { token: buyerToken });

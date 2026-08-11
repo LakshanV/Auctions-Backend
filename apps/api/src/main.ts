@@ -17,6 +17,8 @@ async function bootstrap(): Promise<void> {
       // The enriched catalogue owns its own absolute /api/v2 path (docs 07).
       { path: 'api/v2/catalogue', method: RequestMethod.GET },
       { path: 'api/v2/catalogue/:id', method: RequestMethod.GET },
+      // Buyer command-centre projection owns its own absolute /api/v2 path (doc 05).
+      { path: 'api/v2/me/dashboard', method: RequestMethod.GET },
     ],
   });
   app.enableShutdownHooks();

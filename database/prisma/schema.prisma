@@ -855,3 +855,60 @@ model AiRun {
   @@index([taskType])
   @@map("ai_run")
 }
+
+// ---------------------------------------------------------------------------
+// Singha Social Publisher (docs/11) — AI-assisted Facebook/Instagram creatives
+// and campaigns. Publication records are their own data; publishing goes through
+// an adapter (mock until Meta access). Publishing never mutates auction facts.
+// ---------------------------------------------------------------------------
+
+enum SocialPlatform {
+  facebook
+  instagram
+}
+
+enum SocialPublicationStatus {
+  draft
+  scheduled
+  published
+  failed
+}
+
+enum SocialCampaignType {
+  individual
+  group
+}
+
+model SocialCampaign {
+  id        String             @id
+  name      String
+  type      SocialCampaignType @default(individual)
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  publications SocialPublication[]
+
+  @@map("social_campaign")
+}
+
+model SocialPublication {
+  id             String                  @id
+  listingId      String?                 @map("listing_id")
+  campaignId     String?                 @map("campaign_id")
+  platform       SocialPlatform
+  status         SocialPublicationStatus @default(draft)
+  caption        String
+  creativeRef    String?                 @map("creative_ref")
+  aiRunId        String?                 @map("ai_run_id")
+  externalPostId String?                 @map("external_post_id")
+  scheduledAt    DateTime?               @map("scheduled_at")
+  publishedAt    DateTime?               @map("published_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  campaign SocialCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([listingId])
+  @@index([campaignId])
+  @@index([status])
+  @@map("social_publication")
+}

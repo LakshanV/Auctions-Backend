@@ -310,3 +310,23 @@ export const applyDraftSchema = z.object({
   listingId: z.string().min(1),
 });
 export type ApplyDraftInput = z.infer<typeof applyDraftSchema>;
+
+// --- Singha Social Publisher (docs/11) -------------------------------------
+export const socialPlatformValues = ['facebook', 'instagram'] as const;
+
+export const createCampaignSchema = z.object({
+  name: z.string().min(1).max(200),
+  type: z.enum(['individual', 'group']).default('individual'),
+});
+export type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
+
+/** Draft a publication for a listing (caption AI-assisted if omitted). */
+export const createPublicationSchema = z.object({
+  listingId: z.string().min(1),
+  platform: z.enum(socialPlatformValues),
+  campaignId: z.string().min(1).optional(),
+  caption: z.string().max(2200).optional(),
+  creativeRef: z.string().max(500).optional(),
+  scheduledAt: z.string().datetime().optional(),
+});
+export type CreatePublicationInput = z.infer<typeof createPublicationSchema>;

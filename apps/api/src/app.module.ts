@@ -15,6 +15,8 @@ import { ExchangeModule } from './modules/exchange/exchange.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
 import { AiModule } from './modules/ai/ai.module';
+import { SocialModule } from './modules/social/social.module';
+import { IntelligenceModule } from './modules/intelligence/intelligence.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
@@ -44,6 +46,8 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     CommerceModule,
     ConnectModule,
     AiModule,
+    SocialModule,
+    IntelligenceModule,
     CatalogueModule,
     AuthModule,
     MediaModule,

@@ -12,10 +12,9 @@ import { type RealtimeTransport } from './auction-realtime.transport';
 class FakeBus {
   private sinks: ((id: string, frame: AuctionStateFrame) => void)[] = [];
   transport(): RealtimeTransport {
-    const bus = this;
     return {
-      publish: (id, frame) => bus.sinks.forEach((s) => s(id, frame)),
-      subscribe: (deliver) => bus.sinks.push(deliver),
+      publish: (id, frame) => this.sinks.forEach((s) => s(id, frame)),
+      subscribe: (deliver) => this.sinks.push(deliver),
       close: async () => {},
     };
   }

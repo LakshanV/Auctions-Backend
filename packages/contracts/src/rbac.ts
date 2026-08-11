@@ -40,6 +40,7 @@ export const Permission = {
   ExchangeOperate: 'exchange:operate',
   CommercePay: 'commerce:pay',
   CommerceOperate: 'commerce:operate',
+  ConnectOperate: 'connect:operate',
   AuditRead: 'audit:read',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -77,9 +78,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.EoiReview,
     P.ExchangeOperate,
     P.CommerceOperate,
+    P.ConnectOperate,
   ],
   [Role.Accounts]: [P.CustomerRead, P.CommerceOperate],
-  [Role.Support]: [P.CustomerRead],
+  [Role.Support]: [P.CustomerRead, P.ConnectOperate],
   [Role.Compliance]: [P.CustomerRead, P.KycManage, P.AuditRead],
   [Role.Admin]: [...ALL_PERMISSIONS],
   [Role.SuperAdmin]: [...ALL_PERMISSIONS],

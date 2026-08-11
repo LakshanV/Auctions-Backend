@@ -733,3 +733,90 @@ model Settlement {
 
   @@map("settlement")
 }
+
+// ---------------------------------------------------------------------------
+// Singha Connect (docs/09) — omnichannel: ONE customer identity + conversation
+// history across channels. Providers live behind adapters; channel windows/
+// templates are adapter config, never customer core tables.
+// ---------------------------------------------------------------------------
+
+enum ConversationStatus {
+  open
+  pending
+  closed
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+// Who/what produced a message (AI is always a distinct, auditable provenance).
+enum MessageProvenance {
+  customer
+  staff
+  ai
+  system
+}
+
+model Conversation {
+  id               String             @id
+  customerId       String?            @map("customer_id")
+  channel          ChannelType
+  externalThreadId String             @map("external_thread_id")
+  status           ConversationStatus @default(open)
+  aiMode           Boolean            @default(true) @map("ai_mode")
+  assignedAgentId  String?            @map("assigned_agent_id")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  messages Message[]
+
+  @@unique([channel, externalThreadId])
+  @@index([customerId])
+  @@map("conversation")
+}
+
+model Message {
+  id                String            @id
+  conversationId    String            @map("conversation_id")
+  direction         MessageDirection
+  providerMessageId String?           @map("provider_message_id")
+  sender            String?
+  text              String?
+  payload           Json?
+  provenance        MessageProvenance @default(customer)
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@map("message")
+}
+
+// Messaging-channel bidding (docs/07, rule 11): free text creates a BID INTENT,
+// never a bid. An accepted bid requires explicit confirmation + auction-engine
+// validation. The intent is signed/idempotent and single-use.
+enum BidIntentStatus {
+  pending
+  confirmed
+  placed
+  rejected
+  expired
+}
+
+model BidIntent {
+  id             String          @id
+  customerId     String          @map("customer_id")
+  auctionId      String          @map("auction_id")
+  maxAmountMinor BigInt          @map("max_amount_minor")
+  channel        ChannelType     @default(web)
+  status         BidIntentStatus @default(pending)
+  bidId          String?         @map("bid_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  confirmedAt    DateTime?       @map("confirmed_at")
+
+  @@index([customerId])
+  @@index([auctionId])
+  @@map("bid_intent")
+}

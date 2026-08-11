@@ -13,6 +13,7 @@ import { AuctionModule } from './modules/auction/auction.module';
 import { EoiModule } from './modules/eoi/eoi.module';
 import { ExchangeModule } from './modules/exchange/exchange.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
+import { ConnectModule } from './modules/connect/connect.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
@@ -40,6 +41,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     EoiModule,
     ExchangeModule,
     CommerceModule,
+    ConnectModule,
     CatalogueModule,
     AuthModule,
     MediaModule,

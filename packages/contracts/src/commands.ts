@@ -257,3 +257,36 @@ export const settleSchema = z.object({
   reason: z.string().max(1000).optional(),
 });
 export type SettleInput = z.infer<typeof settleSchema>;
+
+// --- Singha Connect (docs/09) ----------------------------------------------
+/** Inbound message from a channel adapter/webhook (mock in dev). */
+export const inboundMessageSchema = z.object({
+  channel: z.enum(channelValues),
+  externalThreadId: z.string().min(1).max(200),
+  externalUserId: z.string().min(1).max(200).optional(),
+  text: z.string().max(4000).optional(),
+  providerMessageId: z.string().max(200).optional(),
+});
+export type InboundMessageInput = z.infer<typeof inboundMessageSchema>;
+
+/** Staff/AI outbound reply on a conversation. */
+export const sendMessageSchema = z.object({
+  text: z.string().min(1).max(4000),
+  provenance: z.enum(['staff', 'ai', 'system']).default('staff'),
+});
+export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+/** Toggle a conversation between AI and human handling. */
+export const setAiModeSchema = z.object({ aiMode: z.boolean() });
+export type SetAiModeInput = z.infer<typeof setAiModeSchema>;
+
+/**
+ * Messaging-channel bid INTENT (docs/07, rule 11). Free text becomes an intent —
+ * never a bid — until explicitly confirmed and validated by the auction engine.
+ */
+export const createBidIntentSchema = z.object({
+  auctionId: z.string().min(1),
+  maxAmountMinor: z.number().int().positive(),
+  channel: z.enum(channelValues).default('web'),
+});
+export type CreateBidIntentInput = z.infer<typeof createBidIntentSchema>;

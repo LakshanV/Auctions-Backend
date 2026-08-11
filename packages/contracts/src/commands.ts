@@ -439,3 +439,23 @@ export const catalogueQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(60).default(24),
 });
 export type CatalogueQuery = z.infer<typeof catalogueQuerySchema>;
+
+/**
+ * Query for a single AuctionFlow/Rubik category row (pack 01 doc 05). Each row
+ * owns its own cursor so category bands page INDEPENDENTLY — the catalogue is no
+ * longer limited to the first global page, and every category is reachable.
+ * `cursor` is the opaque id of the last loaded item; omit it for the first slice.
+ */
+export const catalogueRowQuerySchema = z.object({
+  category: z.string().min(1).max(40),
+  saleMethod: z.enum(saleMethodValues).optional(),
+  status: z.string().max(20).optional(),
+  search: z.string().max(120).optional(),
+  location: z.string().max(80).optional(),
+  endingSoon: z.coerce.boolean().optional(),
+  auctionEventId: z.string().min(1).optional(),
+  sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('newest'),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(30).default(12),
+});
+export type CatalogueRowQuery = z.infer<typeof catalogueRowQuerySchema>;

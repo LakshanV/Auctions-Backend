@@ -141,6 +141,15 @@ async function main() {
         district: 'Kandy',
       },
     );
+    // A second vehicles lot so the per-category Rubik row has >1 page at limit=1.
+    const _auctionListing2 = await publishListing(
+      sellerToken,
+      staffToken,
+      'vehicles',
+      'BUY_NOW',
+      { make: 'Honda', model: 'Fit', year: 2018 },
+      'Honda Fit 2018',
+    );
 
     // --- v2 catalogue: list + facets + pagination ---
     const all = await v2('/catalogue?limit=24');
@@ -168,6 +177,45 @@ async function main() {
     // Search.
     const searched = await v2('/catalogue?search=Vitz');
     check(searched.json?.total >= 1, 'search matches the auction lot title');
+
+    // --- Per-category Rubik row: independent cursor pagination (pack 01 doc 05) ---
+    const rowP1 = await v2('/catalogue/row?category=vehicles&limit=1');
+    check(
+      rowP1.status === 200 &&
+        rowP1.json?.category === 'vehicles' &&
+        rowP1.json.items.length === 1 &&
+        rowP1.json.items[0].category === 'vehicles',
+      'row endpoint returns a single-category slice',
+    );
+    check(
+      rowP1.json?.exhausted === false && typeof rowP1.json?.nextCursor === 'string',
+      'row page 1 is not exhausted and carries a nextCursor (>1 vehicles lot reachable)',
+    );
+    const rowP2 = await v2(
+      `/catalogue/row?category=vehicles&limit=1&cursor=${rowP1.json.nextCursor}`,
+    );
+    check(
+      rowP2.status === 200 &&
+        rowP2.json.items.length === 1 &&
+        rowP2.json.items[0].id !== rowP1.json.items[0].id,
+      'row page 2 (via cursor) returns the NEXT distinct vehicles lot — every item reachable',
+    );
+    check(rowP2.json?.exhausted === true, 'row is exhausted after the last vehicles lot');
+    const rowEmpty = await v2('/catalogue/row?category=nonexistent&limit=5');
+    check(
+      rowEmpty.status === 200 &&
+        rowEmpty.json.items.length === 0 &&
+        rowEmpty.json.exhausted === true,
+      'row for an empty category is exhausted with no items',
+    );
+
+    // Sale-aware price sort: within Buy Now, order by buy-now price (doc 05).
+    const buyNowAsc = await v2('/catalogue?saleMethod=BUY_NOW&sort=price_asc');
+    check(
+      buyNowAsc.status === 200 &&
+        buyNowAsc.json.items.every((i) => i.commercial.kind === 'buy_now'),
+      'sale-aware sort: Buy Now price sort returns only buy_now cards',
+    );
 
     // Sale-aware cards: auction has currentBid; EOI does NOT.
     const auctionCard = all.json.items.find((i) => i.id === auctionListing);

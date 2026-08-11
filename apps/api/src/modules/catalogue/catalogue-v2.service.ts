@@ -1,7 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { type CatalogueQuery } from '@singha/contracts';
+import { type CatalogueQuery, type CatalogueRowQuery } from '@singha/contracts';
 import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
+
+/** Filter fields shared by the full catalogue query and a single Rubik row. */
+type CatalogueFilters = {
+  category?: string;
+  saleMethod?: CatalogueQuery['saleMethod'];
+  status?: string;
+  search?: string;
+  location?: string;
+  featured?: boolean;
+  endingSoon?: boolean;
+  auctionEventId?: string;
+};
 
 type FullListing = Prisma.ListingGetPayload<{
   include: {
@@ -69,6 +81,34 @@ export class CatalogueV2Service {
     };
   }
 
+  /**
+   * One AuctionFlow/Rubik category row, cursor-paginated (pack 01 doc 05). The
+   * row owns its own cursor so bands page independently and every category is
+   * reachable — not just the first global page. Ordering is stable (id
+   * tiebreaker) so appending a page never reshuffles already-shown faces.
+   */
+  async row(q: CatalogueRowQuery) {
+    const where = this.buildWhere(q);
+    const orderBy = this.buildOrder(q);
+    // Over-fetch by one to detect whether a further page exists without a count.
+    const rows = (await this.prisma.listing.findMany({
+      where,
+      orderBy,
+      take: q.limit + 1,
+      ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
+      include: this.include(),
+    })) as FullListing[];
+
+    const hasMore = rows.length > q.limit;
+    const page = hasMore ? rows.slice(0, q.limit) : rows;
+    return {
+      category: q.category,
+      items: page.map((l) => this.toCardV2(l)),
+      nextCursor: hasMore ? page[page.length - 1]!.id : null,
+      exhausted: !hasMore,
+    };
+  }
+
   async get(listingId: string) {
     // FIX-01 — public single-lot privacy. A public caller may only resolve a
     // listing that is in a PUBLIC status. Draft/submitted/review/approved/
@@ -97,7 +137,7 @@ export class CatalogueV2Service {
 
   // --- query building -------------------------------------------------------
 
-  private buildWhere(q: CatalogueQuery): Prisma.ListingWhereInput {
+  private buildWhere(q: CatalogueFilters): Prisma.ListingWhereInput {
     const and: Prisma.ListingWhereInput[] = [
       { status: { in: (q.status ? [q.status] : [...PUBLIC_STATUSES]) as never } },
     ];
@@ -126,17 +166,35 @@ export class CatalogueV2Service {
     return { AND: and };
   }
 
-  private buildOrder(q: CatalogueQuery): Prisma.ListingOrderByWithRelationInput {
-    switch (q.sort) {
-      case 'ending':
-        return { auction: { endsAt: 'asc' } };
-      case 'price_asc':
-        return { guidePriceMinor: 'asc' };
-      case 'price_desc':
-        return { guidePriceMinor: 'desc' };
-      default:
-        return { createdAt: 'desc' };
+  /**
+   * Sale-aware, cursor-stable ordering (pack 01 doc 05). Price sorting is
+   * meaningful only relative to a sale method, so when a single `saleMethod` is
+   * selected we sort by THAT method's commercial figure — auctions by live/
+   * opening bid, Buy Now by its price, everything else by the public guide.
+   * Without a sale-method filter, "price" has no single comparable across
+   * heterogeneous methods, so we fall back to recency (documented in TEST_MATRIX).
+   * Every branch ends with `id: 'desc'` so cursor pagination is deterministic.
+   */
+  private buildOrder(
+    q: CatalogueFilters & { sort: CatalogueQuery['sort'] },
+  ): Prisma.ListingOrderByWithRelationInput[] {
+    const id = { id: 'desc' as const };
+    if (q.sort === 'ending') return [{ auction: { endsAt: 'asc' } }, id];
+    if (q.sort === 'price_asc' || q.sort === 'price_desc') {
+      const dir = q.sort === 'price_asc' ? ('asc' as const) : ('desc' as const);
+      switch (q.saleMethod) {
+        case 'TIMED_AUCTION':
+        case 'LIVE_HYBRID':
+          // currentBid falls back to openingBid at the DB via coalesce-like
+          // secondary key; nulls (no auction) sort last.
+          return [{ auction: { currentBidMinor: dir } }, { auction: { openingBidMinor: dir } }, id];
+        case 'BUY_NOW':
+          return [{ buyNowPriceMinor: dir }, id];
+        default:
+          return [{ guidePriceMinor: dir }, id];
+      }
     }
+    return [{ createdAt: 'desc' }, id];
   }
 
   private include() {

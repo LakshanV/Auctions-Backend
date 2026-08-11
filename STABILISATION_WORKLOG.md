@@ -19,19 +19,19 @@ Format: issue → fix → files → tests → status.
 
 ## Fix log
 
-| ID     | Issue                                                                                       | Files                                                                                     | Tests           | Status |
-| ------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------- | ------ |
-| FIX-01 | Public single-lot detail leaked drafts (findUnique, no status filter)                       | catalogue-v2.service.ts                                                                    | S01/S02         | done   |
-| FIX-02 | Cover/gallery/videoAvailable ignored visibility+readiness → private/processing media leaked | catalogue-v2.service.ts                                                                    | S03/S04         | done   |
-| FIX-03 | Media write endpoints had no object-level authz (IDOR across sellers)                        | asset-authz.ts, media.service.ts, media.controller.ts                                     | S05/S06/S22 + unit | done   |
-| FIX-04 | registerMedia accepted arbitrary storageKey + marked ready without object verification       | media.service.ts, storage.provider.ts (+ supabase/unconfigured impls), commands.ts        | S07             | done   |
-| FIX-05 | Fake READY / filename fallback on failed upload                                              | media.service.ts, **frontend** sell/new/page.tsx                                           | S08             | done   |
-| FIX-06 | Documents used an unconstrained visibility string                                            | commands.ts (mediaVisibility enum), media.service.ts                                       | S09             | done   |
-| FIX-07 | Direct video registration bypassed object verification                                       | media.service.ts (verified object → ready), commands.ts                                    | gallery/videoAvailable | done   |
-| FIX-08 | Sensitive commands lacked step-up (MFA/AAL) enforcement                                       | jwt.ts, assurance.guard.ts, require-assurance.decorator.ts, dev.controller.ts + 4 command controllers | S10/S11/S12 + unit | done   |
-| FIX-09 | Production could boot with demo auth / default secrets / wildcard CORS (fail-open)            | packages/config/src/env.ts, production-invariants.test.ts                                  | S13/S14/S15     | done   |
-| FIX-10 | Supabase JWTs weren't verified; JIT customer provisioning unhardened                         | supabase-jwt.ts, jwt.ts, identity-provisioning.ts, principal.middleware.ts, principal.ts, shared.module.ts | S16–S19 (unit/code) | done   |
-| FIX-11 | Private dashboard SSE put the bearer token in the URL                                        | **frontend** lib/api.ts (streamDashboard authenticated fetch reader), dashboard/page.tsx  | S20             | done   |
+| ID     | Issue                                                                                       | Files                                                                                                      | Tests                  | Status |
+| ------ | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------- | ------ |
+| FIX-01 | Public single-lot detail leaked drafts (findUnique, no status filter)                       | catalogue-v2.service.ts                                                                                    | S01/S02                | done   |
+| FIX-02 | Cover/gallery/videoAvailable ignored visibility+readiness → private/processing media leaked | catalogue-v2.service.ts                                                                                    | S03/S04                | done   |
+| FIX-03 | Media write endpoints had no object-level authz (IDOR across sellers)                       | asset-authz.ts, media.service.ts, media.controller.ts                                                      | S05/S06/S22 + unit     | done   |
+| FIX-04 | registerMedia accepted arbitrary storageKey + marked ready without object verification      | media.service.ts, storage.provider.ts (+ supabase/unconfigured impls), commands.ts                         | S07                    | done   |
+| FIX-05 | Fake READY / filename fallback on failed upload                                             | media.service.ts, **frontend** sell/new/page.tsx                                                           | S08                    | done   |
+| FIX-06 | Documents used an unconstrained visibility string                                           | commands.ts (mediaVisibility enum), media.service.ts                                                       | S09                    | done   |
+| FIX-07 | Direct video registration bypassed object verification                                      | media.service.ts (verified object → ready), commands.ts                                                    | gallery/videoAvailable | done   |
+| FIX-08 | Sensitive commands lacked step-up (MFA/AAL) enforcement                                     | jwt.ts, assurance.guard.ts, require-assurance.decorator.ts, dev.controller.ts + 4 command controllers      | S10/S11/S12 + unit     | done   |
+| FIX-09 | Production could boot with demo auth / default secrets / wildcard CORS (fail-open)          | packages/config/src/env.ts, production-invariants.test.ts                                                  | S13/S14/S15            | done   |
+| FIX-10 | Supabase JWTs weren't verified; JIT customer provisioning unhardened                        | supabase-jwt.ts, jwt.ts, identity-provisioning.ts, principal.middleware.ts, principal.ts, shared.module.ts | S16–S19 (unit/code)    | done   |
+| FIX-11 | Private dashboard SSE put the bearer token in the URL                                       | **frontend** lib/api.ts (streamDashboard authenticated fetch reader), dashboard/page.tsx                   | S20                    | done   |
 
 Additional matrix rows verified in the security e2e:
 

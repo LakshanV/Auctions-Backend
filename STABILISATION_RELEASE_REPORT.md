@@ -15,19 +15,19 @@ Baselines: backend @ `e30a276`, frontend @ `2d00eed` (both clean at start).
 
 ## Fixes (P0 security matrix)
 
-| ID     | Area                          | Result |
-| ------ | ----------------------------- | ------ |
-| FIX-01 | Draft lot leak (detail)       | S01/S02 ✓ |
-| FIX-02 | Private/processing media leak | S03/S04 ✓ |
-| FIX-03 | Media object-level authz (IDOR) | S05/S06/S22 ✓ + unit |
-| FIX-04 | Arbitrary storageKey / no object verification | S07 ✓ |
-| FIX-05 | Fake READY / filename fallback (BE + FE) | S08 ✓ |
-| FIX-06 | Unconstrained document visibility | S09 ✓ |
-| FIX-07 | Direct video registration | gallery/videoAvailable ✓ |
-| FIX-08 | Step-up (MFA/AAL) on sensitive commands | S10/S11/S12 ✓ + unit |
-| FIX-09 | Production fail-closed invariants | S13/S14/S15 ✓ |
-| FIX-10 | Supabase JWT verification + hardened JIT provisioning | S16–S19 ✓ (unit/code) |
-| FIX-11 | Stream bearer token in URL (frontend) | S20 ✓ |
+| ID     | Area                                                  | Result                   |
+| ------ | ----------------------------------------------------- | ------------------------ |
+| FIX-01 | Draft lot leak (detail)                               | S01/S02 ✓                |
+| FIX-02 | Private/processing media leak                         | S03/S04 ✓                |
+| FIX-03 | Media object-level authz (IDOR)                       | S05/S06/S22 ✓ + unit     |
+| FIX-04 | Arbitrary storageKey / no object verification         | S07 ✓                    |
+| FIX-05 | Fake READY / filename fallback (BE + FE)              | S08 ✓                    |
+| FIX-06 | Unconstrained document visibility                     | S09 ✓                    |
+| FIX-07 | Direct video registration                             | gallery/videoAvailable ✓ |
+| FIX-08 | Step-up (MFA/AAL) on sensitive commands               | S10/S11/S12 ✓ + unit     |
+| FIX-09 | Production fail-closed invariants                     | S13/S14/S15 ✓            |
+| FIX-10 | Supabase JWT verification + hardened JIT provisioning | S16–S19 ✓ (unit/code)    |
+| FIX-11 | Stream bearer token in URL (frontend)                 | S20 ✓                    |
 
 Additional verified rows: **S21** (auction state privacy), **S22** (cross-seller listing edit → 403), **S23** (idempotent media re-register).
 

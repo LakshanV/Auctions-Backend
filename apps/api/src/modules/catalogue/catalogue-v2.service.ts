@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { type CatalogueQuery, type CatalogueRowQuery } from '@singha/contracts';
+import { CATEGORY_KEYS, type CatalogueQuery, type CatalogueRowQuery } from '@singha/contracts';
 import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -40,7 +40,7 @@ export class CatalogueV2Service {
     const where = this.buildWhere(q);
     const orderBy = this.buildOrder(q);
 
-    const [total, rows, categoryFacet, saleMethodFacet] = await Promise.all([
+    const [total, rows, statusFacet, saleMethodFacet, categoryFacet] = await Promise.all([
       this.prisma.listing.count({ where }),
       this.prisma.listing.findMany({
         where,
@@ -51,16 +51,19 @@ export class CatalogueV2Service {
       }),
       this.prisma.listing.groupBy({ by: ['status'], where, _count: true }).catch(() => []),
       this.prisma.listing.groupBy({ by: ['saleMethod'], where, _count: true }),
+      // DB-side category facet (pack 01 doc 05): one bounded COUNT per known
+      // category — the DB aggregates, we never transfer all matching rows to Node.
+      // `category` lives on the Asset relation, so we constrain per key rather
+      // than group by a relation field.
+      Promise.all(
+        CATEGORY_KEYS.map(async (value) => ({
+          value,
+          count: await this.prisma.listing.count({
+            where: { AND: [where, { asset: { category: value } }] },
+          }),
+        })),
+      ),
     ]);
-
-    // Category facet needs a join to asset — group in JS from a light query.
-    const catRows = await this.prisma.listing.findMany({
-      where,
-      select: { asset: { select: { category: true } } },
-    });
-    const categoryCounts = new Map<string, number>();
-    for (const r of catRows)
-      categoryCounts.set(r.asset.category, (categoryCounts.get(r.asset.category) ?? 0) + 1);
 
     return {
       items: rows.map((l) => this.toCardV2(l as FullListing)),
@@ -69,11 +72,9 @@ export class CatalogueV2Service {
       total,
       totalPages: Math.max(1, Math.ceil(total / q.limit)),
       facets: {
-        category: [...categoryCounts.entries()]
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count),
+        category: categoryFacet.filter((f) => f.count > 0).sort((a, b) => b.count - a.count),
         saleMethod: saleMethodFacet.map((f) => ({ value: f.saleMethod, count: f._count })),
-        status: (categoryFacet as { status: string; _count: number }[]).map((f) => ({
+        status: (statusFacet as { status: string; _count: number }[]).map((f) => ({
           value: f.status,
           count: f._count,
         })),

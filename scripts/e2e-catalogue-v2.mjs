@@ -200,7 +200,25 @@ async function main() {
         rowP2.json.items[0].id !== rowP1.json.items[0].id,
       'row page 2 (via cursor) returns the NEXT distinct vehicles lot — every item reachable',
     );
-    check(rowP2.json?.exhausted === true, 'row is exhausted after the last vehicles lot');
+    // Walk the cursor chain to the end. Robust to other suites' data in the
+    // shared acceptance DB: proves EVERY item is reachable (no repeats) and that
+    // the row terminates (reaches exhausted) — the two properties that matter.
+    const seen = new Set();
+    let walk = rowP1.json;
+    let steps = 0;
+    let duplicate = false;
+    for (;;) {
+      for (const it of walk.items) {
+        if (seen.has(it.id)) duplicate = true;
+        seen.add(it.id);
+      }
+      if (walk.exhausted || !walk.nextCursor || steps++ > 1000) break;
+      walk = (await v2(`/catalogue/row?category=vehicles&limit=1&cursor=${walk.nextCursor}`)).json;
+    }
+    check(
+      walk.exhausted === true && !duplicate && seen.size >= 2,
+      `vehicles row cursor chain terminates, no repeats, all ${seen.size} reachable`,
+    );
     const rowEmpty = await v2('/catalogue/row?category=nonexistent&limit=5');
     check(
       rowEmpty.status === 200 &&

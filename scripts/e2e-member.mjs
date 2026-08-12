@@ -470,6 +470,87 @@ async function main() {
       m360b.json?.flags?.[0]?.status === 'resolved',
       `flag resolution preserves the record (status=${m360b.json?.flags?.[0]?.status})`,
     );
+
+    // --- Member search (Revision 06 P1-10/P1-11) -----------------------------
+    const findable = (
+      await post('/customers', {
+        token: admin,
+        body: {
+          legalName: 'Zephyrine Testwick',
+          email: `zephyrine.${Date.now()}@example.com`,
+          phone: `+9477${Math.floor(1_000_000 + Math.random() * 8_999_999)}`,
+        },
+      })
+    ).json;
+    const custView = await token(['customer'], findable.id);
+
+    // Non-staff cannot search.
+    check(
+      (await get('/members/search?q=Zephyrine', { token: custView })).status === 403,
+      'customer cannot search members → 403',
+    );
+
+    // Exact Client ID → the member ranks first; contact is masked, raw contact absent.
+    const byId = await get(`/members/search?q=${findable.clientReference}`, { token: admin });
+    check(byId.status === 200, `staff can search members (${byId.status})`);
+    check(
+      byId.json?.results?.[0]?.customerId === findable.id,
+      `exact Client ID search returns the member first (${byId.json?.results?.[0]?.clientReference})`,
+    );
+    const top = byId.json?.results?.[0] ?? {};
+    check(
+      typeof top.emailMasked === 'string' &&
+        top.emailMasked.includes('•') &&
+        top.emailMasked !== findable.email,
+      'search result masks the email (no full contact in the list)',
+    );
+    check(
+      !('email' in top) && !('phone' in top),
+      'search result never carries the raw email/phone',
+    );
+
+    // By legal name (case-insensitive substring).
+    check(
+      (await get('/members/search?q=zephyrine', { token: admin })).json?.results?.some(
+        (r) => r.customerId === findable.id,
+      ),
+      'name search finds the member (case-insensitive)',
+    );
+
+    // By email.
+    check(
+      (
+        await get(`/members/search?q=${encodeURIComponent(findable.email)}`, { token: admin })
+      ).json?.results?.some((r) => r.customerId === findable.id),
+      'email search finds the member',
+    );
+
+    // By mobile digits (stored with country code).
+    const digits = findable.phone.replace(/\D/g, '').slice(-7);
+    check(
+      (await get(`/members/search?q=${digits}`, { token: admin })).json?.results?.some(
+        (r) => r.customerId === findable.id,
+      ),
+      `mobile search finds the member (…${digits.slice(-4)})`,
+    );
+
+    // Exact Client ID outranks a member whose NAME merely equals that Client ID.
+    await post('/customers', {
+      token: admin,
+      body: { legalName: findable.clientReference, email: `collide.${Date.now()}@example.com` },
+    });
+    check(
+      (await get(`/members/search?q=${findable.clientReference}`, { token: admin })).json
+        ?.results?.[0]?.customerId === findable.id,
+      'exact Client ID ranks above a name that merely equals it',
+    );
+
+    // Too-short query → empty, not an error.
+    const tiny = await get('/members/search?q=z', { token: admin });
+    check(
+      tiny.status === 200 && tiny.json?.results?.length === 0,
+      'too-short query returns empty results, not an error',
+    );
   } finally {
     child.kill('SIGKILL');
   }

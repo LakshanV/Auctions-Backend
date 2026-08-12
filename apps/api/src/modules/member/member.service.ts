@@ -706,6 +706,75 @@ export class MemberService {
     };
   }
 
+  /**
+   * Staff member SEARCH (Revision 06 P1-10/P1-11). Look up a member by Client ID
+   * (CUS-######), mobile, email, legal name or organisation — so staff never
+   * paste raw ULIDs and the onsite desk finds an existing member before creating
+   * a duplicate. `member:read` only; contact is MASKED in the list (open the 360
+   * for full detail). Exact Client ID / contact rank above name substrings.
+   */
+  async search(principal: Principal, rawQuery: Record<string, unknown>) {
+    if (!principal.permissions.has(Permission.MemberRead)) {
+      throw new ForbiddenException('member:read required');
+    }
+    const q = String(rawQuery?.q ?? '').trim();
+    const take = Math.min(Math.max(Math.trunc(Number(rawQuery?.limit) || 10), 1), 25);
+    // A search box may fire on every keystroke — an empty/too-short query is not
+    // an error, it just has no results yet.
+    if (q.length < 2) return { query: q, count: 0, results: [] };
+
+    const digits = q.replace(/\D/g, '');
+    const insensitive = { contains: q, mode: 'insensitive' as const };
+    const or: Prisma.CustomerWhereInput[] = [
+      { clientReference: insensitive },
+      { legalName: insensitive },
+      { email: insensitive },
+      { phone: insensitive },
+      { organizationMembers: { some: { organization: { legalName: insensitive } } } },
+      { organizationMembers: { some: { organization: { organizationReference: insensitive } } } },
+    ];
+    // Match a mobile even when it was stored with country code / formatting.
+    if (digits.length >= 4) or.push({ phone: { contains: digits } });
+
+    // Fetch a candidate pool a little larger than `take`, then rank exact matches
+    // first before slicing — a name substring never outranks an exact Client ID.
+    const customers = await this.prisma.customer.findMany({
+      where: { OR: or },
+      include: {
+        memberships: { orderBy: { createdAt: 'desc' }, take: 1 },
+        organizationMembers: { include: { organization: true }, take: 1 },
+      },
+      take: Math.min(take * 4, 80),
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const qLower = q.toLowerCase();
+    const ranked = customers
+      .map((c) => ({ c, rank: memberSearchRank(c, qLower, digits) }))
+      .sort((a, b) => a.rank - b.rank || (a.c.legalName ?? '').localeCompare(b.c.legalName ?? ''))
+      .slice(0, take);
+
+    const results = await Promise.all(
+      ranked.map(async ({ c }) => ({
+        customerId: c.id,
+        clientReference: c.clientReference,
+        legalName: c.legalName,
+        emailMasked: maskEmail(c.email),
+        phoneMasked: maskPhone(c.phone),
+        kycStatus: c.kycStatus,
+        membershipStatus: c.memberships[0]?.status ?? 'pending',
+        roles: await this.deriveRoles(c.id),
+        organization: c.organizationMembers[0]
+          ? {
+              reference: c.organizationMembers[0].organization.organizationReference,
+              legalName: c.organizationMembers[0].organization.legalName,
+            }
+          : null,
+      })),
+    );
+    return { query: q, count: results.length, results };
+  }
+
   // ---- helpers ---------------------------------------------------------------
 
   private async deriveRoles(customerId: string): Promise<Array<'buyer' | 'seller'>> {
@@ -853,4 +922,46 @@ export class MemberService {
       resolvedAt: f.resolvedAt,
     };
   }
+}
+
+// ---- member-search helpers (pure) --------------------------------------------
+
+/** Rank a candidate against the query: exact Client ID (0) > exact contact (1) >
+ *  prefix (2) > substring (3), so a name substring never outranks an exact ID. */
+function memberSearchRank(
+  c: {
+    clientReference: string | null;
+    email: string | null;
+    phone: string | null;
+    legalName: string | null;
+  },
+  qLower: string,
+  digits: string,
+): number {
+  const ref = (c.clientReference ?? '').toLowerCase();
+  const email = (c.email ?? '').toLowerCase();
+  const phoneDigits = (c.phone ?? '').replace(/\D/g, '');
+  if (ref && ref === qLower) return 0;
+  if ((email && email === qLower) || (digits.length >= 6 && phoneDigits === digits)) return 1;
+  if (ref.startsWith(qLower) || (c.legalName ?? '').toLowerCase().startsWith(qLower)) return 2;
+  return 3;
+}
+
+/** Mask an email for a staff list — keeps enough to disambiguate, not the whole
+ *  address (open the 360 for full contact). e.g. `jo•••@example.com`. */
+function maskEmail(email: string | null): string | null {
+  if (!email) return null;
+  const at = email.indexOf('@');
+  if (at <= 0) return '•••';
+  const user = email.slice(0, at);
+  const head = user.slice(0, 2);
+  return `${head}${'•'.repeat(Math.max(1, user.length - head.length))}@${email.slice(at + 1)}`;
+}
+
+/** Mask a phone to its last four digits, e.g. `••••4567`. */
+function maskPhone(phone: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length <= 4) return '•'.repeat(Math.max(1, digits.length));
+  return `••••${digits.slice(-4)}`;
 }

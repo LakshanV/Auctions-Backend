@@ -144,6 +144,12 @@ export class MemberController {
     return this.member.recalculatePerformance(principal, body.customerId, body.context);
   }
 
+  @Get('search')
+  @RequirePermissions(Permission.MemberRead)
+  search(@CurrentActor() principal: Principal, @Query() query: Record<string, unknown>) {
+    return this.member.search(principal, query);
+  }
+
   @Get(':customerId/360')
   @RequirePermissions(Permission.MemberRead)
   member360(@CurrentActor() principal: Principal, @Param('customerId') customerId: string) {

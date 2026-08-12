@@ -387,6 +387,67 @@ async function main() {
       `a 400k bid within the remaining capacity is accepted after winning (${okBid.status})`,
     );
 
+    // --- §5 (P0): block security release while obligations exist --------------
+    const custRel = await registerCustomer('release');
+    const relToken = await token(['customer'], custRel.id);
+    const secRel = await post('/members/security', {
+      token: admin,
+      body: { customerId: custRel.id, type: 'cash_deposit', faceAmountMinor: 50_000 },
+    });
+    await post(`/members/security/${secRel.json.id}/verify`, {
+      token: admin,
+      body: { decision: 'verify' },
+    });
+    await post('/members/credit/approve', {
+      token: admin,
+      body: { customerId: custRel.id, requiredSecurityBps: 500, approvedLimitMinor: 1_000_000 },
+    });
+    const relLot = await openAuction(staffToken, sellerToken);
+    await post(`/auctions/${relLot}/bids`, { token: relToken, body: { maxAmountMinor: 300_000 } });
+
+    // Release is blocked while an active reservation depends on the security.
+    const blockedRelease = await post(`/members/security/${secRel.json.id}/release`, {
+      token: admin,
+      body: { reason: 'customer requested' },
+    });
+    check(
+      blockedRelease.status === 409 && blockedRelease.json?.code === 'OUTSTANDING_EXPOSURE',
+      `security release blocked by active exposure → OUTSTANDING_EXPOSURE (${blockedRelease.status}/${blockedRelease.json?.code})`,
+    );
+
+    // Unauthorized actor cannot release.
+    const relForbidden = await post(`/members/security/${secRel.json.id}/release`, {
+      token: relToken,
+      body: { reason: 'x' },
+    });
+    check(
+      relForbidden.status === 403,
+      `customer cannot release security → 403 (${relForbidden.status})`,
+    );
+
+    // Outbid + close releases the loser's reservation → exposure clears.
+    const outbidder = await registerCustomer('outbidder');
+    await post(`/auctions/${relLot}/bids`, {
+      token: await token(['customer'], outbidder.id),
+      body: { maxAmountMinor: 500_000 },
+    });
+    await post(`/auctions/${relLot}/close`, { token: staffToken });
+    const relSelf = await get('/me/member', { token: relToken });
+    check(
+      relSelf.json?.bidCapacity?.committedMinor === 0,
+      `losing bidder exposure released at close (committed ${relSelf.json?.bidCapacity?.committedMinor})`,
+    );
+
+    // With no outstanding exposure, release now succeeds.
+    const allowedRelease = await post(`/members/security/${secRel.json.id}/release`, {
+      token: admin,
+      body: { reason: 'cleared' },
+    });
+    check(
+      allowedRelease.status === 201 && allowedRelease.json?.status === 'released',
+      `security release allowed once exposure cleared (${allowedRelease.status}/${allowedRelease.json?.status})`,
+    );
+
     // --- Temporary onsite membership -----------------------------------------
     const custTmp = await registerCustomer('tmp');
     const tmpToken = await token(['customer'], custTmp.id);

@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   type ApproveCreditInput,
   type CreateMemberFlagInput,
@@ -143,6 +148,22 @@ export class MemberService {
     if (!inst) throw new NotFoundException('Security instrument not found');
     const actor = toActor(principal);
     return this.uow.execute(actor, async (ctx) => {
+      // §5/§7-C: a deposit or guarantee cannot leave the system while Singha still
+      // relies on it. Lock the customer's facility row (the SAME row the bid gate
+      // locks) so a concurrent bid can't slip a reservation between this check and
+      // the release — release and a new bid serialize, one loses deterministically.
+      // Then block if any ACTIVE or CONVERTED (won-but-unpaid) exposure remains.
+      await ctx.tx.$queryRawUnsafe(
+        `SELECT id FROM credit_facility WHERE customer_id = $1 AND status = 'active' FOR UPDATE`,
+        inst.customerId,
+      );
+      const committed = await this.exposure.committedExposureMinor(ctx.tx, inst.customerId);
+      if (committed > 0n) {
+        throw new ConflictException({
+          code: 'OUTSTANDING_EXPOSURE',
+          message: 'This security supports outstanding exposure and cannot be released.',
+        });
+      }
       const updated = await ctx.tx.securityInstrument.update({
         where: { id },
         data: {

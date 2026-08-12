@@ -796,6 +796,31 @@ export class MemberService {
     return { query: q, count: results.length, results };
   }
 
+  /**
+   * Canonical credit policy (Rev 06.2 §8): the SINGLE backend source for the
+   * required-security ratio, enforcement mode and policy version. Frontend
+   * previews, staff approval and temporary grants read this rather than
+   * hard-coding 5%. Public — it carries no member data. Safe defaults: 5%
+   * (500 bps), `facility`, `v1`.
+   */
+  async creditPolicy() {
+    const [bps, enforcement, version] = await Promise.all([
+      this.prisma.businessConfig.findUnique({ where: { key: 'credit.requiredSecurityBps' } }),
+      this.prisma.businessConfig.findUnique({ where: { key: 'credit.enforcement' } }),
+      this.prisma.businessConfig.findUnique({ where: { key: 'credit.policyVersion' } }),
+    ]);
+    const parsedBps = Number(bps?.value);
+    const requiredSecurityBps = Number.isFinite(parsedBps) && parsedBps > 0 ? parsedBps : 500;
+    const enf = enforcement?.value;
+    const mode = enf === 'off' || enf === 'strict' || enf === 'facility' ? enf : 'facility';
+    return {
+      requiredSecurityBps,
+      capacityMultiple: 10_000 / requiredSecurityBps,
+      enforcement: mode,
+      policyVersion: version?.value || 'v1',
+    };
+  }
+
   // ---- helpers ---------------------------------------------------------------
 
   private async deriveRoles(customerId: string): Promise<Array<'buyer' | 'seller'>> {

@@ -144,6 +144,12 @@ export class MemberController {
     return this.member.recalculatePerformance(principal, body.customerId, body.context);
   }
 
+  // Public canonical credit policy (Rev 06.2 §8) — no member data, no auth.
+  @Get('credit-policy')
+  creditPolicy() {
+    return this.member.creditPolicy();
+  }
+
   @Get('search')
   @RequirePermissions(Permission.MemberRead)
   search(@CurrentActor() principal: Principal, @Query() query: Record<string, unknown>) {

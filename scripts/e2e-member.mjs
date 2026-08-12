@@ -633,6 +633,20 @@ async function main() {
       tiny.status === 200 && tiny.json?.results?.length === 0,
       'too-short query returns empty results, not an error',
     );
+
+    // --- Credit policy (§8): canonical, public, versioned --------------------
+    const policy = await get('/members/credit-policy');
+    check(
+      policy.status === 200 &&
+        policy.json?.requiredSecurityBps === 500 &&
+        !!policy.json?.policyVersion &&
+        ['off', 'facility', 'strict'].includes(policy.json?.enforcement),
+      `public credit policy: ${policy.json?.requiredSecurityBps}bps · ${policy.json?.enforcement} · ${policy.json?.policyVersion}`,
+    );
+    check(
+      policy.json?.capacityMultiple === 20,
+      `5% policy → 20x capacity multiple (${policy.json?.capacityMultiple})`,
+    );
   } finally {
     child.kill('SIGKILL');
   }

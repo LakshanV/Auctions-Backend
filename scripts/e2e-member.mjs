@@ -127,11 +127,30 @@ async function openAuctionInEvent(staffToken, sellerToken, eventId, sequence) {
   await post(`/auctions/${a.json.id}/open`, { token: staffToken });
   return a.json.id;
 }
+async function makeBuyNowListing(sellerToken, staffToken, priceMinor) {
+  const asset = await post('/assets', {
+    token: sellerToken,
+    body: { category: 'vehicles', attributes: { make: 'BN', model: 'X', year: 2022 } },
+  });
+  const listing = await post('/listings', {
+    token: sellerToken,
+    body: {
+      assetId: asset.json.id,
+      saleMethod: 'BUY_NOW',
+      publicRef: `BN-${Date.now()}-${Math.floor(Math.random() * 1e5)}`,
+    },
+  });
+  await post(`/exchange/listings/${listing.json.id}/buy-now-price`, {
+    token: staffToken,
+    body: { amountMinor: priceMinor, currency: 'LKR' },
+  });
+  return listing.json.id;
+}
 
 async function main() {
   const child = spawn('node', ['apps/api/dist/main.js'], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: process.env,
+    env: { ...process.env, FEATURE_BUY_NOW: 'true' },
   });
   const logs = [];
   child.stdout.on('data', (d) => logs.push(d.toString()));
@@ -660,6 +679,36 @@ async function main() {
       bgSelf.json?.bidCapacity?.committedMinor === 300_000 &&
         bgSelf.json?.bidCapacity?.availableMinor === 0,
       `BG expiry: obligation retained (committed ${bgSelf.json?.bidCapacity?.committedMinor}), new capacity zeroed (available ${bgSelf.json?.bidCapacity?.availableMinor})`,
+    );
+
+    // --- §11 (P1): binding non-auction purchase (Buy Now) enforces capacity ---
+    const bnBuyer = await registerCustomer('buynow');
+    const bnTok = await token(['customer'], bnBuyer.id);
+    const bnSec = await post('/members/security', {
+      token: admin,
+      body: { customerId: bnBuyer.id, type: 'cash_deposit', faceAmountMinor: 50_000 },
+    });
+    await post(`/members/security/${bnSec.json.id}/verify`, {
+      token: admin,
+      body: { decision: 'verify' },
+    });
+    await post('/members/credit/approve', {
+      token: admin,
+      body: { customerId: bnBuyer.id, requiredSecurityBps: 500, approvedLimitMinor: 1_000_000 },
+    });
+    const bnListing1 = await makeBuyNowListing(sellerToken, staffToken, 800_000);
+    const buy1 = await post(`/exchange/listings/${bnListing1}/buy-now`, { token: bnTok });
+    check(buy1.status === 201, `credit buyer Buy Now within capacity accepted (${buy1.status})`);
+    const bnSelf = await get('/me/member', { token: bnTok });
+    check(
+      bnSelf.json?.bidCapacity?.committedMinor === 800_000,
+      `Buy Now creates committed purchase exposure (${bnSelf.json?.bidCapacity?.committedMinor})`,
+    );
+    const bnListing2 = await makeBuyNowListing(sellerToken, staffToken, 500_000);
+    const buy2 = await post(`/exchange/listings/${bnListing2}/buy-now`, { token: bnTok });
+    check(
+      buy2.status === 403 && buy2.json?.code === 'CREDIT_LIMIT_EXCEEDED',
+      `Buy Now over remaining capacity rejected → CREDIT_LIMIT_EXCEEDED (${buy2.status}/${buy2.json?.code})`,
     );
 
     // --- Temporary onsite membership -----------------------------------------

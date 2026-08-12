@@ -16,10 +16,11 @@ import {
 import { OFFER_RESPONSES, assertOfferTransition } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
-import { UnitOfWork } from '../../shared/persistence/unit-of-work';
+import { UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-work';
 import { sellerOrgForListing } from '../../shared/persistence/seller-org';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
+import { CreditExposureService } from '../member/credit-exposure.service';
 
 type FeatureKey = 'buyNow' | 'makeOffer' | 'sealedTender';
 
@@ -35,7 +36,42 @@ export class ExchangeService {
     private readonly prisma: PrismaService,
     private readonly uow: UnitOfWork,
     private readonly config: AppConfigService,
+    private readonly exposure: CreditExposureService,
   ) {}
+
+  /** Reserve bid-capacity for a binding purchase, converting it to a sale
+   *  obligation; throws the deterministic denial code on refusal (§11). */
+  private async reservePurchase(
+    ctx: UowContext,
+    input: {
+      customerId: string;
+      saleId: string;
+      listingId: string;
+      channel: string;
+      amountMinor: bigint;
+      currency: string;
+    },
+  ) {
+    const eventLot = await ctx.tx.auctionEventLot.findFirst({
+      where: { listingId: input.listingId },
+      select: { auctionEventId: true },
+    });
+    const reserve = await this.exposure.reserveBindingSale(ctx, {
+      customerId: input.customerId,
+      saleId: input.saleId,
+      sourceType: input.channel,
+      sourceId: input.saleId,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      scope: { eventId: eventLot?.auctionEventId ?? null },
+    });
+    if (!reserve.ok) {
+      throw new ForbiddenException({
+        code: reserve.reason,
+        message: 'Purchase rejected by bid-capacity policy',
+      });
+    }
+  }
 
   private requireFeature(key: FeatureKey) {
     if (!this.config.get().features[key]) {
@@ -108,6 +144,14 @@ export class ExchangeService {
         },
       });
       await ctx.tx.listing.update({ where: { id: listingId }, data: { status: 'sold' } });
+      await this.reservePurchase(ctx, {
+        customerId: buyerId,
+        saleId: sale.id,
+        listingId,
+        channel: 'buy_now',
+        amountMinor: sale.amountMinor,
+        currency: sale.currency,
+      });
       ctx.emit({
         name: DomainEventName.SaleConfirmed,
         aggregateType: 'Listing',
@@ -207,6 +251,14 @@ export class ExchangeService {
           },
         });
         await ctx.tx.listing.update({ where: { id: offer.listingId }, data: { status: 'sold' } });
+        await this.reservePurchase(ctx, {
+          customerId: offer.customerId,
+          saleId: sale.id,
+          listingId: offer.listingId,
+          channel: 'make_offer',
+          amountMinor: sale.amountMinor,
+          currency: sale.currency,
+        });
         ctx.emit({
           name: DomainEventName.SaleConfirmed,
           aggregateType: 'Listing',
@@ -349,6 +401,14 @@ export class ExchangeService {
         },
       });
       await ctx.tx.listing.update({ where: { id: listingId }, data: { status: 'sold' } });
+      await this.reservePurchase(ctx, {
+        customerId: winner.customerId,
+        saleId: sale.id,
+        listingId,
+        channel: 'sealed_tender',
+        amountMinor: sale.amountMinor,
+        currency: sale.currency,
+      });
       ctx.emit({
         name: DomainEventName.TenderOpened,
         aggregateType: 'Listing',

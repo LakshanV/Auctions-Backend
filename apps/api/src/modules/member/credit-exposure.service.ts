@@ -244,6 +244,48 @@ export class CreditExposureService {
     return { ok: true };
   }
 
+  /**
+   * Reserve capacity for a directly-binding non-auction purchase — Buy Now, an
+   * accepted offer, an awarded tender (§11). Runs the SAME eligibility / scope /
+   * security / capacity checks as a bid, then records the exposure as a CONVERTED
+   * (unpaid-purchase) reservation linked to the sale so it stays committed until
+   * commerce releases it on payment. A cash buyer with no facility passes through
+   * with no reservation (unchanged behaviour).
+   */
+  async reserveBindingSale(
+    ctx: UowContext,
+    input: {
+      customerId: string;
+      saleId: string;
+      sourceType: string;
+      sourceId: string;
+      amountMinor: bigint;
+      currency: string;
+      scope?: { auctionId?: string; eventId?: string | null; category?: string | null };
+    },
+  ): Promise<ReserveResult> {
+    const result = await this.checkAndReserve(ctx, {
+      customerId: input.customerId,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      scope: input.scope,
+    });
+    if (!result.ok) return result;
+    // A facility-backed reservation exists → convert it to a sale obligation.
+    const existing = await ctx.tx.creditReservation.findUnique({
+      where: { sourceType_sourceId: { sourceType: input.sourceType, sourceId: input.sourceId } },
+    });
+    if (existing && existing.status === 'active') {
+      await ctx.tx.creditReservation.update({
+        where: { id: existing.id },
+        data: { status: 'converted', convertedToSaleId: input.saleId },
+      });
+    }
+    return { ok: true };
+  }
+
   /** Release the reservation for a source (e.g. an auction loser at close). */
   async release(ctx: UowContext, sourceType: string, sourceId: string): Promise<void> {
     const existing = await ctx.tx.creditReservation.findUnique({

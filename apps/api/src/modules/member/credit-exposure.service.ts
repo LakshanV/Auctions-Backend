@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { DomainEventName, newId } from '@singha/contracts';
-import { computeCreditAvailability, fitsWithinCapacity } from '@singha/domain';
+import {
+  calculatedBaseLimitMinor,
+  computeCreditAvailability,
+  fitsWithinCapacity,
+} from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { type UowContext } from '../../shared/persistence/unit-of-work';
 
@@ -78,6 +82,42 @@ export class CreditExposureService {
   }
 
   /**
+   * The facility's approved limit re-derived from CURRENTLY eligible supporting
+   * security (§6): expired, released, rejected or unverified instruments count for
+   * zero, so a lapsed bank guarantee cannot keep backing new exposure. A facility
+   * with no linked securities keeps its approved limit (nothing to revalidate).
+   * `securityExhausted` is true when linked security exists but none is eligible.
+   */
+  async effectiveApprovedLimitMinor(
+    tx: UowContext['tx'],
+    facility: { id: string; approvedLimitMinor: bigint; requiredSecurityBps: number },
+  ): Promise<{ limit: bigint; securityExhausted: boolean }> {
+    const links = await tx.creditFacilitySecurity.findMany({
+      where: { facilityId: facility.id },
+      select: {
+        security: { select: { status: true, expiresAt: true, eligibleAmountMinor: true } },
+      },
+    });
+    if (links.length === 0) return { limit: facility.approvedLimitMinor, securityExhausted: false };
+    const now = new Date();
+    const eligible = links.reduce((sum, l) => {
+      const s = l.security;
+      const valid =
+        (s.status === 'verified' || s.status === 'active') && (!s.expiresAt || s.expiresAt > now);
+      return valid ? sum + s.eligibleAmountMinor : sum;
+    }, 0n);
+    if (eligible === 0n) return { limit: 0n, securityExhausted: true };
+    const supported = calculatedBaseLimitMinor({
+      eligibleSecurityMinor: eligible,
+      requiredSecurityBps: facility.requiredSecurityBps,
+    });
+    return {
+      limit: supported < facility.approvedLimitMinor ? supported : facility.approvedLimitMinor,
+      securityExhausted: false,
+    };
+  }
+
+  /**
    * Check membership/status eligibility and reserve `amountMinor` of capacity for
    * `(sourceType, sourceId)` atomically. Idempotent per source: a higher max on the
    * same lot updates the reservation in place rather than stacking exposure.
@@ -151,6 +191,14 @@ export class CreditExposureService {
       };
     }
 
+    // §6: revalidate supporting security AT bid time — a lapsed instrument reduces
+    // (or removes) the facility's effective limit even if the facility itself has
+    // not expired.
+    const effective = await this.effectiveApprovedLimitMinor(tx, facility);
+    if (effective.securityExhausted) {
+      return { ok: false, reason: DenialReason.SecurityExpired };
+    }
+
     // Committed against THIS facility only — its own scoped capacity (§4/§3).
     const committed = await this.committedExposureMinor(tx, input.customerId, {
       excludeSource: { sourceType: input.sourceType, sourceId: input.sourceId },
@@ -158,7 +206,7 @@ export class CreditExposureService {
     });
 
     const fits = fitsWithinCapacity({
-      approvedLimitMinor: facility.approvedLimitMinor,
+      approvedLimitMinor: effective.limit,
       temporaryUpliftMinor: facility.temporaryUpliftMinor,
       committedExposureMinor: committed,
       requestedMinor: input.amountMinor,
@@ -271,8 +319,12 @@ export class CreditExposureService {
     const committed = await this.committedExposureMinor(this.prisma, customerId, {
       facilityId: facility.id,
     });
+    // Reflect currently-eligible supporting security in the shown limit (§6): if a
+    // backing guarantee has lapsed, new capacity drops to zero — but the committed
+    // obligation is retained (debt is never erased).
+    const effective = await this.effectiveApprovedLimitMinor(this.prisma, facility);
     const a = computeCreditAvailability({
-      approvedLimitMinor: facility.approvedLimitMinor,
+      approvedLimitMinor: effective.limit,
       temporaryUpliftMinor: facility.temporaryUpliftMinor,
       committedExposureMinor: committed,
     });

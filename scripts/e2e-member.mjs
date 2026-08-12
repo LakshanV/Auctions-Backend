@@ -616,6 +616,52 @@ async function main() {
       `deterministic: most-specific facility chosen (not aggregated) → over-cap bid rejected (${detOver.status}/${detOver.json?.code})`,
     );
 
+    // --- §6 (P0): supporting-security expiry revalidated at bid time ----------
+    const bgCust = await registerCustomer('bgexpiry');
+    const bgTok = await token(['customer'], bgCust.id);
+    const bgLot = await openAuction(staffToken, sellerToken);
+    const bgSec = await post('/members/security', {
+      token: admin,
+      body: {
+        customerId: bgCust.id,
+        type: 'bank_guarantee',
+        faceAmountMinor: 100_000,
+        issuingBank: 'Test Bank',
+        expiresAt: new Date(Date.now() + 2500).toISOString(),
+      },
+    });
+    await post(`/members/security/${bgSec.json.id}/verify`, {
+      token: admin,
+      body: { decision: 'verify' },
+    });
+    await post('/members/credit/approve', {
+      token: admin,
+      body: { customerId: bgCust.id, requiredSecurityBps: 500, approvedLimitMinor: 1_000_000 },
+    });
+    check(
+      (await post(`/auctions/${bgLot}/bids`, { token: bgTok, body: { maxAmountMinor: 300_000 } }))
+        .status === 201,
+      'valid bank guarantee supports a bid',
+    );
+    // Let the guarantee lapse, then a NEW bid must be denied — the lapsed BG no
+    // longer backs new exposure — while the existing obligation is retained.
+    await sleep(2800);
+    const bgLot2 = await openAuction(staffToken, sellerToken);
+    const bgAfter = await post(`/auctions/${bgLot2}/bids`, {
+      token: bgTok,
+      body: { maxAmountMinor: 100_000 },
+    });
+    check(
+      bgAfter.status === 403 && bgAfter.json?.code === 'SECURITY_EXPIRED',
+      `expired bank guarantee denies new exposure → SECURITY_EXPIRED (${bgAfter.status}/${bgAfter.json?.code})`,
+    );
+    const bgSelf = await get('/me/member', { token: bgTok });
+    check(
+      bgSelf.json?.bidCapacity?.committedMinor === 300_000 &&
+        bgSelf.json?.bidCapacity?.availableMinor === 0,
+      `BG expiry: obligation retained (committed ${bgSelf.json?.bidCapacity?.committedMinor}), new capacity zeroed (available ${bgSelf.json?.bidCapacity?.availableMinor})`,
+    );
+
     // --- Temporary onsite membership -----------------------------------------
     const custTmp = await registerCustomer('tmp');
     const tmpToken = await token(['customer'], custTmp.id);

@@ -17,10 +17,28 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
+
+      # The ephemeral-DB harness (scripts/with-ephemeral-db.mjs) needs initdb,
+      # pg_ctl and psql. On ubuntu runners PostgreSQL is installed but its binaries
+      # live under /usr/lib/postgresql/<ver>/bin, which is NOT on PATH (Rev 05 §2).
+      # Put the newest one on PATH (installing the client/server if somehow absent)
+      # and prove the tools resolve before any DB E2E runs.
+      - name: Ensure PostgreSQL tooling (initdb/pg_ctl/psql) on PATH
+        run: |
+          PGBIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$PGBIN" ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql postgresql-client
+            PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)
+          fi
+          echo "$PGBIN" >> "$GITHUB_PATH"
+          "$PGBIN/initdb" --version
+          "$PGBIN/pg_ctl" --version
+          "$PGBIN/psql" --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -36,6 +54,13 @@ jobs:
 
       - name: E2E (auction engine — concurrency, soft-close, winner)
         run: pnpm run test:auction
+
+      # Member identity, credit, security & performance engine (Revision 05):
+      # Client ID uniqueness, configurable 5% rule, verified/expired security,
+      # concurrency-safe credit reservation (no over-commit), temporary onsite
+      # grant, deterministic performance, and flag/score privacy.
+      - name: E2E (member — Client ID, credit exposure, security, performance)
+        run: pnpm run test:member
 
       # MANDATORY security gate (pack P1 #13): the P0 negative regression suite —
       # privacy, media IDOR, storage integrity, AAL2/MFA and public-state leakage.

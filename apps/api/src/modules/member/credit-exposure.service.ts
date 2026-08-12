@@ -45,14 +45,21 @@ export class CreditExposureService {
     return v === 'off' || v === 'strict' || v === 'facility' ? v : DEFAULT_ENFORCEMENT;
   }
 
-  /** Committed exposure = sum of the customer's ACTIVE reservations. */
+  /**
+   * The ONE canonical committed-exposure calculation (Rev 06.2 §3): ACTIVE
+   * reservations PLUS CONVERTED (won-but-unpaid) reservations. Used identically by
+   * bid admission, Member Self and Member 360, so a customer never regains
+   * capacity merely by winning — only authoritative payment/release (which flips
+   * the reservation to `released`) frees it. Accepts a tx OR the base client so
+   * the in-transaction gate and the read projection share one definition.
+   */
   async committedExposureMinor(
     tx: UowContext['tx'],
     customerId: string,
     excludeSource?: { sourceType: string; sourceId: string },
   ): Promise<bigint> {
     const rows = await tx.creditReservation.findMany({
-      where: { customerId, status: 'active' },
+      where: { customerId, status: { in: ['active', 'converted'] } },
       select: { amountMinor: true, sourceType: true, sourceId: true },
     });
     return rows.reduce((sum, r) => {
@@ -236,12 +243,8 @@ export class CreditExposureService {
         hasFacility: false,
       };
     }
-    const committed = await this.prisma.creditReservation
-      .findMany({
-        where: { customerId, status: { in: ['active', 'converted'] } },
-        select: { amountMinor: true },
-      })
-      .then((rs) => rs.reduce((s, r) => s + r.amountMinor, 0n));
+    // Same canonical committed calc as the bid-admission gate (§3).
+    const committed = await this.committedExposureMinor(this.prisma, customerId);
     const a = computeCreditAvailability({
       approvedLimitMinor: facility.approvedLimitMinor,
       temporaryUpliftMinor: facility.temporaryUpliftMinor,

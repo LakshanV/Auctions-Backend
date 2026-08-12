@@ -366,6 +366,27 @@ async function main() {
       `won bid converts to purchase exposure (still committed ${selfWinner.json?.bidCapacity?.committedMinor})`,
     );
 
+    // §3 (P0): converted unpaid exposure must be counted at NEW bid admission —
+    // winning does not hand capacity back. Winner has approved 1,000,000 with
+    // 500,000 committed as a converted purchase → only 500,000 available.
+    const newLot = await openAuction(staffToken, sellerToken);
+    const overBid = await post(`/auctions/${newLot}/bids`, {
+      token: winnerToken,
+      body: { maxAmountMinor: 600_000 },
+    });
+    check(
+      overBid.status === 403 && overBid.json?.code === 'CREDIT_LIMIT_EXCEEDED',
+      `converted unpaid exposure counted at admission → new 600k bid rejected (${overBid.status}/${overBid.json?.code})`,
+    );
+    const okBid = await post(`/auctions/${newLot}/bids`, {
+      token: winnerToken,
+      body: { maxAmountMinor: 400_000 },
+    });
+    check(
+      okBid.status === 201,
+      `a 400k bid within the remaining capacity is accepted after winning (${okBid.status})`,
+    );
+
     // --- Temporary onsite membership -----------------------------------------
     const custTmp = await registerCustomer('tmp');
     const tmpToken = await token(['customer'], custTmp.id);

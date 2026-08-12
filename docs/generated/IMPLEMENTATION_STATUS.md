@@ -61,3 +61,37 @@ credit-exposure gate (row-locks the facility so simultaneous bids cannot over-re
 locally green (`pnpm check`, `contract:check`, all E2E + `test:member`). GitHub Actions,
 Railway deploy and production smoke run only after a human `git push` + Railway config
 (see `RAILWAY_REQUIRED_CONFIGURATION.md`). Release gate = NO_GO until then.
+
+## Revision 06.2 — credit integrity + member search (PARTIAL — result NO_GO)
+
+_2026-08-12. `main` commits `240ef09` (search), `4c9e3b4` (§3), `6b6d269` (§5),
+`45aa2b8` (§8). Verified via `pnpm test:member` (all checks pass) + api typecheck/lint._
+
+**Done + verified (`COMPLETE_VERIFIED` locally):**
+- **§12 staff member search** — `GET /api/v1/members/search?q=&limit=` (`member:read`):
+  Client ID / mobile / email / legal name / organisation; exact Client ID ranked first;
+  contact masked; raw contact never returned; public/customer denied (403).
+- **§3 (P0) converted unpaid exposure** — bid admission now counts ACTIVE **+ CONVERTED**
+  (won-but-unpaid) via one canonical `committedExposureMinor`; a winner cannot regain
+  capacity for a new bid until payment/release. Regression: winner 10m, 8m converted →
+  new over-limit bid `CREDIT_LIMIT_EXCEEDED`, in-limit bid accepted.
+- **§5 (P0) security-release blocking** — `releaseSecurityInstrument` locks the facility
+  row (serialises with the bid gate, §7-C) and blocks with `OUTSTANDING_EXPOSURE` (409)
+  while ACTIVE/CONVERTED exposure remains; allowed once cleared; unauthorised 403.
+- **§8 credit policy** — public `GET /members/credit-policy` (requiredSecurityBps /
+  enforcement / policyVersion / capacityMultiple) from BusinessConfig, default 5%.
+
+**Still OPEN (why result is `NO_GO`):**
+- **§4 (P0) temporary facility SCOPE enforcement** — the gate locks the first active
+  facility; it does not yet resolve auction→event or enforce PLATFORM/EVENT/AUCTION scope
+  at bid time. `NOT_STARTED`.
+- **§6 (P0) security-expiry revalidation** — gate checks facility expiry, not the
+  underlying instrument's validity/recalculation; no background recalc worker. `PARTIAL`.
+- **§7 Race B/C** — mechanisms exist (converted counted at admission; facility-row lock on
+  release) and §3/§5 exercise them, but dedicated concurrent race B/C tests are not added.
+- **§9 explicit capacity mode**, **§10 central KYC/eligibility evaluator**,
+  **§11 exposure on other binding sale methods** (Buy Now / Make Offer / Tender / Live) —
+  `PARTIAL`/`NOT_STARTED`.
+- **Deploy** — not pushed; Railway/production smoke pending owner action.
+
+Per §24/§25, Rev 06.2 is **NO_GO** while §4/§6 P0 items remain open and nothing is deployed.

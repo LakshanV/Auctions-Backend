@@ -163,12 +163,19 @@ export class AuctionService {
         // row-locks the customer's facility so two simultaneous bids on different
         // lots cannot both consume the same remaining capacity — a denial rolls
         // back the whole bid (nothing persists). Reason codes are deterministic.
+        // Resolve the event this lot belongs to (if any) so a scoped temporary
+        // facility is chosen correctly (§4).
+        const eventLot = await ctx.tx.auctionEventLot.findFirst({
+          where: { listingId: auction.listingId },
+          select: { auctionEventId: true },
+        });
         const reservation = await this.exposure.checkAndReserve(ctx, {
           customerId: bidderId,
           sourceType: 'auction_bid',
           sourceId: `${auctionId}:${bidderId}`,
           amountMinor: BigInt(newMax),
           currency: auction.currency,
+          scope: { auctionId, eventId: eventLot?.auctionEventId ?? null },
         });
         if (!reservation.ok) {
           throw new ForbiddenException({

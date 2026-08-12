@@ -56,20 +56,23 @@ export class CreditExposureService {
   async committedExposureMinor(
     tx: UowContext['tx'],
     customerId: string,
-    excludeSource?: { sourceType: string; sourceId: string },
+    opts?: {
+      excludeSource?: { sourceType: string; sourceId: string };
+      /** Restrict to one facility's own exposure (its scoped capacity, §4). */
+      facilityId?: string;
+    },
   ): Promise<bigint> {
     const rows = await tx.creditReservation.findMany({
-      where: { customerId, status: { in: ['active', 'converted'] } },
+      where: {
+        customerId,
+        status: { in: ['active', 'converted'] },
+        ...(opts?.facilityId ? { facilityId: opts.facilityId } : {}),
+      },
       select: { amountMinor: true, sourceType: true, sourceId: true },
     });
+    const ex = opts?.excludeSource;
     return rows.reduce((sum, r) => {
-      if (
-        excludeSource &&
-        r.sourceType === excludeSource.sourceType &&
-        r.sourceId === excludeSource.sourceId
-      ) {
-        return sum;
-      }
+      if (ex && r.sourceType === ex.sourceType && r.sourceId === ex.sourceId) return sum;
       return sum + r.amountMinor;
     }, 0n);
   }
@@ -87,6 +90,8 @@ export class CreditExposureService {
       sourceId: string;
       amountMinor: bigint;
       currency: string;
+      /** Where this exposure occurs, so a scoped facility is chosen (§4). */
+      scope?: { auctionId?: string; eventId?: string | null; category?: string | null };
     },
   ): Promise<ReserveResult> {
     const { tx } = ctx;
@@ -108,30 +113,48 @@ export class CreditExposureService {
         return { ok: false, reason: DenialReason.TemporaryAccessExpired };
     }
 
-    // Serialize concurrent bids for this customer by locking the facility row.
+    // Lock ALL of the customer's active facilities (serialises concurrent bids for
+    // this customer — Race A) then choose the one whose scope covers THIS auction/
+    // event, most specific first (§4: AUCTION → EVENT → PLATFORM). Facilities are
+    // never aggregated.
     const locked = await tx.$queryRawUnsafe<{ id: string }[]>(
-      `SELECT id FROM credit_facility WHERE customer_id = $1 AND status = 'active' ORDER BY created_at LIMIT 1 FOR UPDATE`,
+      `SELECT id FROM credit_facility WHERE customer_id = $1 AND status = 'active' FOR UPDATE`,
       input.customerId,
     );
-    const facilityId = locked[0]?.id;
+    const facilities = locked.length
+      ? await tx.creditFacility.findMany({ where: { id: { in: locked.map((l) => l.id) } } })
+      : [];
+    const facility = selectFacilityForScope(facilities, input.scope);
 
-    if (!facilityId) {
-      // No standing facility: cash bidder. Allowed under `facility`, denied under `strict`.
-      return mode === 'strict'
-        ? { ok: false, reason: DenialReason.AuctionRegistrationRequired }
-        : { ok: true };
+    if (!facility) {
+      // A customer with NO facility at all is a cash bidder (allowed under
+      // `facility`, denied under `strict`). A customer who HAS facilities but none
+      // for THIS scope — e.g. an Event-A grant bidding Event B — is denied: their
+      // scoped credit does not reach here (§4).
+      if (facilities.length === 0) {
+        return mode === 'strict'
+          ? { ok: false, reason: DenialReason.AuctionRegistrationRequired }
+          : { ok: true };
+      }
+      return { ok: false, reason: DenialReason.AuctionRegistrationRequired };
     }
 
-    const facility = await tx.creditFacility.findUniqueOrThrow({ where: { id: facilityId } });
-
-    // Expired facility no longer supports new exposure (§9).
+    // Expired facility no longer supports new exposure (§6). A scoped/temporary
+    // facility reports TEMPORARY_ACCESS_EXPIRED; a standing platform one SECURITY_EXPIRED.
     if (facility.expiresAt && facility.expiresAt <= new Date()) {
-      return { ok: false, reason: DenialReason.SecurityExpired };
+      return {
+        ok: false,
+        reason:
+          facility.scopeType === 'platform'
+            ? DenialReason.SecurityExpired
+            : DenialReason.TemporaryAccessExpired,
+      };
     }
 
+    // Committed against THIS facility only — its own scoped capacity (§4/§3).
     const committed = await this.committedExposureMinor(tx, input.customerId, {
-      sourceType: input.sourceType,
-      sourceId: input.sourceId,
+      excludeSource: { sourceType: input.sourceType, sourceId: input.sourceId },
+      facilityId: facility.id,
     });
 
     const fits = fitsWithinCapacity({
@@ -150,7 +173,7 @@ export class CreditExposureService {
       create: {
         id: newId(),
         customerId: input.customerId,
-        facilityId,
+        facilityId: facility.id,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
         amountMinor: input.amountMinor,
@@ -162,7 +185,7 @@ export class CreditExposureService {
     ctx.emit({
       name: DomainEventName.CreditReservationCreated,
       aggregateType: 'CreditFacility',
-      aggregateId: facilityId,
+      aggregateId: facility.id,
       payload: {
         customerId: input.customerId,
         sourceType: input.sourceType,
@@ -243,8 +266,11 @@ export class CreditExposureService {
         hasFacility: false,
       };
     }
-    // Same canonical committed calc as the bid-admission gate (§3).
-    const committed = await this.committedExposureMinor(this.prisma, customerId);
+    // Same canonical committed calc as the gate, restricted to this facility's own
+    // scoped exposure (§3/§4).
+    const committed = await this.committedExposureMinor(this.prisma, customerId, {
+      facilityId: facility.id,
+    });
     const a = computeCreditAvailability({
       approvedLimitMinor: facility.approvedLimitMinor,
       temporaryUpliftMinor: facility.temporaryUpliftMinor,
@@ -260,4 +286,39 @@ export class CreditExposureService {
       expiresAt: facility.expiresAt,
     };
   }
+}
+
+/**
+ * Choose the facility whose scope covers a transaction, most specific first
+ * (§4: AUCTION → EVENT → PLATFORM). Never aggregates facilities. Returns
+ * undefined when the customer has no facility that reaches this auction/event.
+ */
+function selectFacilityForScope<
+  F extends { scopeType: string; scopeId: string | null; createdAt: Date },
+>(
+  facilities: F[],
+  scope: { auctionId?: string; eventId?: string | null; category?: string | null } | undefined,
+): F | undefined {
+  const applies = (f: F): boolean => {
+    switch (f.scopeType) {
+      case 'platform':
+        return true;
+      case 'event':
+        return !!scope?.eventId && f.scopeId === scope.eventId;
+      case 'auction':
+        return !!scope?.auctionId && f.scopeId === scope.auctionId;
+      case 'category':
+        return !!scope?.category && f.scopeId === scope.category;
+      default:
+        return false;
+    }
+  };
+  const rank: Record<string, number> = { auction: 0, event: 1, category: 1, platform: 2 };
+  return facilities
+    .filter(applies)
+    .sort(
+      (a, b) =>
+        (rank[a.scopeType] ?? 9) - (rank[b.scopeType] ?? 9) ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    )[0];
 }

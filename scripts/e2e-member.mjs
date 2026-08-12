@@ -106,6 +106,27 @@ async function openAuction(staffToken, sellerToken) {
   await post(`/auctions/${a.json.id}/open`, { token: staffToken });
   return a.json.id;
 }
+async function openAuctionInEvent(staffToken, sellerToken, eventId, sequence) {
+  const listingId = await makeListing(sellerToken);
+  await post(`/events/${eventId}/lots`, {
+    token: staffToken,
+    body: { listingId, sequence, lane: 'A' },
+  });
+  const now = Date.now();
+  const a = await post('/auctions', {
+    token: staffToken,
+    body: {
+      listingId,
+      startsAt: new Date(now - 1000).toISOString(),
+      endsAt: new Date(now + 5 * 60_000).toISOString(),
+      openingBidMinor: 100_000,
+      incrementMinor: 10_000,
+      reserveMinor: 100_000,
+    },
+  });
+  await post(`/auctions/${a.json.id}/open`, { token: staffToken });
+  return a.json.id;
+}
 
 async function main() {
   const child = spawn('node', ['apps/api/dist/main.js'], {
@@ -446,6 +467,153 @@ async function main() {
     check(
       allowedRelease.status === 201 && allowedRelease.json?.status === 'released',
       `security release allowed once exposure cleared (${allowedRelease.status}/${allowedRelease.json?.status})`,
+    );
+
+    // --- §4 (P0): temporary facility scope enforced at bid time ---------------
+    const futureIso = () => new Date(Date.now() + 3_600_000).toISOString();
+
+    // AUCTION scope: capacity for auctionX works only in auctionX.
+    const scopeCust = await registerCustomer('scoped');
+    const scopeTok = await token(['customer'], scopeCust.id);
+    const auctionX = await openAuction(staffToken, sellerToken);
+    const auctionZ = await openAuction(staffToken, sellerToken);
+    await post('/members/temporary-grant', {
+      token: staffToken,
+      body: {
+        customerId: scopeCust.id,
+        scopeType: 'auction',
+        scopeId: auctionX,
+        spotDepositMinor: 50_000,
+        requiredSecurityBps: 500,
+        expiresAt: futureIso(),
+        reason: 'auction scope',
+      },
+    });
+    check(
+      (
+        await post(`/auctions/${auctionX}/bids`, {
+          token: scopeTok,
+          body: { maxAmountMinor: 300_000 },
+        })
+      ).status === 201,
+      'auction-scoped capacity works in its own auction',
+    );
+    const outOfScope = await post(`/auctions/${auctionZ}/bids`, {
+      token: scopeTok,
+      body: { maxAmountMinor: 100_000 },
+    });
+    check(
+      outOfScope.status === 403 && outOfScope.json?.code === 'AUCTION_REGISTRATION_REQUIRED',
+      `auction-scoped capacity rejected in another auction (${outOfScope.status}/${outOfScope.json?.code})`,
+    );
+
+    // EVENT scope: capacity for Event A works on a lot in Event A, not outside it.
+    const eventA = await post('/events', {
+      token: staffToken,
+      body: { publicRef: `EVA-${Date.now()}`, title: 'Scope Event A' },
+    });
+    const evtCust = await registerCustomer('evt');
+    const evtTok = await token(['customer'], evtCust.id);
+    const lotInA = await openAuctionInEvent(staffToken, sellerToken, eventA.json.id, 1);
+    const lotOutside = await openAuction(staffToken, sellerToken);
+    await post('/members/temporary-grant', {
+      token: staffToken,
+      body: {
+        customerId: evtCust.id,
+        scopeType: 'event',
+        scopeId: eventA.json.id,
+        spotDepositMinor: 50_000,
+        requiredSecurityBps: 500,
+        expiresAt: futureIso(),
+        reason: 'event scope',
+      },
+    });
+    check(
+      (await post(`/auctions/${lotInA}/bids`, { token: evtTok, body: { maxAmountMinor: 300_000 } }))
+        .status === 201,
+      'event-scoped capacity works on a lot in that event',
+    );
+    const evtOut = await post(`/auctions/${lotOutside}/bids`, {
+      token: evtTok,
+      body: { maxAmountMinor: 100_000 },
+    });
+    check(
+      evtOut.status === 403 && evtOut.json?.code === 'AUCTION_REGISTRATION_REQUIRED',
+      `event-scoped capacity rejected outside the event (${evtOut.status}/${evtOut.json?.code})`,
+    );
+
+    // Expired temporary grant denies new bids deterministically.
+    const expCust = await registerCustomer('expscope');
+    const expTok = await token(['customer'], expCust.id);
+    const expLot = await openAuction(staffToken, sellerToken);
+    await post('/members/temporary-grant', {
+      token: staffToken,
+      body: {
+        customerId: expCust.id,
+        scopeType: 'auction',
+        scopeId: expLot,
+        spotDepositMinor: 50_000,
+        requiredSecurityBps: 500,
+        expiresAt: new Date(Date.now() + 1200).toISOString(),
+        reason: 'about to expire',
+      },
+    });
+    await sleep(1600);
+    const expBid = await post(`/auctions/${expLot}/bids`, {
+      token: expTok,
+      body: { maxAmountMinor: 100_000 },
+    });
+    check(
+      expBid.status === 403 && expBid.json?.code === 'TEMPORARY_ACCESS_EXPIRED',
+      `expired temporary grant → TEMPORARY_ACCESS_EXPIRED (${expBid.status}/${expBid.json?.code})`,
+    );
+
+    // Deterministic selection: an AUCTION-specific facility is chosen over a larger
+    // PLATFORM one (no aggregation) — a bid over the specific cap is rejected even
+    // though the platform facility could cover it.
+    const detCust = await registerCustomer('determ');
+    const detTok = await token(['customer'], detCust.id);
+    const detAuction = await openAuction(staffToken, sellerToken);
+    const detSec = await post('/members/security', {
+      token: admin,
+      body: { customerId: detCust.id, type: 'cash_deposit', faceAmountMinor: 1_000_000 },
+    });
+    await post(`/members/security/${detSec.json.id}/verify`, {
+      token: admin,
+      body: { decision: 'verify' },
+    });
+    await post('/members/credit/approve', {
+      token: admin,
+      body: { customerId: detCust.id, requiredSecurityBps: 500, approvedLimitMinor: 10_000_000 },
+    });
+    await post('/members/temporary-grant', {
+      token: staffToken,
+      body: {
+        customerId: detCust.id,
+        scopeType: 'auction',
+        scopeId: detAuction,
+        spotDepositMinor: 50_000,
+        requiredSecurityBps: 500,
+        expiresAt: futureIso(),
+        reason: 'determ',
+      },
+    });
+    check(
+      (
+        await post(`/auctions/${detAuction}/bids`, {
+          token: detTok,
+          body: { maxAmountMinor: 800_000 },
+        })
+      ).status === 201,
+      'deterministic: a bid within the auction-specific facility is accepted',
+    );
+    const detOver = await post(`/auctions/${detAuction}/bids`, {
+      token: detTok,
+      body: { maxAmountMinor: 1_500_000 },
+    });
+    check(
+      detOver.status === 403 && detOver.json?.code === 'CREDIT_LIMIT_EXCEEDED',
+      `deterministic: most-specific facility chosen (not aggregated) → over-cap bid rejected (${detOver.status}/${detOver.json?.code})`,
     );
 
     // --- Temporary onsite membership -----------------------------------------

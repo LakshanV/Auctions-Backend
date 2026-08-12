@@ -459,3 +459,121 @@ export const catalogueRowQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(30).default(12),
 });
 export type CatalogueRowQuery = z.infer<typeof catalogueRowQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Member identity, credit, security & performance commands (Revision 05).
+// The API exposes explicit COMMANDS, never a generic PATCH of sensitive credit,
+// security or membership state (§12). Money is an integer count of minor units.
+// ---------------------------------------------------------------------------
+
+const moneyMinor = z.number().int().nonnegative();
+const bps = z.number().int().min(1).max(100000);
+
+export const securityInstrumentTypeValues = [
+  'cash_deposit',
+  'bank_guarantee',
+  'spot_deposit',
+] as const;
+export const grantScopeTypeValues = ['platform', 'event', 'auction', 'category'] as const;
+export const performanceContextValues = ['buyer', 'seller'] as const;
+export const memberFlagContextValues = ['buyer', 'seller', 'general'] as const;
+export const memberFlagSeverityValues = ['low', 'medium', 'high', 'critical'] as const;
+
+export const submitSecurityInstrumentSchema = z.object({
+  customerId: z.string().min(1),
+  organizationId: z.string().min(1).optional(),
+  type: z.enum(securityInstrumentTypeValues),
+  currency: z.string().length(3).default('LKR'),
+  faceAmountMinor: moneyMinor,
+  eligibilityBps: bps.default(10000),
+  reference: z.string().max(120).optional(),
+  issuingBank: z.string().max(120).optional(),
+  guaranteeNumber: z.string().max(120).optional(),
+  issueDate: z.string().datetime().optional(),
+  expiresAt: z.string().datetime().optional(),
+  documentMediaId: z.string().min(1).optional(),
+  notes: z.string().max(1000).optional(),
+});
+export type SubmitSecurityInstrumentInput = z.infer<typeof submitSecurityInstrumentSchema>;
+
+export const verifySecurityInstrumentSchema = z.object({
+  decision: z.enum(['verify', 'reject']),
+  eligibilityBps: bps.optional(),
+  reason: z.string().max(1000).optional(),
+});
+export type VerifySecurityInstrumentInput = z.infer<typeof verifySecurityInstrumentSchema>;
+
+export const releaseSecurityInstrumentSchema = z.object({
+  reason: z.string().max(1000).optional(),
+});
+export type ReleaseSecurityInstrumentInput = z.infer<typeof releaseSecurityInstrumentSchema>;
+
+export const approveCreditSchema = z.object({
+  customerId: z.string().min(1),
+  requiredSecurityBps: bps.optional(),
+  /** Manual cap on the calculated limit; omit to approve the full calculation. */
+  approvedLimitMinor: moneyMinor.optional(),
+  temporaryUpliftMinor: moneyMinor.optional(),
+  expiresAt: z.string().datetime().optional(),
+  reason: z.string().max(1000).optional(),
+  /** Optional dual-approval for high-value decisions (§15/§24). */
+  secondApprover: z.string().min(1).optional(),
+});
+export type ApproveCreditInput = z.infer<typeof approveCreditSchema>;
+
+export const suspendCreditSchema = z.object({
+  customerId: z.string().min(1),
+  reason: z.string().min(1).max(1000),
+});
+export type SuspendCreditInput = z.infer<typeof suspendCreditSchema>;
+
+export const grantTemporaryMembershipSchema = z.object({
+  customerId: z.string().min(1),
+  scopeType: z.enum(grantScopeTypeValues),
+  scopeId: z.string().min(1).optional(),
+  /** Approved spot deposit backing the temporary access. */
+  spotDepositMinor: moneyMinor,
+  requiredSecurityBps: bps.default(500),
+  /** Optional staff cap on the calculated temporary capacity. */
+  approvedLimitMinor: moneyMinor.optional(),
+  expiresAt: z.string().datetime(),
+  reason: z.string().max(1000).optional(),
+});
+export type GrantTemporaryMembershipInput = z.infer<typeof grantTemporaryMembershipSchema>;
+
+export const setMembershipStatusSchema = z.object({
+  customerId: z.string().min(1),
+  status: z.enum(['active', 'suspended', 'blocked', 'expired']),
+  reason: z.string().max(1000).optional(),
+});
+export type SetMembershipStatusInput = z.infer<typeof setMembershipStatusSchema>;
+
+export const createMemberFlagSchema = z.object({
+  customerId: z.string().min(1),
+  context: z.enum(memberFlagContextValues).default('general'),
+  category: z.string().min(1).max(60),
+  severity: z.enum(memberFlagSeverityValues).default('low'),
+  reasonCode: z.string().min(1).max(60),
+  title: z.string().min(1).max(200),
+  privateNote: z.string().max(2000).optional(),
+  evidence: z.array(z.string().min(1)).default([]),
+  expiresAt: z.string().datetime().optional(),
+});
+export type CreateMemberFlagInput = z.infer<typeof createMemberFlagSchema>;
+
+export const resolveMemberFlagSchema = z.object({
+  resolution: z.enum(['resolve', 'dismiss']),
+  note: z.string().max(2000).optional(),
+});
+export type ResolveMemberFlagInput = z.infer<typeof resolveMemberFlagSchema>;
+
+export const recordPerformanceEventSchema = z.object({
+  customerId: z.string().min(1),
+  context: z.enum(performanceContextValues),
+  eventType: z.string().min(1).max(60),
+  dimension: z.string().min(1).max(60),
+  value: z.number().default(1),
+  sourceEntityType: z.string().max(60).optional(),
+  sourceEntityId: z.string().min(1).optional(),
+});
+export type RecordPerformanceEventInput = z.infer<typeof recordPerformanceEventSchema>;

@@ -25,6 +25,7 @@ import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 import { AuctionRealtimeGateway } from './auction-realtime.gateway';
 import { sellerOrgForListing } from '../../shared/persistence/seller-org';
+import { CreditExposureService } from '../member/credit-exposure.service';
 
 /**
  * Timed auction engine orchestration (docs/07). Server-authoritative: every bid
@@ -39,6 +40,7 @@ export class AuctionService {
     private readonly prisma: PrismaService,
     private readonly uow: UnitOfWork,
     private readonly realtime: AuctionRealtimeGateway,
+    private readonly exposure: CreditExposureService,
   ) {}
 
   /**
@@ -155,6 +157,26 @@ export class AuctionService {
           where: { auctionId_bidderId: { auctionId, bidderId } },
         });
         const newMax = Math.max(Number(existingMax?.maxMinor ?? 0), input.maxAmountMinor);
+
+        // Credit / bid-capacity gate (Revision 05 §16/§17). A bidder's committed
+        // exposure on this lot equals their standing proxy maximum. The gate
+        // row-locks the customer's facility so two simultaneous bids on different
+        // lots cannot both consume the same remaining capacity — a denial rolls
+        // back the whole bid (nothing persists). Reason codes are deterministic.
+        const reservation = await this.exposure.checkAndReserve(ctx, {
+          customerId: bidderId,
+          sourceType: 'auction_bid',
+          sourceId: `${auctionId}:${bidderId}`,
+          amountMinor: BigInt(newMax),
+          currency: auction.currency,
+        });
+        if (!reservation.ok) {
+          throw new ForbiddenException({
+            code: reservation.reason,
+            message: 'Bid rejected by bid-capacity policy',
+          });
+        }
+
         await ctx.tx.bidderMax.upsert({
           where: { auctionId_bidderId: { auctionId, bidderId } },
           update: { maxMinor: BigInt(newMax) },
@@ -268,10 +290,12 @@ export class AuctionService {
 
       // A sold auction produces the authoritative Sale award (docs/14) that the
       // commerce pipeline invoices. Unique per listing — cannot be created twice.
+      let saleId: string | null = null;
       if (sold && winner) {
+        saleId = newId();
         await ctx.tx.sale.create({
           data: {
-            id: newId(),
+            id: saleId,
             listingId: auction.listingId,
             buyerCustomerId: winner,
             channel: 'auction',
@@ -281,6 +305,22 @@ export class AuctionService {
           },
         });
         await ctx.tx.listing.update({ where: { id: auction.listingId }, data: { status: 'sold' } });
+      }
+
+      // Credit exposure at close (Revision 05 §16): every participant's proxy
+      // reservation is released, EXCEPT the winner's — that converts to unpaid
+      // purchase exposure (released later when the sale is paid).
+      const participants = await ctx.tx.bidderMax.findMany({
+        where: { auctionId: id },
+        select: { bidderId: true },
+      });
+      for (const p of participants) {
+        const source = { type: 'auction_bid', id: `${id}:${p.bidderId}` };
+        if (sold && winner && p.bidderId === winner && saleId) {
+          await this.exposure.convertToSale(ctx, source.type, source.id, saleId);
+        } else {
+          await this.exposure.release(ctx, source.type, source.id);
+        }
       }
 
       ctx.emit({

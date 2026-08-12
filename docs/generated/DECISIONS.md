@@ -28,6 +28,13 @@ infra (Class D) decisions are NOT made here.
 | D-0020 | A     | Transactional UnitOfWork writes business change + outbox event + audit in ONE tx                              | docs/16 atomic outbox; docs/04 append-only audit                              | Low (foundational)             |
 | D-0021 | B     | Versioned category attribute schemas live in `@singha/contracts` (Zod)                                        | docs/06 category schema versioning; shared by API + tests                     | Medium                         |
 | D-0022 | A     | Data-core E2E is an out-of-process driver (real API + ephemeral DB)                                           | Highest fidelity; avoids SWC-in-Vitest for Nest decorators                    | High                           |
+| D-0023 | A     | Client ID / Org ref via a Postgres SEQUENCE (`CUS-######`/`ORG-######`), separate from the ULID PK, backfilled resumably | Atomic, never-recycled, collision-free under concurrency; not MAX()+1 (Rev 05 §3/§10) | Medium |
+| D-0024 | A     | Credit/security money stored as BigInt minor units + basis-point ratios; all limit maths in pure `@singha/domain` | Never floats for authoritative finance; exhaustively unit-testable (Rev 05 §14) | Medium |
+| D-0025 | B     | Bid-capacity enforcement is configurable (`credit.enforcement` = off/facility/strict), default `facility`      | Real protection whenever a facility exists, without breaking cash bidders or the proven engine/tests (Rev 05 §16) | High |
+| D-0026 | A     | Exposure gate row-locks the customer's `credit_facility` (`SELECT … FOR UPDATE`) inside the bid tx            | Two simultaneous bids for one customer cannot over-reserve the same line (Rev 05 §7) | High |
+| D-0027 | A     | Buyer/Seller is a DERIVED role on one durable Customer (owns assets / org member), never a duplicate record    | Rev 05 §1 "one durable Customer, do not duplicate"                             | Medium |
+| D-0028 | A     | Performance is a deterministic, versioned rule engine (not LLM); score `null` = INSUFFICIENT_HISTORY           | Explainable, rebuildable, private; AI may summarize but never sets score (Rev 05 §18/§25) | Medium |
+| D-0029 | A     | Customer self view is a SEPARATE DTO from staff Member 360 (flags/score/docs never projected), not CSS-hidden  | Rev 05 §18 visual privacy boundary is enforced server-side                     | High |
 
 ## Open items awaiting inputs
 

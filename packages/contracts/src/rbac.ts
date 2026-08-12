@@ -49,6 +49,20 @@ export const Permission = {
   EventOperate: 'event:operate',
   ListingContent: 'listing:content',
   AuditRead: 'audit:read',
+  // Member identity, credit, security & performance engine (Revision 05).
+  MemberRead: 'member:read',
+  MemberManage: 'member:manage',
+  MemberTemporaryGrant: 'member:temporary-grant',
+  SecurityRead: 'security:read',
+  SecurityVerify: 'security:verify',
+  SecurityRelease: 'security:release',
+  CreditRead: 'credit:read',
+  CreditApprove: 'credit:approve',
+  CreditOverride: 'credit:override',
+  CreditSuspend: 'credit:suspend',
+  PerformanceRead: 'performance:read',
+  MemberFlagRead: 'member-flag:read',
+  MemberFlagManage: 'member-flag:manage',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
 export const ALL_PERMISSIONS = Object.values(Permission) as [Permission, ...Permission[]];
@@ -95,10 +109,43 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.LiveOperate,
     P.EventOperate,
     P.ListingContent,
+    // Onsite auction desk: register members, grant temporary access, take/verify
+    // spot deposits, read exposure — but NOT approve/override standing credit.
+    P.MemberRead,
+    P.MemberManage,
+    P.MemberTemporaryGrant,
+    P.SecurityRead,
+    P.SecurityVerify,
+    P.CreditRead,
+    P.PerformanceRead,
+    P.MemberFlagRead,
   ],
-  [Role.Accounts]: [P.CustomerRead, P.CommerceOperate],
-  [Role.Support]: [P.CustomerRead, P.ConnectOperate],
-  [Role.Compliance]: [P.CustomerRead, P.KycManage, P.AuditRead],
+  [Role.Accounts]: [
+    P.CustomerRead,
+    P.CommerceOperate,
+    // Credit control desk owns standing credit + security lifecycle.
+    P.MemberRead,
+    P.SecurityRead,
+    P.SecurityVerify,
+    P.SecurityRelease,
+    P.CreditRead,
+    P.CreditApprove,
+    P.CreditOverride,
+    P.CreditSuspend,
+    P.PerformanceRead,
+  ],
+  [Role.Support]: [P.CustomerRead, P.ConnectOperate, P.MemberRead],
+  [Role.Compliance]: [
+    P.CustomerRead,
+    P.KycManage,
+    P.AuditRead,
+    // Compliance owns internal flags/reviews + reads performance/security.
+    P.MemberRead,
+    P.SecurityRead,
+    P.PerformanceRead,
+    P.MemberFlagRead,
+    P.MemberFlagManage,
+  ],
   [Role.Admin]: [...ALL_PERMISSIONS],
   [Role.SuperAdmin]: [...ALL_PERMISSIONS],
 };

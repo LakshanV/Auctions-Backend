@@ -25,6 +25,7 @@ import { AppConfigService } from '../../config/config.service';
 import { UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
+import { CreditExposureService } from '../member/credit-exposure.service';
 
 /**
  * Commerce pipeline (docs/14): a won/accepted sale continues through invoice →
@@ -39,6 +40,7 @@ export class CommerceService {
     private readonly prisma: PrismaService,
     private readonly uow: UnitOfWork,
     private readonly config: AppConfigService,
+    private readonly exposure: CreditExposureService,
   ) {}
 
   async issueInvoice(principal: Principal, input: IssueInvoiceInput) {
@@ -211,6 +213,8 @@ export class CommerceService {
             data: { status: 'paid' },
           });
           await this.moveFulfilment(ctx, payment.invoice.listingId, 'payment_confirmed');
+          // Paid → release the buyer's committed purchase exposure (Revision 05 §16).
+          await this.exposure.releaseForSale(ctx, payment.invoice.saleId);
           ctx.emit({
             name: DomainEventName.PaymentConfirmed,
             aggregateType: 'Invoice',

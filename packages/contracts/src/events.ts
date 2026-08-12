@@ -38,6 +38,25 @@ export const DomainEventName = {
   SocialPublicationPublished: 'SOCIAL_PUBLICATION_PUBLISHED',
   LiveBroadcastStarted: 'LIVE_BROADCAST_STARTED',
   LiveBroadcastEnded: 'LIVE_BROADCAST_ENDED',
+  // Member identity, credit, security & performance engine (Revision 05).
+  ClientIdAssigned: 'CLIENT_ID_ASSIGNED',
+  MembershipActivated: 'MEMBERSHIP_ACTIVATED',
+  MembershipSuspended: 'MEMBERSHIP_SUSPENDED',
+  TemporaryMembershipGranted: 'TEMPORARY_MEMBERSHIP_GRANTED',
+  TemporaryMembershipExpired: 'TEMPORARY_MEMBERSHIP_EXPIRED',
+  SecurityInstrumentSubmitted: 'SECURITY_INSTRUMENT_SUBMITTED',
+  SecurityInstrumentVerified: 'SECURITY_INSTRUMENT_VERIFIED',
+  SecurityInstrumentReleased: 'SECURITY_INSTRUMENT_RELEASED',
+  BankGuaranteeExpiring: 'BANK_GUARANTEE_EXPIRING',
+  BankGuaranteeExpired: 'BANK_GUARANTEE_EXPIRED',
+  CreditLimitApproved: 'CREDIT_LIMIT_APPROVED',
+  CreditLimitChanged: 'CREDIT_LIMIT_CHANGED',
+  CreditReviewRequired: 'CREDIT_REVIEW_REQUIRED',
+  CreditReservationCreated: 'CREDIT_RESERVATION_CREATED',
+  CreditReservationReleased: 'CREDIT_RESERVATION_RELEASED',
+  MemberFlagCreated: 'MEMBER_FLAG_CREATED',
+  MemberFlagResolved: 'MEMBER_FLAG_RESOLVED',
+  PerformanceScoreUpdated: 'PERFORMANCE_SCORE_UPDATED',
 } as const;
 
 export type DomainEventName = (typeof DomainEventName)[keyof typeof DomainEventName];

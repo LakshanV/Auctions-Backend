@@ -25,6 +25,7 @@ import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
 import { DevModule } from './modules/dev/dev.module';
+import { MemberModule } from './modules/member/member.module';
 import { PrincipalMiddleware } from './shared/auth/principal.middleware';
 
 /**
@@ -60,6 +61,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     AuthModule,
     MediaModule,
     DevModule,
+    MemberModule,
   ],
 })
 export class AppModule implements NestModule {

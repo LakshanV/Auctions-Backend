@@ -9,6 +9,7 @@ import {
 } from '@singha/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
+import { allocateClientReference } from '../../shared/persistence/client-ref';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 
@@ -24,17 +25,35 @@ export class IdentityService {
     const actor = toActor(principal);
     const id = newId();
     return this.uow.execute(actor, async (ctx) => {
+      // Every new Customer receives a stable, human-readable Client ID from an
+      // atomic sequence, and starts with a PENDING membership (Revision 05 §10/§11).
+      const clientReference = await allocateClientReference(ctx.tx);
       const customer = await ctx.tx.customer.create({
         data: {
           id,
           status: 'prospect',
+          clientReference,
           legalName: input.legalName,
           email: input.email,
           phone: input.phone,
           kycStatus: 'none',
         },
       });
-      ctx.audit({ action: 'CUSTOMER_REGISTERED', targetType: 'Customer', targetId: id });
+      await ctx.tx.membership.create({
+        data: { id: newId(), customerId: id, status: 'pending', createdBy: actor.id ?? undefined },
+      });
+      ctx.audit({
+        action: 'CUSTOMER_REGISTERED',
+        targetType: 'Customer',
+        targetId: id,
+        after: { clientReference },
+      });
+      ctx.emit({
+        name: DomainEventName.ClientIdAssigned,
+        aggregateType: 'Customer',
+        aggregateId: id,
+        payload: { customerId: id, clientReference },
+      });
       return customer;
     });
   }

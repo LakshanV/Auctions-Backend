@@ -4,8 +4,10 @@ import { AuctionService } from './auction.service';
 import { AuctionRealtimeGateway } from './auction-realtime.gateway';
 import { REALTIME_TRANSPORT, RedisRealtimeTransport } from './auction-realtime.transport';
 import { AppConfigService } from '../../config/config.service';
+import { MemberModule } from '../member/member.module';
 
 @Module({
+  imports: [MemberModule],
   controllers: [AuctionController],
   providers: [
     AuctionService,

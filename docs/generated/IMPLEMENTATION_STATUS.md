@@ -21,6 +21,7 @@ live in the `Auctions New` repo.
 | 10    | Asset Intelligence / Market Pulse (derived read models)                | ✅       | `test:social-intel`                  |
 | 11    | Singha Live (mock IVS/YouTube; one-ledger hybrid)                      | ✅       | `test:live`                          |
 | 12    | Hardening / load / security / V1 migration / launch                    | 🚧       | acceptance                           |
+| R05   | Member ID / Credit / Security / Performance engine (Revision 05)       | ✅       | `test:member` (+11 domain units)     |
 
 ## Acceptance
 
@@ -42,3 +43,21 @@ data-core, auction, EOI, exchange, commerce, connect, AI, social+intelligence, l
 - Real provider credentials (WhatsApp/Meta/AI/IVS/YouTube/payment gateway) —
   vendor accounts + secrets (escalation); adapters are ready.
 - A production auth/IdP for staff/seller roles (dev uses `/dev/token` + demo login).
+
+## Revision 05 — member / credit / security / performance engine ✅
+
+Additive engine integrated into the proven auction engine via a narrow, concurrency-safe
+credit-exposure gate (row-locks the facility so simultaneous bids cannot over-reserve).
+
+- Client ID `CUS-######` / Org `ORG-######` via atomic Postgres sequences (resumable backfill).
+- Configurable 5% (bps) security rule + eligibility + caps; pure BigInt math (no floats).
+- Security instruments (cash / bank guarantee / spot deposit) with private documents.
+- Credit facility with separate calculated / approved / uplift + append-only decision history.
+- Temporary onsite membership (spot deposit → capacity → scoped/expiring grant).
+- Deterministic, versioned, rebuildable performance rule engine (+ INSUFFICIENT_HISTORY).
+- Private internal flags; AAL2 on sensitive commands; separate customer vs staff DTOs.
+
+**Remote-green status (Rev 05 Truth Gate): PENDING PUSH.** Code committed to `main` and
+locally green (`pnpm check`, `contract:check`, all E2E + `test:member`). GitHub Actions,
+Railway deploy and production smoke run only after a human `git push` + Railway config
+(see `RAILWAY_REQUIRED_CONFIGURATION.md`). Release gate = NO_GO until then.

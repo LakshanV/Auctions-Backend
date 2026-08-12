@@ -27,7 +27,27 @@ pnpm run check      # format + lint + typecheck + build + unit tests
 pnpm run test:db    # ephemeral Postgres: migrations + DB/upgrade-safety integration
 pnpm run test:e2e   # ephemeral Postgres: build API + full data-core E2E
 pnpm run test:auction  # ephemeral Postgres: auction concurrency + soft-close E2E
+pnpm run test:member   # ephemeral Postgres: Client ID, credit exposure, security,
+                       # 5% rule, temporary grant, performance, flag privacy E2E
 ```
+
+## Revision 05 — member / credit / security / performance
+
+| Requirement (Rev 05 §27)                                       | Where                           |
+| -------------------------------------------------------------- | ------------------------------- |
+| Client ID unique under concurrent registration                 | `test:member` (6-way burst)     |
+| Client ID stable; one Customer for Buyer+Seller                | `test:member`                   |
+| Pending security = 0 eligible; verified contributes            | `test:member`                   |
+| Expired guarantee stops new supported credit                   | `test:member`                   |
+| Unauthorized staff cannot verify; private docs                 | `test:member`                   |
+| Configurable 5% rule (500k→10m; 10%→5m)                        | `test:member` + domain units    |
+| Manual cap; available = approved − committed                   | `test:member`                   |
+| Concurrent bids cannot over-reserve capacity                   | `test:member` (race)            |
+| Outbid releases / won converts / paid releases                 | `test:member` + `test:commerce` |
+| AAL2 required on credit approval (MFA_REQUIRED)                | `test:member`                   |
+| Temporary onsite grant + scope/expiry                          | `test:member`                   |
+| Performance deterministic / rebuildable / INSUFFICIENT_HISTORY | `test:member` + 11 domain units |
+| Flags/score private; resolve preserves history                 | `test:member`                   |
 
 CI runs unit + DB integration against a Postgres service and then the E2E driver.
 

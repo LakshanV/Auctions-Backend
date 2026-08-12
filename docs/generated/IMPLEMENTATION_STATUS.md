@@ -62,36 +62,41 @@ locally green (`pnpm check`, `contract:check`, all E2E + `test:member`). GitHub 
 Railway deploy and production smoke run only after a human `git push` + Railway config
 (see `RAILWAY_REQUIRED_CONFIGURATION.md`). Release gate = NO_GO until then.
 
-## Revision 06.2 — credit integrity + member search (PARTIAL — result NO_GO)
+## Revision 06.2 — credit integrity + member search (code-complete; deploy pending)
 
-_2026-08-12. `main` commits `240ef09` (search), `4c9e3b4` (§3), `6b6d269` (§5),
-`45aa2b8` (§8). Verified via `pnpm test:member` (all checks pass) + api typecheck/lint._
+_2026-08-12. `main` commits `240ef09` §12, `4c9e3b4` §3, `6b6d269` §5, `45aa2b8` §8,
+`6fdb730` §4, `5a25aa3` §6, `d793841` §11, `2d43ed0` §7/§10. Verified: `pnpm test:member`
+(all checks) + `test:auction` + `test:commerce` + `test:exchange` green; api typecheck/lint._
 
 **Done + verified (`COMPLETE_VERIFIED` locally):**
-- **§12 staff member search** — `GET /api/v1/members/search?q=&limit=` (`member:read`):
-  Client ID / mobile / email / legal name / organisation; exact Client ID ranked first;
-  contact masked; raw contact never returned; public/customer denied (403).
-- **§3 (P0) converted unpaid exposure** — bid admission now counts ACTIVE **+ CONVERTED**
-  (won-but-unpaid) via one canonical `committedExposureMinor`; a winner cannot regain
-  capacity for a new bid until payment/release. Regression: winner 10m, 8m converted →
-  new over-limit bid `CREDIT_LIMIT_EXCEEDED`, in-limit bid accepted.
-- **§5 (P0) security-release blocking** — `releaseSecurityInstrument` locks the facility
-  row (serialises with the bid gate, §7-C) and blocks with `OUTSTANDING_EXPOSURE` (409)
-  while ACTIVE/CONVERTED exposure remains; allowed once cleared; unauthorised 403.
-- **§8 credit policy** — public `GET /members/credit-policy` (requiredSecurityBps /
-  enforcement / policyVersion / capacityMultiple) from BusinessConfig, default 5%.
+- **§3 (P0) converted unpaid exposure** — admission counts ACTIVE **+ CONVERTED** via one
+  canonical `committedExposureMinor`; a winner can't regain capacity until paid.
+- **§4 (P0) temporary facility SCOPE** — the gate locks ALL active facilities and selects
+  the one covering this auction/event, most specific first (AUCTION → EVENT → PLATFORM,
+  never aggregated); auction bids resolve their event. Auction & event scope enforced,
+  expired grants `TEMPORARY_ACCESS_EXPIRED`, deterministic selection tested.
+- **§5 (P0) security-release blocking** — release locks the facility row and blocks
+  `OUTSTANDING_EXPOSURE` (409) while ACTIVE/CONVERTED exposure remains.
+- **§6 (P0) security-expiry revalidation** — the gate re-derives the effective limit from
+  currently-eligible security; a lapsed BG denies new exposure (`SECURITY_EXPIRED`) while the
+  obligation is retained and available zeroed. _Transaction-time defence done; a background
+  recalc/flag worker is a secondary operational enhancement (not correctness-critical)._
+- **§7 races** — A (existing), B (via §3 counting), C (release vs concurrent bid serialised
+  on the facility row; test asserts they never both succeed).
+- **§8 credit policy** — public `GET /members/credit-policy` (bps / enforcement / kycPolicy /
+  policyVersion / multiple) from BusinessConfig, default 5%.
+- **§9 explicit capacity mode** — the `credit.enforcement` config (off / facility / strict)
+  is the single explicit mode, surfaced via the policy endpoint; `strict` = every binding
+  exposure needs a valid source.
+- **§10 KYC/eligibility** — the exposure gate is the central deterministic evaluator with
+  stable codes; a configurable KYC gate (`credit.kycPolicy`, default `off`) uses
+  `KYC_REQUIRED` when policy requires it.
+- **§11 exposure on binding non-auction sales** — Buy Now, accepted offer and awarded tender
+  reserve/convert exposure via `reserveBindingSale`; a credit buyer's over-capacity Buy Now
+  is `CREDIT_LIMIT_EXCEEDED`; commerce releases on payment; cash buyers unchanged.
+- **§12 staff member search** — `GET /members/search` (`member:read`), exact Client ID first,
+  masked contact, public/customer 403.
 
-**Still OPEN (why result is `NO_GO`):**
-- **§4 (P0) temporary facility SCOPE enforcement** — the gate locks the first active
-  facility; it does not yet resolve auction→event or enforce PLATFORM/EVENT/AUCTION scope
-  at bid time. `NOT_STARTED`.
-- **§6 (P0) security-expiry revalidation** — gate checks facility expiry, not the
-  underlying instrument's validity/recalculation; no background recalc worker. `PARTIAL`.
-- **§7 Race B/C** — mechanisms exist (converted counted at admission; facility-row lock on
-  release) and §3/§5 exercise them, but dedicated concurrent race B/C tests are not added.
-- **§9 explicit capacity mode**, **§10 central KYC/eligibility evaluator**,
-  **§11 exposure on other binding sale methods** (Buy Now / Make Offer / Tender / Live) —
-  `PARTIAL`/`NOT_STARTED`.
-- **Deploy** — not pushed; Railway/production smoke pending owner action.
-
-Per §24/§25, Rev 06.2 is **NO_GO** while §4/§6 P0 items remain open and nothing is deployed.
+**Remaining for a formal GO (§24/§25):** push both repos + **deploy** (Railway/Vercel) and run
+production smoke — owner action; and the optional §6 background recalc worker. All code is
+committed to `main` and locally green.

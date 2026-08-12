@@ -711,6 +711,43 @@ async function main() {
       `Buy Now over remaining capacity rejected → CREDIT_LIMIT_EXCEEDED (${buy2.status}/${buy2.json?.code})`,
     );
 
+    // --- §7 Race C: security release + a concurrent bid must stay safe --------
+    const rcCust = await registerCustomer('racec');
+    const rcTok = await token(['customer'], rcCust.id);
+    const rcSec = await post('/members/security', {
+      token: admin,
+      body: { customerId: rcCust.id, type: 'cash_deposit', faceAmountMinor: 50_000 },
+    });
+    await post(`/members/security/${rcSec.json.id}/verify`, {
+      token: admin,
+      body: { decision: 'verify' },
+    });
+    await post('/members/credit/approve', {
+      token: admin,
+      body: { customerId: rcCust.id, requiredSecurityBps: 500, approvedLimitMinor: 1_000_000 },
+    });
+    const rcLot = await openAuction(staffToken, sellerToken);
+    // Fire the release and a new bid together; the facility-row lock serialises them.
+    const [rel, bid] = await Promise.all([
+      post(`/members/security/${rcSec.json.id}/release`, {
+        token: admin,
+        body: { reason: 'race' },
+      }),
+      post(`/auctions/${rcLot}/bids`, { token: rcTok, body: { maxAmountMinor: 300_000 } }),
+    ]);
+    const relOk = rel.status === 201;
+    const bidOk = bid.status === 201;
+    const secStatus = (
+      (await get(`/members/${rcCust.id}/360`, { token: admin })).json?.security ?? []
+    ).find((s) => s.id === rcSec.json.id)?.status;
+    const released = secStatus === 'released';
+    check(
+      !(relOk && bidOk),
+      `race C: release and bid never both succeed (rel=${rel.status}, bid=${bid.status})`,
+    );
+    check(!relOk || released, 'race C: if release succeeded, the security is released');
+    check(!bidOk || !released, 'race C: if the bid succeeded, the security is NOT released');
+
     // --- Temporary onsite membership -----------------------------------------
     const custTmp = await registerCustomer('tmp');
     const tmpToken = await token(['customer'], custTmp.id);

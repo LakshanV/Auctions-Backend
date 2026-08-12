@@ -804,10 +804,11 @@ export class MemberService {
    * (500 bps), `facility`, `v1`.
    */
   async creditPolicy() {
-    const [bps, enforcement, version] = await Promise.all([
+    const [bps, enforcement, version, kyc] = await Promise.all([
       this.prisma.businessConfig.findUnique({ where: { key: 'credit.requiredSecurityBps' } }),
       this.prisma.businessConfig.findUnique({ where: { key: 'credit.enforcement' } }),
       this.prisma.businessConfig.findUnique({ where: { key: 'credit.policyVersion' } }),
+      this.prisma.businessConfig.findUnique({ where: { key: 'credit.kycPolicy' } }),
     ]);
     const parsedBps = Number(bps?.value);
     const requiredSecurityBps = Number.isFinite(parsedBps) && parsedBps > 0 ? parsedBps : 500;
@@ -817,6 +818,7 @@ export class MemberService {
       requiredSecurityBps,
       capacityMultiple: 10_000 / requiredSecurityBps,
       enforcement: mode,
+      kycPolicy: kyc?.value === 'required' ? 'required' : 'off',
       policyVersion: version?.value || 'v1',
     };
   }

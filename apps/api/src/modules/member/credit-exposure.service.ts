@@ -49,6 +49,12 @@ export class CreditExposureService {
     return v === 'off' || v === 'strict' || v === 'facility' ? v : DEFAULT_ENFORCEMENT;
   }
 
+  /** Configurable KYC policy for binding exposure (§10), default `off`. */
+  private async kycPolicy(tx: UowContext['tx']): Promise<'off' | 'required'> {
+    const cfg = await tx.businessConfig.findUnique({ where: { key: 'credit.kycPolicy' } });
+    return cfg?.value === 'required' ? 'required' : 'off';
+  }
+
   /**
    * The ONE canonical committed-exposure calculation (Rev 06.2 §3): ACTIVE
    * reservations PLUS CONVERTED (won-but-unpaid) reservations. Used identically by
@@ -151,6 +157,19 @@ export class CreditExposureService {
         return { ok: false, reason: DenialReason.AccountSuspended };
       if (membership.status === 'expired')
         return { ok: false, reason: DenialReason.TemporaryAccessExpired };
+    }
+
+    // §10: deliberate, configurable KYC gate (default off, so existing cash and
+    // credit flows are unchanged). When policy requires KYC, an unverified customer
+    // cannot take on new binding exposure.
+    if ((await this.kycPolicy(tx)) === 'required') {
+      const customer = await tx.customer.findUnique({
+        where: { id: input.customerId },
+        select: { kycStatus: true },
+      });
+      if (customer && customer.kycStatus !== 'verified') {
+        return { ok: false, reason: DenialReason.KycRequired };
+      }
     }
 
     // Lock ALL of the customer's active facilities (serialises concurrent bids for

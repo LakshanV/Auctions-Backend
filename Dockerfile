@@ -20,5 +20,6 @@ RUN pnpm --filter @singha/database run generate \
 
 EXPOSE 4000
 
-# Apply pending migrations (idempotent) then start the API. Railway injects PORT.
-CMD ["sh", "-c", "pnpm --filter @singha/database exec prisma migrate deploy && node apps/api/dist/main.js"]
+# Apply pending migrations (idempotent, with bounded retry) then start the API.
+# Railway injects PORT. See scripts/start.sh for the EMAXCONNSESSION rationale.
+CMD ["sh", "scripts/start.sh"]

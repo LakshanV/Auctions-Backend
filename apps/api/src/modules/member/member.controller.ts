@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   Permission,
   approveCreditSchema,
@@ -150,8 +151,10 @@ export class MemberController {
     return this.member.creditPolicy();
   }
 
+  // Staff-only, capped + audited: bulk member exfiltration is throttled hard (§04).
   @Get('search')
   @RequirePermissions(Permission.MemberRead)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   search(@CurrentActor() principal: Principal, @Query() query: Record<string, unknown>) {
     return this.member.search(principal, query);
   }

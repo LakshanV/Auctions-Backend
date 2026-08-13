@@ -1,4 +1,7 @@
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { SecurityThrottlerGuard } from './shared/security/security-throttler.guard';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SharedModule } from './shared/shared.module';
@@ -35,6 +38,10 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
  */
 @Module({
   imports: [
+    // Route-aware rate limiting (anti-clone retrofit). Generous default so normal
+    // browsing/bidding is never harmed; sensitive routes tighten this per-route.
+    // Active only in production (or an opt-in test) via SecurityThrottlerGuard.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     AppConfigModule,
     PrismaModule,
     SharedModule,
@@ -63,6 +70,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     DevModule,
     MemberModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: SecurityThrottlerGuard }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

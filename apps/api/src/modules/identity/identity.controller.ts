@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   type LinkExternalIdentityInput,
   Permission,
@@ -19,8 +20,10 @@ import { ZodBody } from '../../shared/validation/zod.pipe';
 export class IdentityController {
   constructor(private readonly identity: IdentityService) {}
 
-  /** Self-service registration — creates a customer (verified facts only). */
+  /** Self-service registration — creates a customer (verified facts only).
+   *  Throttled hard to stop mass account creation / enumeration (§02/§04). */
   @Post()
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   register(
     @CurrentActor() principal: Principal,
     @Body(new ZodBody(registerCustomerSchema)) input: RegisterCustomerInput,

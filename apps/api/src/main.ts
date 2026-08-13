@@ -1,13 +1,41 @@
 import 'reflect-metadata';
 import { Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { type NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
 import { loadConfig } from '@singha/config';
 import { API_VERSION } from '@singha/contracts';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // Security headers (anti-clone retrofit doc 02). The API returns JSON/SSE only,
+  // so lock the document CSP right down, deny framing, drop the referrer and remove
+  // the server fingerprint. HSTS only in production (behind TLS). CORP is
+  // cross-origin so the CORS-gated browser fetch below is never blocked.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+      },
+      hsts: isProd ? { maxAge: 15_552_000, includeSubDomains: true } : false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      referrerPolicy: { policy: 'no-referrer' },
+    }),
+  );
+  // helmet already hides X-Powered-By; disable it at the Express layer too.
+  app.getHttpAdapter().getInstance().disable('x-powered-by');
+  // Behind the Railway edge — trust one proxy hop so the real client IP reaches
+  // rate limiting and HSTS.
+  app.set('trust proxy', 1);
+
+  // Explicit request-body limits (doc 02). Media uploads go direct-to-storage via
+  // signed URLs, so the API only ever parses small JSON/urlencoded commands.
+  app.useBodyParser('json', { limit: '512kb' });
+  app.useBodyParser('urlencoded', { limit: '512kb', extended: true });
 
   // Versioned API surface (docs/16). Liveness/readiness probes stay at the root.
   app.setGlobalPrefix(`api/${API_VERSION}`, {

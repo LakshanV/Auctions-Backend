@@ -1,7 +1,10 @@
 import { Controller, Get, HttpCode } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 import { liveness, readiness } from './health.logic';
 
+// Platform health probes (Railway) must never be rate-limited.
+@SkipThrottle()
 @Controller()
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}

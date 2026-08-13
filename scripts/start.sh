@@ -19,23 +19,34 @@ set -e
 MAX_ATTEMPTS="${MIGRATE_MAX_ATTEMPTS:-12}"
 SLEEP_SECONDS="${MIGRATE_RETRY_SLEEP:-6}"
 
+migrated=0
 attempt=1
-while true; do
+while [ "${attempt}" -le "${MAX_ATTEMPTS}" ]; do
   if pnpm --filter @singha/database exec prisma migrate deploy; then
     echo "[start] migrations applied (attempt ${attempt})"
+    migrated=1
     break
   fi
-
-  if [ "${attempt}" -ge "${MAX_ATTEMPTS}" ]; then
-    echo "[start] migrate deploy failed after ${attempt} attempts — aborting" >&2
-    echo "[start] if the error is EMAXCONNSESSION, move DATABASE_URL to the :6543 transaction pooler" >&2
-    exit 1
-  fi
-
   echo "[start] migrate deploy attempt ${attempt} failed; retrying in ${SLEEP_SECONDS}s..." >&2
   attempt=$((attempt + 1))
   sleep "${SLEEP_SECONDS}"
 done
+
+if [ "${migrated}" -ne 1 ]; then
+  # migrate deploy needs the SESSION pooler (:5432); during a redeploy the old replica can
+  # hold all 15 session slots (EMAXCONNSESSION), so it can't get in. Fall back to checking —
+  # over the runtime datasource (:6543 transaction pooler, still reachable) — whether the DB is
+  # already up to date. If so it's safe to boot: passing the healthcheck lets Railway retire the
+  # old replica and free the session pool. If a real migration is pending, we must NOT boot.
+  echo "[start] migrate deploy exhausted retries; checking whether the DB is already current..." >&2
+  node scripts/migrations-current.mjs
+  case "$?" in
+    0) echo "[start] DB already up to date — booting without applying migrations" >&2 ;;
+    *) echo "[start] pending migration or check failed — aborting (won't serve a stale schema)" >&2
+       echo "[start] if the error is EMAXCONNSESSION, free the :5432 session pool or move DATABASE_URL to :6543" >&2
+       exit 1 ;;
+  esac
+fi
 
 echo "[start] starting API"
 # exec so the Node process is PID 1's replacement and receives SIGTERM for graceful shutdown.

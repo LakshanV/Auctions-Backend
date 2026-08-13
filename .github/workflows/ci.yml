@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Least-privilege token (anti-clone doc 03): read-only by default.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

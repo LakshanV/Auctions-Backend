@@ -1,0 +1,21 @@
+# Code ownership + required review (anti-clone doc 03). Combine with branch
+# protection: require review on these security-sensitive paths, no force-push.
+# Canonical backend repo — owner LakshanV.
+
+* @LakshanV
+
+# Auth / authorization / assurance
+/apps/api/src/shared/auth/         @LakshanV
+
+# Crown-jewel domain logic
+/apps/api/src/modules/auction/     @LakshanV
+/apps/api/src/modules/member/      @LakshanV
+/apps/api/src/modules/commerce/    @LakshanV
+/apps/api/src/modules/exchange/    @LakshanV
+/packages/domain/                  @LakshanV
+
+# Security middleware, bootstrap, migrations, CI
+/apps/api/src/shared/security/     @LakshanV
+/apps/api/src/main.ts              @LakshanV
+/database/prisma/migrations/       @LakshanV
+/.github/                          @LakshanV

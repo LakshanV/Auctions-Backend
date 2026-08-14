@@ -21,9 +21,24 @@ trust stale wording").
 
 ## Current phase
 
-**V3-5 — Singha Discover + Buyer Twin.** Backend engine + persistence + Discovery API
-module already landed (`2777337`, `33bd0f3`). Continuation adds the **discovery HTTP
-E2E** acceptance (pack doc 04 §E) — the one backend item outstanding for V3-5.
+**V3-6 — Bid Battle + Engagement Engine (kickoff).** V3-5 is complete (discovery HTTP E2E
+landed, `pnpm test:discovery` = 24/24 on real Postgres). This increment lands the
+privacy-critical Tier-A core of V3-6: a **pure, rebuildable rivalry engine** over the
+immutable Bid ledger + **privacy-safe bidder aliases** (`packages/domain/.../engagement`,
+`packages/contracts/src/engagement.ts`). 15 unit tests; never writes the ledger, never
+decides bid validity, never exposes a bidderId or proxy maximum.
+
+Still to do for V3-6: HTTP exposure of the safe `RivalryView` (read-only, gated on
+`bidBattleV3`) + E2E; the Bid Battle UI (frontend, `bidBattleV3`); the `engagementV3`
+notification engine (preferences, quiet hours, frequency caps, idempotency, provider
+fakes-first adapters); sound/haptics controls.
+
+## ⚠️ Push access blocker (owner P0)
+
+`git push` and GitHub-App `create_branch` to `LakshanV/Auctions-Backend` both return **403**
+(read-only integration), while the frontend `MUA1234/Auctions-New` pushes fine. Backend
+commits below are verified locally and preserved as `git format-patch` artifacts until the
+owner grants the Claude GitHub App `contents: write` on this repo.
 
 ## Landed backend commits (this program, on `main`)
 
@@ -46,8 +61,8 @@ increment. No new migration in the V3-5 E2E increment (test-only).
 
 ## Next command
 
-`pnpm test:discovery` (new) → then fold into `test:acceptance`. Then V3-6 (Bid Battle +
-Engagement) begins with the privacy-safe bidder alias + rebuildable rivalry projection.
+V3-6 rivalry engine unit tests: `pnpm --filter @singha/domain test`. Next: expose the safe
+`RivalryView` over HTTP behind `bidBattleV3` + an E2E, then the Bid Battle UI (frontend).
 
 ## Owner blockers (cannot be done by the agent — pack doc 16)
 

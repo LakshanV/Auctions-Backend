@@ -10,3 +10,4 @@ export * from './modules/commerce';
 export * from './modules/audit';
 export * from './modules/member';
 export * from './modules/discovery';
+export * from './modules/engagement';

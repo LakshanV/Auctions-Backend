@@ -5,3 +5,4 @@ export * from './rbac';
 export * from './categories';
 export * from './commands';
 export * from './discovery';
+export * from './engagement';

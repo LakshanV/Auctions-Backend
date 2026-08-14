@@ -98,9 +98,7 @@
       "fullDescription": "null",
       "id": "string",
       "inspectionSummary": "null",
-      "media": [
-        "unknown"
-      ],
+      "media": ["unknown"],
       "publicTermsRef": "null",
       "reference": "string",
       "saleMethod": "string",
@@ -123,9 +121,7 @@
       "version": "number"
     },
     "GET /api/v2/me/dashboard": {
-      "groups": [
-        "unknown"
-      ],
+      "groups": ["unknown"],
       "strip": {
         "activeBids": "number",
         "currency": "string",

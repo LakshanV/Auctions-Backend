@@ -21,19 +21,24 @@ trust stale wording").
 
 ## Current phase
 
-**V3-6 — Bid Battle + Engagement Engine (kickoff).** V3-5 is complete (discovery HTTP E2E
-landed, `pnpm test:discovery` = 24/24 on real Postgres). This increment lands the
-privacy-critical Tier-A core of V3-6: a **pure, rebuildable rivalry engine** over the
-immutable Bid ledger + **privacy-safe bidder aliases** (`packages/domain/.../engagement`,
-`packages/contracts/src/engagement.ts`). 15 unit tests; never writes the ledger, never
-decides bid validity, never exposes a bidderId or proxy maximum.
+**V3-10 done — build track complete, GO_FOR_CONTROLLED_PILOT.** V3-5…V3-10 are all
+landed and pushed to `main` (`e458ccc`). The final report lives in the frontend repo at
+`V3_FINAL_GO_NO_GO.md`. V3 highlights this program:
 
-Landed too: **HTTP exposure** of the safe `RivalryView` — `GET /auctions/:id/rivalry`,
-gated server-side on `bidBattleV3` (404 when OFF), viewer-aware ("You"), derived from the
-ledger, never writing it. E2E `scripts/e2e-bid-battle.mjs` (`pnpm test:bid-battle`, folded
-into `test:acceptance`) — **17 checks green on real Postgres**: real proxy-bidding →
-leader/challenger aliases, viewer "You", 3 lead changes, comeback + you_outbid moments, no
-PII/proxy-max leakage, flag gate proven both ways (200 ON / 404 OFF) by restarting the API.
+- **V3-6 Bid Battle:** rivalry engine + `GET /auctions/:id/rivalry` (bidBattleV3) — 15
+  domain + 17 E2E checks; engagement engine (notification policy, `notification_preference`
+  - `notification_delivery` ledger, retry→dead-letter, provider fakes) — 11 domain + 14 E2E.
+- **V3-7 AI safety kernel:** prompt-injection + data-boundary redaction + model-tier router
+  - private prompt registry; 12 domain + 6 new AI E2E. Connect/Social/Intelligence verified.
+- **V3-8 Live:** enforced `liveV3` gate + canonical live-room SSE (snapshot/seq, video-outage
+  independence) — 17 E2E.
+- **V3-9 dashboard pilot:** `product_event` + `POST /api/v2/me/analytics` (dashboardV3Beta).
+- **Catalogue scale fix (offset row cursor):** 2,000 lots reachable; `contract:check` green.
+
+Full backend acceptance E2E + scale pass on real Postgres; unit domain 90 / api 21 /
+contracts 17. All V3 flags OFF by default.
+
+_Historical detail for earlier increments (superseded by the above):_
 
 Still to do for V3-6: the Bid Battle UI (frontend, `bidBattleV3`); the `engagementV3`
 notification engine (preferences, quiet hours, frequency caps, idempotency, provider

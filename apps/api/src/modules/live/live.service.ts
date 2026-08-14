@@ -135,6 +135,26 @@ export class LiveService {
     return this.view(await this.require(id));
   }
 
+  /**
+   * The canonical live-room projection (pack doc 08): broadcast status + video
+   * availability + the AUTHORITATIVE current bid state from the auction engine. Bid state
+   * is read from the engine, NOT a separate live-bid store, so a video/stream outage can
+   * never corrupt bidding — `videoAvailable` may be false while `bid` keeps updating.
+   * `seq` is the auction engine's monotonic version, for realtime ordering/dedupe.
+   */
+  async liveRoom(id: string) {
+    const event = await this.require(id);
+    const bid = event.auctionId
+      ? await this.auctions.getState(event.auctionId).catch(() => null)
+      : null;
+    return {
+      ...this.view(event),
+      videoAvailable: event.status === 'live' && !!event.playbackUrl,
+      bid,
+      seq: bid?.version ?? 0,
+    };
+  }
+
   private async require(id: string) {
     const event = await this.prisma.liveEvent.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('Live event not found');

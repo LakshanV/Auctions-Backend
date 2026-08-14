@@ -62,10 +62,30 @@ const registerCustomer = async (label) =>
   (await post('/customers', { body: { legalName: label, email: `${label}${Date.now()}@ex.com` } }))
     .json?.id;
 
+/** Read the first SSE data frame from a stream URL (reconnect snapshot). */
+async function firstSseFrame(url) {
+  const res = await fetch(url, { headers: { accept: 'text/event-stream' } });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  try {
+    for (let i = 0; i < 40; i += 1) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const m = buf.match(/data: (.+)\n/);
+      if (m) return JSON.parse(m[1]);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return null;
+}
+
 async function main() {
   const child = spawn('node', ['apps/api/dist/main.js'], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: process.env,
+    env: { ...process.env, FEATURE_V3_LIVE: 'true' },
   });
   const logs = [];
   child.stdout.on('data', (d) => logs.push(d.toString()));
@@ -159,6 +179,22 @@ async function main() {
       `clerk-relayed floor bid takes the lead (current=${floor.json?.currentBidMinor})`,
     );
 
+    // --- Canonical live-room projection + realtime (pack doc 08) --------------
+    // The room carries the AUTHORITATIVE engine bid state, not a separate live store.
+    const liveRoom = await get(`/live/events/${eventId}/room`);
+    check(
+      liveRoom.json?.videoAvailable === true &&
+        liveRoom.json?.bid?.currentBidMinor === floor.json.currentBidMinor,
+      `live room shows video + engine bid state (bid=${liveRoom.json?.bid?.currentBidMinor})`,
+    );
+    check(typeof liveRoom.json?.seq === 'number', 'live room carries a monotonic seq for ordering');
+    // Reconnect/resync: the SSE stream delivers an authoritative snapshot on connect.
+    const frame = await firstSseFrame(`${BASE}/api/v1/live/events/${eventId}/stream`);
+    check(
+      frame?.id === eventId && frame?.bid?.currentBidMinor === floor.json.currentBidMinor,
+      `live SSE pushes a snapshot on connect (reconnect/resync-safe, bid=${frame?.bid?.currentBidMinor})`,
+    );
+
     // Close → floor bidder wins (highest max), decided by the engine.
     const closed = await post(`/auctions/${auctionId}/close`, { token: staffToken });
     check(
@@ -170,6 +206,15 @@ async function main() {
     check(
       stopped.json?.status === 'ended' && /mp4/.test(stopped.json?.recordingUrl ?? ''),
       'broadcast stopped with a recording URL',
+    );
+
+    // Video-outage independence (pack doc 08): with the broadcast ended (video
+    // unavailable) the room STILL serves the authoritative engine bid state — the stream
+    // is a distribution surface, never the source of truth for bidding.
+    const afterStop = await get(`/live/events/${eventId}/room`);
+    check(
+      afterStop.json?.videoAvailable === false && afterStop.json?.bid?.currentBidMinor != null,
+      'video unavailable, but authoritative bid state is still served (outage-independent)',
     );
 
     // The ONE ledger holds both sources.
@@ -194,6 +239,25 @@ async function main() {
     }
   } finally {
     child.kill('SIGKILL');
+  }
+
+  // --- Flag OFF: the whole live surface is 404 (liveV3 gate) ------------------
+  const offChild = spawn('node', ['apps/api/dist/main.js'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, FEATURE_V3_LIVE: 'false' },
+  });
+  try {
+    if (!(await waitForHealth())) process.exit(1);
+    const staffOff = await token(['auction_staff']);
+    const roomOff = await get(`/live/events/does-not-matter/room`);
+    check(roomOff.status === 404, `live room is 404 when liveV3 is OFF (got ${roomOff.status})`);
+    const createOff = await post('/live/events', { token: staffOff, body: { title: 'x' } });
+    check(
+      createOff.status === 404,
+      `live create is 404 when liveV3 is OFF (got ${createOff.status})`,
+    );
+  } finally {
+    offChild.kill('SIGKILL');
   }
 
   if (failures > 0) {

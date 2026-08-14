@@ -88,19 +88,28 @@ export class CatalogueV2Service {
 
   /**
    * One AuctionFlow/Rubik category row, cursor-paginated (pack 01 doc 05). The
-   * row owns its own cursor so bands page independently and every category is
-   * reachable — not just the first global page. Ordering is stable (id
-   * tiebreaker) so appending a page never reshuffles already-shown faces.
+   * row owns its own cursor so bands page independently and EVERY lot in the band
+   * is reachable — not just the first page — with no repeats and a clean end.
+   *
+   * The opaque cursor is an offset into the fully-ordered band. Keyset (id-based)
+   * cursors CANNOT seek correctly here because the Ending-Soon default orders by a
+   * NULLABLE to-one relation column (`auction.endsAt`); a keyset on `id` collapses
+   * after the first page (the AuctionFlow scale regression). Because `buildOrder`
+   * always ends in the unique `id` tiebreaker, the total order is deterministic, so
+   * offset paging is exact — no skipped, repeated or unreachable faces — across
+   * every sort mode, including relation-ordered ones. Drift under concurrent inserts
+   * is acceptable for a browse surface and self-heals on the next full load.
    */
   async row(q: CatalogueRowQuery) {
     const where = this.buildWhere(q);
     const orderBy = this.buildOrder(q);
+    const offset = this.decodeRowCursor(q.cursor);
     // Over-fetch by one to detect whether a further page exists without a count.
     const rows = (await this.prisma.listing.findMany({
       where,
       orderBy,
+      skip: offset,
       take: q.limit + 1,
-      ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
       include: this.include(),
     })) as FullListing[];
 
@@ -109,9 +118,16 @@ export class CatalogueV2Service {
     return {
       category: q.category,
       items: page.map((l) => this.toCardV2(l)),
-      nextCursor: hasMore ? page[page.length - 1]!.id : null,
+      nextCursor: hasMore ? String(offset + q.limit) : null,
       exhausted: !hasMore,
     };
+  }
+
+  /** Decode the opaque row cursor to a non-negative offset (invalid → start). */
+  private decodeRowCursor(cursor: string | undefined): number {
+    if (!cursor) return 0;
+    const n = Number.parseInt(cursor, 10);
+    return Number.isSafeInteger(n) && n >= 0 ? n : 0;
   }
 
   async get(listingId: string) {

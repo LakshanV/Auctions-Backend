@@ -9,3 +9,4 @@ export * from './modules/exchange';
 export * from './modules/commerce';
 export * from './modules/audit';
 export * from './modules/member';
+export * from './modules/discovery';

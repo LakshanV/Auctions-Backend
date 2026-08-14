@@ -4,3 +4,4 @@ export * from './api';
 export * from './rbac';
 export * from './categories';
 export * from './commands';
+export * from './discovery';

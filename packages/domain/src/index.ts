@@ -11,3 +11,4 @@ export * from './modules/audit';
 export * from './modules/member';
 export * from './modules/discovery';
 export * from './modules/engagement';
+export * from './modules/ai';

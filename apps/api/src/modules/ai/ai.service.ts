@@ -6,11 +6,15 @@ import {
   type DraftListingInput,
   newId,
 } from '@singha/contracts';
+import { guardAiRequest } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 import { AI_PROVIDER, type AiProvider, type ListingDraft } from './ai.provider';
+
+const SAFE_REFUSAL =
+  'I can’t help with that request. A Singha specialist can assist you with anything about a lot, bidding or your account.';
 
 /**
  * Singha AI Core (docs/10). Every AI invocation is recorded as an AiRun with
@@ -69,9 +73,50 @@ export class AiService {
   }
 
   async assist(principal: Principal, input: AssistInput) {
-    const reply = await this.ai.assist(input.prompt, input.context);
     const actor = toActor(principal);
     const id = newId();
+
+    // Boundary guard (pack doc 06/12): detect prompt-injection, redact sensitive context,
+    // resolve the model tier. A flagged request is REFUSED — recorded, never sent to a
+    // provider — so free text can never override policy or exfiltrate Tier-A data.
+    const guard = guardAiRequest('assistant', input.prompt, input.context);
+    if (!guard.allowed) {
+      return this.uow.execute(actor, async (ctx) => {
+        await ctx.tx.aiRun.create({
+          data: {
+            id,
+            taskType: 'assistant',
+            model: this.ai.model,
+            provider: this.ai.name,
+            actorId: actor.id,
+            prompt: input.prompt,
+            output: {
+              blocked: true,
+              refusalReason: guard.refusalReason,
+              reasons: guard.injection.reasons,
+              modelTier: guard.tier,
+            } as unknown as object,
+            confidence: 0,
+          },
+        });
+        ctx.audit({
+          action: 'AI_ASSIST_BLOCKED',
+          targetType: 'AiRun',
+          targetId: id,
+          actorType: 'ai',
+        });
+        return {
+          aiRunId: id,
+          reply: SAFE_REFUSAL,
+          confidence: 0,
+          blocked: true,
+          refusalReason: guard.refusalReason,
+        };
+      });
+    }
+
+    // Only the redacted, safe context crosses into the provider.
+    const reply = await this.ai.assist(input.prompt, guard.safeContext);
     return this.uow.execute(actor, async (ctx) => {
       await ctx.tx.aiRun.create({
         data: {
@@ -81,12 +126,16 @@ export class AiService {
           provider: this.ai.name,
           actorId: actor.id,
           prompt: input.prompt,
-          output: reply as unknown as object,
+          output: {
+            ...reply,
+            modelTier: guard.tier,
+            redactedKeys: guard.redactedKeys,
+          } as unknown as object,
           confidence: reply.confidence,
         },
       });
       ctx.audit({ action: 'AI_ASSIST', targetType: 'AiRun', targetId: id, actorType: 'ai' });
-      return { aiRunId: id, ...reply };
+      return { aiRunId: id, ...reply, blocked: false };
     });
   }
 

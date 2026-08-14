@@ -46,7 +46,9 @@ async function main() {
       console.log(`[migrations-current] newest migration ${latest} already applied — safe to boot`);
       process.exit(0);
     }
-    console.error(`[migrations-current] newest migration ${latest} NOT applied — a real migration is pending`);
+    console.error(
+      `[migrations-current] newest migration ${latest} NOT applied — a real migration is pending`,
+    );
     process.exit(1);
   } finally {
     await disconnectPrisma();

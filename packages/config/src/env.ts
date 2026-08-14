@@ -67,6 +67,21 @@ export const envSchema = z.object({
   FEATURE_SOCIAL_AUTO_PUBLISH: boolFromEnv.default(false),
   FEATURE_WHATSAPP_BID_INTENT: boolFromEnv.default(false),
 
+  // V3 experience flags (pack doc 21). All default OFF so production stays on the
+  // current UI; each is server/config-controlled for rapid rollback without a code
+  // change, and surfaced via GET /api/v1/feature-flags for the frontend to gate on.
+  FEATURE_V3_VISUAL_ARCHITECTURE: boolFromEnv.default(false),
+  FEATURE_V3_FLOW_MATRIX: boolFromEnv.default(false),
+  FEATURE_V3_CATEGORY_OVERLAY: boolFromEnv.default(false),
+  FEATURE_V3_FEATURED_REEL: boolFromEnv.default(false),
+  FEATURE_V3_DISCOVER: boolFromEnv.default(false),
+  FEATURE_V3_BUYER_TWIN: boolFromEnv.default(false),
+  FEATURE_V3_BID_BATTLE: boolFromEnv.default(false),
+  FEATURE_V3_GESTURE_BID: boolFromEnv.default(false),
+  FEATURE_V3_ENGAGEMENT: boolFromEnv.default(false),
+  FEATURE_V3_DASHBOARD_BETA: boolFromEnv.default(false),
+  FEATURE_V3_LIVE: boolFromEnv.default(false),
+
   STORAGE_ENDPOINT: z.string().default(''),
   STORAGE_BUCKET: z.string().default(''),
   STORAGE_ACCESS_KEY: z.string().default(''),

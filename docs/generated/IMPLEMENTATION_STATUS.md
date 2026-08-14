@@ -69,6 +69,7 @@ _2026-08-12. `main` commits `240ef09` §12, `4c9e3b4` §3, `6b6d269` §5, `45aa2
 (all checks) + `test:auction` + `test:commerce` + `test:exchange` green; api typecheck/lint._
 
 **Done + verified (`COMPLETE_VERIFIED` locally):**
+
 - **§3 (P0) converted unpaid exposure** — admission counts ACTIVE **+ CONVERTED** via one
   canonical `committedExposureMinor`; a winner can't regain capacity until paid.
 - **§4 (P0) temporary facility SCOPE** — the gate locks ALL active facilities and selects

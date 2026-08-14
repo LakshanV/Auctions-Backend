@@ -18,19 +18,19 @@
 
 ## Required environment variables
 
-| Variable                          | Required value / note                                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                        | `production`                                                                                            |
-| `DEMO_AUTH_ENABLED`               | **`false`** — disables `/auth/demo`. The service must fail closed if this is not `false` in production. |
+| Variable                          | Required value / note                                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                        | `production`                                                                                                |
+| `DEMO_AUTH_ENABLED`               | **`false`** — disables `/auth/demo`. The service must fail closed if this is not `false` in production.     |
 | `DATABASE_URL`                    | Supabase **TRANSACTION pooler**, port **6543**, `?pgbouncer=true` (app runtime). See §Database connections. |
-| `DIRECT_URL`                      | Supabase **SESSION pooler**, port **5432** (migrations only). See §Database connections.                 |
-| `JWT_SECRET` / session secret     | A strong, unique, rotated secret. No default/placeholder in production.                                 |
-| `SUPABASE_URL`                    | Project URL (for JWKS verification of real Supabase JWTs).                                              |
-| `SUPABASE_ANON_KEY` / service key | As required by the auth + storage adapters.                                                             |
-| `SUPABASE_MEDIA_BUCKET`           | e.g. `singha-media`.                                                                                    |
-| `CORS_ORIGINS`                    | **Explicit** origin list (the Vercel domain), never `*` in production.                                  |
-| `PORT`                            | Provided by Railway; the app binds `0.0.0.0:$PORT`.                                                     |
-| `REDIS_URL`                       | Optional — enables cross-instance realtime; absent → in-process fan-out.                                |
+| `DIRECT_URL`                      | Supabase **SESSION pooler**, port **5432** (migrations only). See §Database connections.                    |
+| `JWT_SECRET` / session secret     | A strong, unique, rotated secret. No default/placeholder in production.                                     |
+| `SUPABASE_URL`                    | Project URL (for JWKS verification of real Supabase JWTs).                                                  |
+| `SUPABASE_ANON_KEY` / service key | As required by the auth + storage adapters.                                                                 |
+| `SUPABASE_MEDIA_BUCKET`           | e.g. `singha-media`.                                                                                        |
+| `CORS_ORIGINS`                    | **Explicit** origin list (the Vercel domain), never `*` in production.                                      |
+| `PORT`                            | Provided by Railway; the app binds `0.0.0.0:$PORT`.                                                         |
+| `REDIS_URL`                       | Optional — enables cross-instance realtime; absent → in-process fan-out.                                    |
 
 ### Database connections — CRITICAL (fixes deploy `EMAXCONNSESSION` crash-loop)
 
@@ -70,7 +70,7 @@ those connections drop, then redeploy. Optionally raise the pool size in Supabas
 Dashboard → Database → Connection pooling if 15 is tight for your concurrency.
 
 `scripts/start.sh` also retries `migrate deploy` with backoff (`MIGRATE_MAX_ATTEMPTS`,
-`MIGRATE_RETRY_SLEEP`) so *transient* redeploy overlap self-heals — but that only helps
+`MIGRATE_RETRY_SLEEP`) so _transient_ redeploy overlap self-heals — but that only helps
 once `DATABASE_URL` is off the session pooler.
 
 ### Member / credit engine (Revision 05) — optional tuning

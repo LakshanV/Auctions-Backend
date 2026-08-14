@@ -65,3 +65,26 @@ export interface BuyerTwinSummary {
   explanations: string[];
   builtAt: string | null;
 }
+
+/**
+ * Privacy-safe product analytics event (pack doc 08/09 dashboard instrumentation). A
+ * strict primitive metadata allow-list — never a place for PII or device fingerprints.
+ */
+export const PRODUCT_SURFACES = [
+  'DASHBOARD',
+  'DISCOVER',
+  'FLOW',
+  'LOT',
+  'NOTIFICATION',
+  'LIVE',
+  'BID_BATTLE',
+] as const;
+export const recordProductEventSchema = z.object({
+  surface: z.enum(PRODUCT_SURFACES),
+  action: z.string().min(1).max(60),
+  listingId: z.string().max(60).optional(),
+  funnelStep: z.string().max(40).optional(),
+  anonymousSessionId: z.string().max(120).optional(),
+  metadata: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+export type RecordProductEventInput = z.infer<typeof recordProductEventSchema>;

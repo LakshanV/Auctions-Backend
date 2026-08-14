@@ -47,6 +47,8 @@ async function bootstrap(): Promise<void> {
       { path: 'api/v2/catalogue/:id', method: RequestMethod.GET },
       // Buyer command-centre projection owns its own absolute /api/v2 path (doc 05).
       { path: 'api/v2/me/dashboard', method: RequestMethod.GET },
+      // Dashboard-pilot instrumentation shares the absolute /api/v2/me path (doc 09).
+      { path: 'api/v2/me/analytics', method: RequestMethod.POST },
     ],
   });
   app.enableShutdownHooks();

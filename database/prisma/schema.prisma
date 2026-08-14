@@ -1531,3 +1531,23 @@ model NotificationDelivery {
   @@index([status])
   @@map("notification_delivery")
 }
+
+// Privacy-safe product analytics for the V3 dashboard pilot (pack doc 08/09). An
+// append-only, PII-light instrumentation log: which surfaces are opened, which actions
+// complete, and Discover→watch→bid funnel steps — so V3-11 can refine from evidence.
+// FK-less analytics (customerId is a bare column, nullable for anonymous).
+model ProductEvent {
+  id                 String   @id
+  customerId         String?  @map("customer_id")
+  anonymousSessionId String?  @map("anonymous_session_id")
+  surface            String
+  action             String
+  listingId          String?  @map("listing_id")
+  funnelStep         String?  @map("funnel_step")
+  metadata           Json?
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([surface, createdAt])
+  @@index([customerId, createdAt])
+  @@map("product_event")
+}

@@ -1,6 +1,8 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PLATFORM_CURRENCY } from '@singha/config';
+import { newId, type RecordProductEventInput } from '@singha/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AppConfigService } from '../../config/config.service';
 import { type Principal } from '../../shared/auth/principal';
 
 /** A lot as it appears in a command-centre status band. */
@@ -48,7 +50,33 @@ type ListingWithAsset = {
  */
 @Injectable()
 export class MeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: AppConfigService,
+  ) {}
+
+  /**
+   * Record a privacy-safe product-analytics event for the dashboard pilot (pack doc
+   * 08/09), gated on `dashboardV3Beta`. Append-only, PII-light: surface + action + an
+   * optional listing/funnel step + a primitive metadata allow-list. Anonymous callers are
+   * allowed (customerId null). 404 when the flag is OFF so the surface stays hidden.
+   */
+  async recordAnalytics(principal: Principal, input: RecordProductEventInput) {
+    if (!this.config.get().features.dashboardV3Beta) throw new NotFoundException('Not found');
+    await this.prisma.productEvent.create({
+      data: {
+        id: newId(),
+        customerId: principal.customerId ?? null,
+        anonymousSessionId: input.anonymousSessionId ?? null,
+        surface: input.surface,
+        action: input.action,
+        listingId: input.listingId ?? null,
+        funnelStep: input.funnelStep ?? null,
+        metadata: input.metadata ?? undefined,
+      },
+    });
+    return { recorded: true };
+  }
 
   private customerId(principal: Principal): string {
     if (!principal.customerId) throw new ForbiddenException('Authenticated customer required');

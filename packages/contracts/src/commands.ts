@@ -434,7 +434,7 @@ export const catalogueQuerySchema = z.object({
   featured: z.coerce.boolean().optional(),
   endingSoon: z.coerce.boolean().optional(),
   auctionEventId: z.string().min(1).optional(),
-  sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('newest'),
+  sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('ending'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(60).default(24),
 });
@@ -454,7 +454,7 @@ export const catalogueRowQuerySchema = z.object({
   location: z.string().max(80).optional(),
   endingSoon: z.coerce.boolean().optional(),
   auctionEventId: z.string().min(1).optional(),
-  sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('newest'),
+  sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('ending'),
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(30).default(12),
 });

@@ -25,6 +25,10 @@ type FullListing = Prisma.ListingGetPayload<{
 }>;
 
 const PUBLIC_STATUSES = ['scheduled', 'live', 'ended', 'sold'] as const;
+// V3 (pack doc 08): the DEFAULT open catalogue shows only live/upcoming inventory.
+// Closed/sold lots have a past deadline and would otherwise sort to the very top of
+// the Ending Soon default; a caller can still request them explicitly with `status`.
+const OPEN_STATUSES = ['scheduled', 'live'] as const;
 
 /**
  * Enriched public catalogue (consolidated pack doc 07): `/api/v2/catalogue` with
@@ -140,7 +144,7 @@ export class CatalogueV2Service {
 
   private buildWhere(q: CatalogueFilters): Prisma.ListingWhereInput {
     const and: Prisma.ListingWhereInput[] = [
-      { status: { in: (q.status ? [q.status] : [...PUBLIC_STATUSES]) as never } },
+      { status: { in: (q.status ? [q.status] : [...OPEN_STATUSES]) as never } },
     ];
     if (q.category) and.push({ asset: { category: q.category } });
     if (q.saleMethod) and.push({ saleMethod: q.saleMethod });
@@ -180,7 +184,18 @@ export class CatalogueV2Service {
     q: CatalogueFilters & { sort: CatalogueQuery['sort'] },
   ): Prisma.ListingOrderByWithRelationInput[] {
     const id = { id: 'desc' as const };
-    if (q.sort === 'ending') return [{ auction: { endsAt: 'asc' } }, id];
+    if (q.sort === 'ending')
+      // Ending Soon (V3 default, pack doc 08): deadline-aware across sale methods.
+      // Timed auctions order by their (soft-close-extended) `endsAt`; non-auction
+      // methods (EOI/tender/offer/Buy-Now window) order by the listing `closesAt`.
+      // Auctions with no relation and lots with no deadline fall last (nulls last)
+      // and are broken by recency, then `id` for cursor-stable determinism.
+      return [
+        { auction: { endsAt: 'asc' } },
+        { closesAt: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'desc' },
+        id,
+      ];
     if (q.sort === 'price_asc' || q.sort === 'price_desc') {
       const dir = q.sort === 'price_asc' ? ('asc' as const) : ('desc' as const);
       switch (q.saleMethod) {

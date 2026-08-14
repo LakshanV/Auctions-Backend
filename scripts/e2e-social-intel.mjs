@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 /**
  * Phase 9 (Social Publisher) + Phase 10 (Asset Intelligence) E2E. Proves: a
- * listing gets an AI-assisted publication draft, a group campaign publishes all
- * its drafts through the mock adapter (external post ids assigned), and analytics
- * DERIVED from real sales power Market Pulse + comparables + seller intelligence
- * without ever mutating sale facts. Permissions enforced (social:operate,
+ * listing gets an AI-assisted publication draft, it must be submitted and
+ * approved (`social:approve`, distinct from `social:operate`) before it — or a
+ * group campaign of them — can publish through the mock adapter (external post
+ * ids assigned), and analytics DERIVED from real sales power Market Pulse
+ * (including sell-through) + comparables + seller intelligence without ever
+ * mutating sale facts. Permissions enforced (social:operate, social:approve,
  * intelligence:read); Market Pulse is public.
  */
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import PrismaPkg from '@prisma/client';
 
+const { PrismaClient } = PrismaPkg;
 const BASE = 'http://localhost:4000';
 const API = `${BASE}/api/v1`;
 let failures = 0;
@@ -92,6 +96,34 @@ async function sellVehicle(sellerToken, staffToken, buyerToken, buyer, priceMino
   return listing.json.id;
 }
 
+/** Open then immediately close an auction with NO bids -> passed in (unsold). */
+async function passInVehicle(sellerToken, staffToken) {
+  const asset = await post('/assets', {
+    token: sellerToken,
+    body: { category: 'vehicles', attributes: { make: 'Toyota', model: 'Axio', year: 2017 } },
+  });
+  const listing = await post('/listings', {
+    token: sellerToken,
+    body: {
+      assetId: asset.json.id,
+      saleMethod: 'TIMED_AUCTION',
+      publicRef: `SI-PI-${Date.now()}-${Math.floor(Math.random() * 1e4)}`,
+    },
+  });
+  const auction = await post('/auctions', {
+    token: staffToken,
+    body: {
+      listingId: listing.json.id,
+      startsAt: new Date(Date.now() - 1000).toISOString(),
+      endsAt: new Date(Date.now() + 60_000).toISOString(),
+      openingBidMinor: 1_000_000,
+      incrementMinor: 10_000,
+    },
+  });
+  await post(`/auctions/${auction.json.id}/open`, { token: staffToken });
+  return post(`/auctions/${auction.json.id}/close`, { token: staffToken });
+}
+
 async function main() {
   const child = spawn('node', ['apps/api/dist/main.js'], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -109,9 +141,13 @@ async function main() {
 
     const sellerId = await registerCustomer('seller');
     const buyer = await registerCustomer('buyer');
+    const adminId = await registerCustomer('admin');
     const sellerToken = await token(['seller'], sellerId);
     const staffToken = await token(['auction_staff'], sellerId);
     const buyerToken = await token(['customer'], buyer);
+    // Admin holds social:approve; auction_staff (above) holds only social:operate
+    // — the approve gate must stay a distinct human step from drafting/operating.
+    const adminToken = await token(['admin'], adminId);
 
     // Two completed sales in 'vehicles' → analytics have data.
     const soldA = await sellVehicle(sellerToken, staffToken, buyerToken, buyer, 2_000_000);
@@ -141,6 +177,23 @@ async function main() {
       'publication drafted with an auto caption',
     );
 
+    // Approval gate (docs/11): a human must approve before ANY publish, single
+    // or campaign — submit it, then approve as admin (social:approve).
+    const pubSubmit = await post(`/social/publications/${pub.json.id}/submit`, {
+      token: staffToken,
+    });
+    check(
+      pubSubmit.status === 201 && pubSubmit.json?.status === 'pending_approval',
+      `campaign publication submitted for approval (status=${pubSubmit.json?.status})`,
+    );
+    const pubApprove = await post(`/social/publications/${pub.json.id}/approve`, {
+      token: adminToken,
+    });
+    check(
+      pubApprove.status === 201 && pubApprove.json?.status === 'approved',
+      `admin approved the campaign publication (status=${pubApprove.json?.status})`,
+    );
+
     const publishedCampaign = await post(`/social/campaigns/${campaign.json.id}/publish`, {
       token: staffToken,
     });
@@ -151,6 +204,91 @@ async function main() {
     );
     const pubList = await get(`/social/listings/${soldA}/publications`, { token: staffToken });
     check(pubList.json?.[0]?.status === 'published', 'publication now marked published');
+
+    // --- Phase 9b: approval gate, reject flow, permission split, audit ---
+    const gated = await post('/social/publications', {
+      token: staffToken,
+      body: { listingId: soldA, platform: 'facebook', caption: 'Gate test caption' },
+    });
+    check(gated.status === 201 && gated.json?.status === 'draft', 'second publication drafted');
+
+    // Draft can't publish — must be approved first.
+    const draftPublish = await post(`/social/publications/${gated.json.id}/publish`, {
+      token: staffToken,
+    });
+    check(
+      draftPublish.status === 409,
+      `draft cannot publish before approval -> 409 (got ${draftPublish.status})`,
+    );
+
+    const submitted = await post(`/social/publications/${gated.json.id}/submit`, {
+      token: staffToken,
+    });
+    check(
+      submitted.status === 201 && submitted.json?.status === 'pending_approval',
+      `submitted for approval -> pending_approval (got ${submitted.json?.status})`,
+    );
+
+    // Approve requires social:approve — a social:operate-only actor is refused.
+    const approveDenied = await post(`/social/publications/${gated.json.id}/approve`, {
+      token: staffToken,
+    });
+    check(
+      approveDenied.status === 403,
+      `social:operate-only actor cannot approve -> 403 (got ${approveDenied.status})`,
+    );
+
+    // Reject sends it back to draft — still cannot publish.
+    const rejected = await post(`/social/publications/${gated.json.id}/reject`, {
+      token: adminToken,
+    });
+    check(
+      rejected.status === 201 && rejected.json?.status === 'draft',
+      `admin rejected -> back to draft (got ${rejected.json?.status})`,
+    );
+    const stillBlocked = await post(`/social/publications/${gated.json.id}/publish`, {
+      token: staffToken,
+    });
+    check(
+      stillBlocked.status === 409,
+      `rejected/draft still cannot publish -> 409 (got ${stillBlocked.status})`,
+    );
+
+    // Happy path: submit -> approve -> publish.
+    await post(`/social/publications/${gated.json.id}/submit`, { token: staffToken });
+    const approved = await post(`/social/publications/${gated.json.id}/approve`, {
+      token: adminToken,
+    });
+    check(
+      approved.status === 201 &&
+        approved.json?.status === 'approved' &&
+        approved.json?.approvedById === adminId &&
+        !!approved.json?.approvedAt,
+      `admin approved (status=${approved.json?.status}, approvedById correct=${approved.json?.approvedById === adminId})`,
+    );
+    const gatedPublish = await post(`/social/publications/${gated.json.id}/publish`, {
+      token: staffToken,
+    });
+    check(
+      gatedPublish.status === 201 &&
+        gatedPublish.json?.status === 'published' &&
+        gatedPublish.json?.externalPostId?.startsWith('mock-'),
+      `submit->approve->publish happy path succeeds (status=${gatedPublish.json?.status})`,
+    );
+
+    // The approval is audited.
+    const prisma = new PrismaClient();
+    try {
+      const approveAudit = await prisma.auditEvent.findFirst({
+        where: { targetId: gated.json.id, action: 'SOCIAL_PUBLICATION_APPROVED' },
+      });
+      check(
+        approveAudit?.actorType === 'staff' && approveAudit?.actorId === adminId,
+        `the approval is audited (actorType=${approveAudit?.actorType}, actorId correct=${approveAudit?.actorId === adminId})`,
+      );
+    } finally {
+      await prisma.$disconnect();
+    }
 
     // --- Phase 10: Asset Intelligence ---
     // Market Pulse is public (no token) — rule 13.
@@ -163,6 +301,32 @@ async function main() {
     check(
       vehicles?.avgMinor === Math.round(vehicles.totalMinor / vehicles.salesCount),
       'Market Pulse average is derived correctly',
+    );
+
+    // Sell-through = soldCount / offeredCount, computed live from Auction rows
+    // (status='closed' + winnerCustomerId) — never materialized. Seed one more
+    // sold lot + one passed-in (unsold) lot and assert the DELTA, since a shared
+    // DB may already hold closed auctions from other tests.
+    const stBefore = pulse.json?.sellThrough;
+    await sellVehicle(sellerToken, staffToken, buyerToken, buyer, 2_500_000);
+    const passedIn = await passInVehicle(sellerToken, staffToken);
+    check(
+      passedIn.status === 201 &&
+        passedIn.json?.status === 'closed' &&
+        !passedIn.json?.winnerCustomerId,
+      `seeded a passed-in (unsold) auction lot (status=${passedIn.json?.status})`,
+    );
+    const pulseAfter = await get('/intelligence/market-pulse');
+    const stAfter = pulseAfter.json?.sellThrough;
+    check(
+      stAfter?.soldCount === (stBefore?.soldCount ?? 0) + 1 &&
+        stAfter?.offeredCount === (stBefore?.offeredCount ?? 0) + 2,
+      `sell-through: soldCount +1, offeredCount +2 (sold=${stAfter?.soldCount}, offered=${stAfter?.offeredCount})`,
+    );
+    check(
+      stAfter?.ratio !== null &&
+        Math.abs(stAfter.ratio - stAfter.soldCount / stAfter.offeredCount) < 1e-9,
+      `sell-through ratio reflects sold/(sold+unsold) (${stAfter?.ratio})`,
     );
 
     // Comparables need permission.

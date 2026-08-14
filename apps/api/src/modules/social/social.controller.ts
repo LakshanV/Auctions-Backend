@@ -44,6 +44,26 @@ export class SocialController {
     return this.social.publish(principal, id);
   }
 
+  /** Hand a draft/scheduled post to a reviewer. Inherits class-level `social:operate`. */
+  @Post('publications/:id/submit')
+  submitForApproval(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.social.submitForApproval(principal, id);
+  }
+
+  /** Approve a pending post — the human gate publish() requires (docs/11). */
+  @Post('publications/:id/approve')
+  @RequirePermissions(Permission.SocialApprove)
+  approve(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.social.approve(principal, id);
+  }
+
+  /** Send a pending post back to draft. */
+  @Post('publications/:id/reject')
+  @RequirePermissions(Permission.SocialApprove)
+  reject(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.social.reject(principal, id);
+  }
+
   @Get('listings/:id/publications')
   listForListing(@Param('id') id: string) {
     return this.social.listForListing(id);

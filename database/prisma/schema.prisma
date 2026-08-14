@@ -1016,6 +1016,11 @@ enum SocialPublicationStatus {
   scheduled
   published
   failed
+  // Approval lifecycle (docs/11 "human approval" gate): a draft/scheduled post
+  // is submitted, then a human with `social:approve` approves or rejects it.
+  // publish() requires `approved` — additive values, existing rows unaffected.
+  pending_approval
+  approved
 }
 
 enum SocialCampaignType {
@@ -1046,6 +1051,10 @@ model SocialPublication {
   externalPostId String?                 @map("external_post_id")
   scheduledAt    DateTime?               @map("scheduled_at")
   publishedAt    DateTime?               @map("published_at")
+  // Who/when approved this post (docs/11) — set only by approve(); a derived
+  // provenance record, never a substitute for the append-only audit trail.
+  approvedById   String?                 @map("approved_by_id")
+  approvedAt     DateTime?               @map("approved_at")
   createdAt      DateTime                @default(now()) @map("created_at")
   updatedAt      DateTime                @updatedAt @map("updated_at")
 

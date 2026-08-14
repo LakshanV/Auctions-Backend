@@ -86,6 +86,11 @@ export class SocialService {
     const pub = await this.prisma.socialPublication.findUnique({ where: { id } });
     if (!pub) throw new NotFoundException('Publication not found');
     if (pub.status === 'published') throw new ConflictException('Already published');
+    // A human approval must gate every public post (docs/11) — nothing goes out
+    // unless it has been through submitForApproval() -> approve().
+    if (pub.status !== 'approved') {
+      throw new ConflictException('Publication must be approved before it can be published');
+    }
 
     const result = await this.publisher.publish(
       pub.platform,
@@ -121,16 +126,96 @@ export class SocialService {
     });
   }
 
-  /** Publish every draft/scheduled publication in a group campaign. */
+  /** Publish every APPROVED publication in a group campaign (docs/11 gate). */
   async publishCampaign(principal: Principal, campaignId: string) {
     const campaign = await this.prisma.socialCampaign.findUnique({ where: { id: campaignId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
     const pending = await this.prisma.socialPublication.findMany({
-      where: { campaignId, status: { in: ['draft', 'scheduled'] } },
+      where: { campaignId, status: 'approved' },
     });
     const results = [];
     for (const p of pending) results.push(await this.publish(principal, p.id));
     return { campaignId, published: results.length, publications: results };
+  }
+
+  /**
+   * Draft (or pre-scheduled) -> pending_approval: hand the post to a reviewer.
+   * Accepts 'scheduled' too — a scheduledAt was chosen at draft time but that is
+   * a timing preference, not a substitute for the approval gate publish() now
+   * enforces, so a scheduled post must still be able to reach 'approved'.
+   */
+  async submitForApproval(principal: Principal, id: string) {
+    const pub = await this.prisma.socialPublication.findUnique({ where: { id } });
+    if (!pub) throw new NotFoundException('Publication not found');
+    if (pub.status !== 'draft' && pub.status !== 'scheduled') {
+      throw new ConflictException('Only a draft or scheduled publication can be submitted');
+    }
+
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      const updated = await ctx.tx.socialPublication.update({
+        where: { id },
+        data: { status: 'pending_approval' },
+      });
+      ctx.audit({
+        action: 'SOCIAL_PUBLICATION_SUBMITTED',
+        targetType: 'SocialPublication',
+        targetId: id,
+        before: { status: pub.status },
+        after: { status: 'pending_approval' },
+      });
+      return this.pubView(updated);
+    });
+  }
+
+  /** A human (`social:approve`) approves a pending post — publish()'s required gate. */
+  async approve(principal: Principal, id: string) {
+    const pub = await this.prisma.socialPublication.findUnique({ where: { id } });
+    if (!pub) throw new NotFoundException('Publication not found');
+    if (pub.status !== 'pending_approval') {
+      throw new ConflictException('Only a publication pending approval can be approved');
+    }
+
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      const updated = await ctx.tx.socialPublication.update({
+        where: { id },
+        data: { status: 'approved', approvedById: actor.id ?? undefined, approvedAt: new Date() },
+      });
+      ctx.audit({
+        action: 'SOCIAL_PUBLICATION_APPROVED',
+        targetType: 'SocialPublication',
+        targetId: id,
+        before: { status: pub.status },
+        after: { status: 'approved' },
+      });
+      return this.pubView(updated);
+    });
+  }
+
+  /** A human (`social:approve`) sends a pending post back to draft — no public effect. */
+  async reject(principal: Principal, id: string) {
+    const pub = await this.prisma.socialPublication.findUnique({ where: { id } });
+    if (!pub) throw new NotFoundException('Publication not found');
+    if (pub.status !== 'pending_approval') {
+      throw new ConflictException('Only a publication pending approval can be rejected');
+    }
+
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      const updated = await ctx.tx.socialPublication.update({
+        where: { id },
+        data: { status: 'draft' },
+      });
+      ctx.audit({
+        action: 'SOCIAL_PUBLICATION_REJECTED',
+        targetType: 'SocialPublication',
+        targetId: id,
+        before: { status: pub.status },
+        after: { status: 'draft' },
+      });
+      return this.pubView(updated);
+    });
   }
 
   async listForListing(listingId: string) {
@@ -156,6 +241,8 @@ export class SocialService {
     externalPostId: string | null;
     scheduledAt: Date | null;
     publishedAt: Date | null;
+    approvedById: string | null;
+    approvedAt: Date | null;
   }) {
     return {
       id: p.id,
@@ -167,6 +254,8 @@ export class SocialService {
       externalPostId: p.externalPostId,
       scheduledAt: p.scheduledAt,
       publishedAt: p.publishedAt,
+      approvedById: p.approvedById,
+      approvedAt: p.approvedAt,
     };
   }
 }

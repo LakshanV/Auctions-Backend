@@ -43,6 +43,11 @@ export const Permission = {
   ConnectOperate: 'connect:operate',
   AiUse: 'ai:use',
   SocialOperate: 'social:operate',
+  // Approving a publication is a distinct human gate from drafting/operating it
+  // (docs/11 "human approval" before every public post) — deliberately NOT
+  // granted alongside SocialOperate, so see ROLE_PERMISSIONS: only admin/
+  // super_admin hold it, never AuctionStaff (the drafter role).
+  SocialApprove: 'social:approve',
   IntelligenceRead: 'intelligence:read',
   LiveOperate: 'live:operate',
   WatchManage: 'watch:manage',

@@ -46,7 +46,42 @@ export class IntelligenceService {
       }))
       .sort((a, b) => b.totalMinor - a.totalMinor);
 
-    return { windowDays: days, salesCount: sales.length, totalMinor, categories };
+    const sellThrough = await this.sellThrough(since);
+
+    return { windowDays: days, salesCount: sales.length, totalMinor, categories, sellThrough };
+  }
+
+  /**
+   * Sell-through = soldCount / offeredCount over a window: what fraction of
+   * auction lots that came up for sale actually sold, vs. passed in (closed
+   * with no winner). Computed LIVE from the durable outcome auction.service's
+   * close() already records on every Auction row — never materialized, no
+   * migration. AUCTION_PASSED_IN is audited per lot (auction.service.ts) but
+   * never aggregated anywhere, and Listing.status's 'unsold' value is defined
+   * in the schema/lifecycle but close() never actually sets it on the
+   * passed-in path — so neither is a reliable signal here. Auction IS
+   * reliable: close() unconditionally sets status='closed' and ONLY sets
+   * winnerCustomerId when the lot sold (see auction.service.ts#close), for
+   * every closed auction, sold or not. There is no `closedAt` column, so
+   * `updatedAt` is used as its proxy — a closed auction is never updated again
+   * by any current code path (open()/bid placement both require status
+   * ==='open', which close() has already left).
+   */
+  private async sellThrough(since: Date): Promise<{
+    soldCount: number;
+    offeredCount: number;
+    ratio: number | null;
+  }> {
+    const [soldCount, notSoldCount] = await Promise.all([
+      this.prisma.auction.count({
+        where: { status: 'closed', updatedAt: { gte: since }, winnerCustomerId: { not: null } },
+      }),
+      this.prisma.auction.count({
+        where: { status: 'closed', updatedAt: { gte: since }, winnerCustomerId: null },
+      }),
+    ]);
+    const offeredCount = soldCount + notSoldCount;
+    return { soldCount, offeredCount, ratio: offeredCount === 0 ? null : soldCount / offeredCount };
   }
 
   /** Recent comparable sales for a category → suggested price range. */

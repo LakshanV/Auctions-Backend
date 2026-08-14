@@ -30,6 +30,7 @@ import { MediaModule } from './modules/media/media.module';
 import { DevModule } from './modules/dev/dev.module';
 import { MemberModule } from './modules/member/member.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
+import { EngagementModule } from './modules/engagement/engagement.module';
 import { PrincipalMiddleware } from './shared/auth/principal.middleware';
 
 /**
@@ -71,6 +72,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     DevModule,
     MemberModule,
     DiscoveryModule,
+    EngagementModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: SecurityThrottlerGuard }],
 })

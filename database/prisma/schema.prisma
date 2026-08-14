@@ -142,6 +142,8 @@ model Customer {
   memberFlags          MemberFlag[]
   discoveryEvents      DiscoveryEvent[]
   buyerTwin            BuyerTwinProjection?
+  notificationPreference NotificationPreference?
+  notificationDeliveries NotificationDelivery[]
 
   @@map("customer")
 }
@@ -1482,4 +1484,50 @@ model RecommendationImpression {
 
   @@index([customerId, listingId])
   @@map("recommendation_impression")
+}
+
+// Engagement notification preferences (pack doc 05). One row per customer. The
+// consent/quiet-hours/frequency POLICY lives in the domain engine; this is durable
+// customer preference state only. Money-free, PII-light.
+model NotificationPreference {
+  customerId           String   @id @map("customer_id")
+  channels             Json     @default("{\"in_app\":true,\"push\":false,\"email\":true,\"sms\":false,\"whatsapp\":false}")
+  engagementOptIn      Boolean  @default(false) @map("engagement_opt_in")
+  quietStartMinute     Int?     @map("quiet_start_minute")
+  quietEndMinute       Int?     @map("quiet_end_minute")
+  timezoneOffsetMinutes Int     @default(0) @map("timezone_offset_minutes")
+  frequencyCapPerDay   Int      @default(8) @map("frequency_cap_per_day")
+  mutedCategories      String[] @default([]) @map("muted_categories")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preference")
+}
+
+// Append-only delivery ledger (pack doc 05). Every dispatch decision is recorded:
+// a send (per channel), a suppression (with reason), a transient failure, or a
+// dead-lettered give-up. Never mutated destructively — status transitions append.
+model NotificationDelivery {
+  id               String   @id
+  customerId       String   @map("customer_id")
+  eventType        String   @map("event_type")
+  classification   String
+  channel          String?
+  status           String
+  suppressedReason String?  @map("suppressed_reason")
+  dedupeKey        String   @map("dedupe_key")
+  title            String
+  body             String
+  providerMessageId String? @map("provider_message_id")
+  attempts         Int      @default(0)
+  lastError        String?  @map("last_error")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([status])
+  @@map("notification_delivery")
 }

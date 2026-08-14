@@ -15,9 +15,11 @@ import {
   type AuctionConfig,
   type BidderMaxEntry,
   applySoftClose,
+  buildRivalryProjection,
   computeAuctionState,
   minimumAcceptableMax,
   reserveMet,
+  toRivalryView,
 } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
@@ -26,6 +28,7 @@ import { type Principal } from '../../shared/auth/principal';
 import { AuctionRealtimeGateway } from './auction-realtime.gateway';
 import { sellerOrgForListing } from '../../shared/persistence/seller-org';
 import { CreditExposureService } from '../member/credit-exposure.service';
+import { AppConfigService } from '../../config/config.service';
 
 /**
  * Timed auction engine orchestration (docs/07). Server-authoritative: every bid
@@ -41,6 +44,7 @@ export class AuctionService {
     private readonly uow: UnitOfWork,
     private readonly realtime: AuctionRealtimeGateway,
     private readonly exposure: CreditExposureService,
+    private readonly config: AppConfigService,
   ) {}
 
   /**
@@ -392,6 +396,39 @@ export class AuctionService {
           )
         : undefined,
     };
+  }
+
+  /**
+   * Bid Battle rivalry view (pack doc 05), gated on `bidBattleV3`. A read-only,
+   * NON-authoritative projection derived from the immutable bid ledger: it never
+   * writes the ledger, never decides bid validity, and exposes only privacy-safe
+   * aliases (the viewer is shown as "You") — never a bidderId or the private proxy
+   * maximum. When the flag is OFF the surface does not exist (404), so nothing
+   * half-built leaks before the phase gate opens.
+   */
+  async getRivalry(principal: Principal, id: string) {
+    if (!this.config.get().features.bidBattleV3) throw new NotFoundException('Auction not found');
+    const auction = await this.prisma.auction.findUnique({ where: { id } });
+    if (!auction) throw new NotFoundException('Auction not found');
+
+    const bids = await this.prisma.bid.findMany({
+      where: { auctionId: id, status: 'accepted' },
+      orderBy: { sequence: 'asc' },
+      select: { sequence: true, bidderId: true, amountMinor: true },
+    });
+
+    const projection = buildRivalryProjection(
+      id,
+      bids.map((b) => ({
+        sequence: b.sequence,
+        bidderId: b.bidderId,
+        amountMinor: Number(b.amountMinor),
+      })),
+    );
+    return toRivalryView(projection, {
+      viewerBidderId: principal.customerId ?? null,
+      incrementMinor: Number(auction.incrementMinor),
+    });
   }
 
   private bidderView(

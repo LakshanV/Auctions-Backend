@@ -63,6 +63,16 @@ export class AuctionController {
   }
 
   /**
+   * Bid Battle rivalry view (pack doc 05), gated on `bidBattleV3`. Read-only,
+   * privacy-safe (aliases only; the caller is shown as "You"); a swipe/read here can
+   * never place a bid. 404 when the flag is OFF so the surface stays hidden.
+   */
+  @Get(':id/rivalry')
+  rivalry(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.auctions.getRivalry(principal, id);
+  }
+
+  /**
    * Realtime auction state as Server-Sent Events (pack 01 doc 07). Shared
    * fan-out, not per-viewer polling: every subscriber of an auction receives the
    * SAME post-commit frames from `AuctionRealtimeGateway`, so a bid fans out to

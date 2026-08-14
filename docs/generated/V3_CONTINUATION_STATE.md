@@ -28,8 +28,14 @@ immutable Bid ledger + **privacy-safe bidder aliases** (`packages/domain/.../eng
 `packages/contracts/src/engagement.ts`). 15 unit tests; never writes the ledger, never
 decides bid validity, never exposes a bidderId or proxy maximum.
 
-Still to do for V3-6: HTTP exposure of the safe `RivalryView` (read-only, gated on
-`bidBattleV3`) + E2E; the Bid Battle UI (frontend, `bidBattleV3`); the `engagementV3`
+Landed too: **HTTP exposure** of the safe `RivalryView` — `GET /auctions/:id/rivalry`,
+gated server-side on `bidBattleV3` (404 when OFF), viewer-aware ("You"), derived from the
+ledger, never writing it. E2E `scripts/e2e-bid-battle.mjs` (`pnpm test:bid-battle`, folded
+into `test:acceptance`) — **17 checks green on real Postgres**: real proxy-bidding →
+leader/challenger aliases, viewer "You", 3 lead changes, comeback + you_outbid moments, no
+PII/proxy-max leakage, flag gate proven both ways (200 ON / 404 OFF) by restarting the API.
+
+Still to do for V3-6: the Bid Battle UI (frontend, `bidBattleV3`); the `engagementV3`
 notification engine (preferences, quiet hours, frequency caps, idempotency, provider
 fakes-first adapters); sound/haptics controls.
 

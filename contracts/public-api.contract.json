@@ -77,7 +77,7 @@
           "watchers": "number"
         }
       ],
-      "nextCursor": "string"
+      "nextCursor": "null"
     },
     "GET /api/v2/catalogue/:id": {
       "attributes": {

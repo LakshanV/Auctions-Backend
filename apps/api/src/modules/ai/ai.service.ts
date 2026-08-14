@@ -4,6 +4,7 @@ import {
   type AssistInput,
   DomainEventName,
   type DraftListingInput,
+  type TranslateInput,
   newId,
 } from '@singha/contracts';
 import { guardAiRequest } from '@singha/domain';
@@ -136,6 +137,80 @@ export class AiService {
       });
       ctx.audit({ action: 'AI_ASSIST', targetType: 'AiRun', targetId: id, actorType: 'ai' });
       return { aiRunId: id, ...reply, blocked: false };
+    });
+  }
+
+  /**
+   * Translate free text (docs/10 Customer AI — multilingual assistant). Same
+   * boundary-guard shape as `assist()`: `text` is free text, so it goes THROUGH
+   * `guardAiRequest('translation', ...)` for injection detection before anything
+   * reaches a provider. There is no free-form `context` bag on this DTO (nothing
+   * to redact), but the ceiling/injection checks still fully apply to `text`. The
+   * translation itself is a DERIVED record (rule 3) — the source text is never
+   * touched, only ever passed through as-is to the provider once cleared.
+   */
+  async translate(principal: Principal, input: TranslateInput) {
+    const actor = toActor(principal);
+    const id = newId();
+
+    const guard = guardAiRequest('translation', input.text);
+    if (!guard.allowed) {
+      return this.uow.execute(actor, async (ctx) => {
+        await ctx.tx.aiRun.create({
+          data: {
+            id,
+            taskType: 'translation',
+            model: this.ai.model,
+            provider: this.ai.name,
+            actorId: actor.id,
+            prompt: input.text,
+            output: {
+              blocked: true,
+              refusalReason: guard.refusalReason,
+              reasons: guard.injection.reasons,
+              modelTier: guard.tier,
+            } as unknown as object,
+            confidence: 0,
+          },
+        });
+        ctx.audit({
+          action: 'AI_TRANSLATE_BLOCKED',
+          targetType: 'AiRun',
+          targetId: id,
+          actorType: 'ai',
+        });
+        return {
+          aiRunId: id,
+          translatedText: SAFE_REFUSAL,
+          confidence: 0,
+          blocked: true,
+          refusalReason: guard.refusalReason,
+        };
+      });
+    }
+
+    // Only text that has cleared the guard reaches the provider.
+    const result = await this.ai.translate(input.text, input.targetLang, input.sourceLang);
+    return this.uow.execute(actor, async (ctx) => {
+      await ctx.tx.aiRun.create({
+        data: {
+          id,
+          taskType: 'translation',
+          model: this.ai.model,
+          provider: this.ai.name,
+          actorId: actor.id,
+          prompt: input.text,
+          output: {
+            ...result,
+            targetLang: input.targetLang,
+            sourceLang: input.sourceLang ?? null,
+            modelTier: guard.tier,
+          } as unknown as object,
+          confidence: result.confidence,
+        },
+      });
+      ctx.audit({ action: 'AI_TRANSLATE', targetType: 'AiRun', targetId: id, actorType: 'ai' });
+      return { aiRunId: id, ...result, blocked: false };
     });
   }
 

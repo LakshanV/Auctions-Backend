@@ -3,10 +3,12 @@ import {
   type ApplyDraftInput,
   type AssistInput,
   type DraftListingInput,
+  type TranslateInput,
   Permission,
   applyDraftSchema,
   assistSchema,
   draftListingSchema,
+  translateSchema,
 } from '@singha/contracts';
 import { AiService } from './ai.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
@@ -38,6 +40,15 @@ export class AiController {
     @Body(new ZodBody(assistSchema)) input: AssistInput,
   ) {
     return this.ai.assist(principal, input);
+  }
+
+  @Post('translate')
+  @RequirePermissions(Permission.AiUse)
+  translate(
+    @CurrentActor() principal: Principal,
+    @Body(new ZodBody(translateSchema)) input: TranslateInput,
+  ) {
+    return this.ai.translate(principal, input);
   }
 
   @Get('runs/:id')

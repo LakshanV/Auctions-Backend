@@ -11,6 +11,13 @@ export interface AssistReply {
   confidence: number;
 }
 
+/** A translation (DERIVED content — never overwrites the source text). */
+export interface TranslateReply {
+  translatedText: string;
+  detectedSourceLang?: string;
+  confidence: number;
+}
+
 /**
  * AI provider adapter (docs/10 — provider abstraction). Real text/vision
  * providers implement this when their keys arrive; nothing else changes. Outputs
@@ -25,6 +32,7 @@ export interface AiProvider {
     locale: string,
   ): Promise<ListingDraft>;
   assist(prompt: string, context?: Record<string, unknown>): Promise<AssistReply>;
+  translate(text: string, targetLang: string, sourceLang?: string): Promise<TranslateReply>;
 }
 
 export const AI_PROVIDER = Symbol('AI_PROVIDER');
@@ -59,6 +67,18 @@ export class MockAiProvider implements AiProvider {
     return {
       reply: `Thanks for your question: "${prompt.slice(0, 120)}". A Singha specialist will confirm the details.`,
       confidence: 0.4,
+    };
+  }
+
+  /** Deterministic, credential-free fake: mirrors `assist()` above — no external
+   * call, so the create/guard/record flow is fully exercised without a real
+   * model configured. Marks the text with the target locale rather than
+   * attempting real translation. */
+  async translate(text: string, targetLang: string, sourceLang?: string): Promise<TranslateReply> {
+    return {
+      translatedText: `[${targetLang}] ${text}`,
+      detectedSourceLang: sourceLang ?? 'auto',
+      confidence: 0.5,
     };
   }
 

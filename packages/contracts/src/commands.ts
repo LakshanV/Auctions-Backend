@@ -339,6 +339,24 @@ export const applyDraftSchema = z.object({
 });
 export type ApplyDraftInput = z.infer<typeof applyDraftSchema>;
 
+/**
+ * Translate free text (docs/10 Customer AI — multilingual assistant). `text` is
+ * free text, so it goes through `guardAiRequest('translation', ...)` for
+ * injection detection (rule 3/12) before it ever reaches a provider. The 6000
+ * ceiling mirrors `POLICIES.translation.maxInputChars` in
+ * packages/domain/src/modules/ai/ai-safety.ts — kept in sync manually since
+ * @singha/contracts cannot depend on @singha/domain (dependency runs the other
+ * way). `targetLang`/`sourceLang` are short locale tags (e.g. 'en', 'si', 'ta')
+ * rather than a fixed enum, matching `draftListingSchema.locale` — the platform
+ * is architected for English/Sinhala/Tamil first but must not hard-block others.
+ */
+export const translateSchema = z.object({
+  text: z.string().min(1).max(6000),
+  targetLang: z.string().min(2).max(10),
+  sourceLang: z.string().min(2).max(10).optional(),
+});
+export type TranslateInput = z.infer<typeof translateSchema>;
+
 // --- Singha Social Publisher (docs/11) -------------------------------------
 export const socialPlatformValues = ['facebook', 'instagram'] as const;
 

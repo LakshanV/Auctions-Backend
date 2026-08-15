@@ -23,8 +23,8 @@ phase. Code overrides stale docs.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding | **IN PROGRESS** |
-| E1 | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit | pending |
+| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding | ✅ PASS |
+| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit | ✅ PASS |
 | E2 | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition` | pending |
 | E3 | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas | pending |
 | **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION) | pending |
@@ -67,6 +67,12 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
 ---
 
 ## Change log
-- **E0 started** — pack read in full; vendored to `docs/singha-evolution/` in both repos;
+- **E0 (PASS)** — pack read in full; vendored to `docs/singha-evolution/` in both repos;
   baseline SHAs recorded; `DECISIONS` + this `STATE` created. Gap analysis
   (`SINGHA_EVOLUTION_CURRENT_TO_TARGET.md`) authored from a real code audit of both repos.
+  Addendum A (Satellite Market Node) added from owner directive.
+- **E1 (PASS)** — frontend brand/language rebrand (Singha, geography-neutral, multi-method;
+  un-gated) + geography-neutral IA (Explore/Exchange/Sell/Wanted/Services) behind default-OFF
+  `neutralIaV1` with its own `?evo=on` preview channel + 3 editorial routes; language glossary +
+  build-enforced guard test; hydration verified clean. See
+  `SINGHA_EVOLUTION_PHASE_E1_REPORT.md` (authored in the frontend repo). Next: **E2**.

@@ -36,7 +36,7 @@ phase. Code overrides stale docs.
 | E10    | Supply Programmes + perishable-goods metadata                                                                                                            | ✅ PASS |
 | E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | ✅ PASS |
 | E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | ✅ PASS |
-| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
+| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | ✅ PASS |
 | E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
 | E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
 
@@ -336,3 +336,26 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   contracts 25, config 14 tests, lint 0 errors, format clean). See
   `SINGHA_EVOLUTION_PHASE_E12_REPORT.md`. Next: **E13** (Satellite Market Node and SEO/local-site
   integration).
+- **E13 (PASS)** — Satellite Market Node (Addendum A) and deterministic SEO. Contracts `node-domains`
+  (node capabilities; originate and SEO schemas). Pure `@singha/domain` `modules/node` (10 tests):
+  `resolveNodeCapabilities` (Discovery browse always available) and `assessOrigination` — a Discovery
+  node originates nothing (DISCOVERY_ONLY), a Local Commerce node needs the capability enabled
+  (CAPABILITY_DISABLED otherwise) and verified owner config, else a non-binding MANUAL_REVIEW_REQUIRED
+  preview (D7); only a verified enabled node is ALLOWED, and even then the record is created centrally
+  with origin-node attribution. SEO helpers: `canonicalUrl` (strips display-currency and tracking so
+  one listing has one canonical URL), `hreflangAlternates` (per-locale and x-default), `listingJsonLd`
+  (schema.org Product/Offer, exact minor-to-major price, float-free), `sitemapEntries`. One additive
+  table `node_origination` (append-only attribution/routing audit — deliberately NOT a per-country
+  ledger) via migration `20260815220000_...` (one CREATE TABLE with an index, zero DROP/RENAME);
+  node-originated listings live in the central `Listing` with `origin_node_id`. Flag-gated `node`
+  module: `GET /nodes/:code` and `/nodes/:code/discovery` are public marketing surfaces,
+  `POST /nodes/:code/originate` (`exchange:operate`) runs the gating and persists a snapshot,
+  `POST /seo/canonical` and `/seo/listing-jsonld` return the SEO artefacts. New flag `satelliteNodes`
+  (default OFF) across `@singha/config` (3 files) and seed. Real-Postgres E2E `scripts/e2e-node.mjs`
+  (wired into `test:node`, the acceptance chain and a CI step) seeds four nodes and a central Listing
+  attributed to a node and proves the origination gating matrix, operator-only origination (buyer 403),
+  the node-originated listing retrieved as the **same central canonical record**, and the SEO
+  canonical/hreflang/JSON-LD. Gates green (build 7/7, typecheck 13/13, domain 202, api 54, contracts
+  25, config 14 tests, lint 0 errors, format clean). Binding node origination stays owner-gated (O1/O4).
+  See `SINGHA_EVOLUTION_PHASE_E13_REPORT.md`. Next: **E14** (Hardening / compatibility /
+  legacy-retirement decisions).

@@ -2337,3 +2337,21 @@ model IntelligenceReport {
   @@index([kind])
   @@map("intelligence_report")
 }
+
+// Node origination audit (Evolution E13, Addendum A). An append-only attribution + routing snapshot
+// of a Satellite Market Node origination attempt. This is deliberately NOT a per-country ledger of
+// listings/offers/bids/sales/payments/shipments — those remain the single central canonical records.
+// It records origin_node + the resolved outcome for audit (Addendum A acceptance).
+model NodeOrigination {
+  id            String   @id
+  nodeCode      String   @map("node_code")
+  capability    String
+  outcome       String
+  operatorCode  String?  @map("operator_code")
+  subjectRef    String?  @map("subject_ref")
+  requestedBy   String?  @map("requested_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([nodeCode])
+  @@map("node_origination")
+}

@@ -131,6 +131,13 @@ jobs:
       - name: E2E (insight — deterministic matching / pricing / offer / risk intelligence)
         run: pnpm run test:insight
 
+      # Satellite Market Node + SEO (Evolution E13, pack Addendum A + doc 11) — the two node modes,
+      # the non-negotiable central-ledger invariant (a node-originated listing is the SAME central
+      # canonical record; origination is attribution, gated by mode/capability/verification), and the
+      # deterministic SEO helpers (canonical strips display currency, hreflang, JSON-LD).
+      - name: E2E (satellite node — central-ledger invariant + SEO)
+        run: pnpm run test:node
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

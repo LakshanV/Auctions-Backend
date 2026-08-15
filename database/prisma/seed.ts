@@ -143,6 +143,12 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Deterministic matching / offer / pricing / risk intelligence (derived, E12)',
   },
+  // Singha Evolution (E13) — Satellite Market Node + SEO. OFF until wired.
+  {
+    key: 'SATELLITE_NODES',
+    enabled: false,
+    description: 'Satellite Market Node presentation/origination + deterministic SEO (E13)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

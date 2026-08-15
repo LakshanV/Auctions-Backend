@@ -127,6 +127,9 @@ export const envSchema = z.object({
   // Singha Evolution Intelligence expansion (E12). Default OFF.
   FEATURE_INSIGHT_ENGINE: boolFromEnv.default(false),
 
+  // Singha Evolution Satellite Market Node + SEO (E13). Default OFF.
+  FEATURE_SATELLITE_NODES: boolFromEnv.default(false),
+
   // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
   // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
   FX_API_URL: z.string().default(''),

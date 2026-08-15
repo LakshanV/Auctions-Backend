@@ -107,6 +107,11 @@ export interface FeatureFlags {
   // intelligence surface — matching, offer/pricing comparison and risk signals. Every output is a
   // derived, non-binding recommendation (no LLM binds; deterministic code owns money/eligibility).
   insightEngine: boolean;
+
+  // Singha Evolution Satellite Market Node + SEO (E13, Addendum A). Default OFF; gates the node
+  // presentation/origination surface + the deterministic SEO helpers. A node never owns binding
+  // records — origination is attribution over the one central authoritative domain.
+  satelliteNodes: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

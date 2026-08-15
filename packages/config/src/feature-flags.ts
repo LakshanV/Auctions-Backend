@@ -39,6 +39,15 @@ export interface FeatureFlags {
   structuredLocations: boolean;
   quantityUnits: boolean;
   saleMethodConfig: boolean;
+
+  // Singha Evolution Commercial Offer Engine V2 (E4). Default OFF; gate the new
+  // negotiation surface — full-terms proposals + immutable revisions
+  // (commercialOffersV2) and the confidential sealed-offer flow with a
+  // controlled reveal + explicit award (sealedOffers). Binding selection is
+  // MANUAL_SELECTION by default — the highest sealed proposal never auto-awards
+  // (DECISIONS D4).
+  commercialOffersV2: boolean;
+  sealedOffers: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

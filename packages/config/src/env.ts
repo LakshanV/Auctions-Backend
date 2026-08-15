@@ -88,6 +88,10 @@ export const envSchema = z.object({
   FEATURE_QUANTITY_UNITS: boolFromEnv.default(false),
   FEATURE_SALE_METHOD_CONFIG: boolFromEnv.default(false),
 
+  // Singha Evolution Commercial Offer Engine V2 (E4). All default OFF.
+  FEATURE_COMMERCIAL_OFFERS_V2: boolFromEnv.default(false),
+  FEATURE_SEALED_OFFERS: boolFromEnv.default(false),
+
   STORAGE_ENDPOINT: z.string().default(''),
   STORAGE_BUCKET: z.string().default(''),
   STORAGE_ACCESS_KEY: z.string().default(''),

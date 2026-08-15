@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bindingTotalMinor,
   canRevealSealedOffers,
+  comparableHeadlineMinor,
   defaultAwardPolicy,
   isCounterAuthor,
   nextRevisionNumber,
+  parseQuantityToScaled,
   revealedRankedOffers,
   sealedParticipationView,
   selectSealedWinner,
@@ -28,6 +31,61 @@ describe('offer revisions', () => {
     expect(isCounterAuthor('seller')).toBe(true);
     expect(isCounterAuthor('operator')).toBe(true);
     expect(isCounterAuthor('buyer')).toBe(false);
+  });
+});
+
+describe('binding total (money-critical, float-free — DECISIONS D5)', () => {
+  it('parses decimal quantities to a 10^9-scaled integer (no float)', () => {
+    expect(parseQuantityToScaled('1')).toBe(1_000_000_000n);
+    expect(parseQuantityToScaled('2.5')).toBe(2_500_000_000n);
+    expect(parseQuantityToScaled('0.000000001')).toBe(1n);
+    expect(() => parseQuantityToScaled('1.2.3')).toThrow();
+    expect(() => parseQuantityToScaled('abc')).toThrow();
+    expect(() => parseQuantityToScaled('1.1234567891')).toThrow(); // > 9 dp
+  });
+
+  it('prefers an explicit total price', () => {
+    expect(bindingTotalMinor({ totalPriceMinor: 500n, unitPriceMinor: 999n, quantity: '3' })).toBe(
+      500n,
+    );
+  });
+
+  it('derives unit price × quantity only when it is an exact number of minor units', () => {
+    expect(
+      bindingTotalMinor({ totalPriceMinor: null, unitPriceMinor: 25_000n, quantity: '100' }),
+    ).toBe(2_500_000n);
+    // 2.5 units × 200 = 500 minor units, exact.
+    expect(
+      bindingTotalMinor({ totalPriceMinor: null, unitPriceMinor: 200n, quantity: '2.5' }),
+    ).toBe(500n);
+  });
+
+  it('refuses to invent rounding — a fractional minor-unit product throws (deferred to E8)', () => {
+    // 1 minor unit × 0.5 = 0.5 minor units → not representable, must throw.
+    expect(() =>
+      bindingTotalMinor({ totalPriceMinor: null, unitPriceMinor: 1n, quantity: '0.5' }),
+    ).toThrow();
+  });
+
+  it('throws when there is no derivable price at all, and on non-positive quantity', () => {
+    expect(() =>
+      bindingTotalMinor({ totalPriceMinor: null, unitPriceMinor: null, quantity: '10' }),
+    ).toThrow();
+    expect(() =>
+      bindingTotalMinor({ totalPriceMinor: null, unitPriceMinor: 100n, quantity: '0' }),
+    ).toThrow();
+  });
+
+  it('comparableHeadlineMinor returns null instead of throwing when no total can be derived', () => {
+    expect(
+      comparableHeadlineMinor({ totalPriceMinor: 700n, unitPriceMinor: null, quantity: null }),
+    ).toBe(700n);
+    expect(
+      comparableHeadlineMinor({ totalPriceMinor: null, unitPriceMinor: 1n, quantity: '0.5' }),
+    ).toBeNull();
+    expect(
+      comparableHeadlineMinor({ totalPriceMinor: null, unitPriceMinor: null, quantity: null }),
+    ).toBeNull();
   });
 });
 

@@ -120,6 +120,8 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       structuredLocations: env.FEATURE_STRUCTURED_LOCATIONS,
       quantityUnits: env.FEATURE_QUANTITY_UNITS,
       saleMethodConfig: env.FEATURE_SALE_METHOD_CONFIG,
+      commercialOffersV2: env.FEATURE_COMMERCIAL_OFFERS_V2,
+      sealedOffers: env.FEATURE_SEALED_OFFERS,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },

@@ -52,6 +52,18 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Configurable sale-method taxonomy (Evolution E2/E3)',
   },
+  // Singha Evolution (E4) — Commercial Offer Engine V2. OFF until its surface lands.
+  {
+    key: 'COMMERCIAL_OFFERS_V2',
+    enabled: false,
+    description: 'Full-terms offer negotiation + immutable revisions (Evolution E4)',
+  },
+  {
+    key: 'SEALED_OFFERS',
+    enabled: false,
+    description:
+      'Confidential sealed offers: controlled reveal + explicit award, D4 (Evolution E4)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

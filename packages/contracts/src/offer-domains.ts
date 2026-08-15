@@ -56,3 +56,27 @@ export const counterOfferSchema = z.object({
   proposal: offerProposalSchema,
 });
 export type CounterOfferInput = z.infer<typeof counterOfferSchema>;
+
+/** Body for countering an offer addressed by path (`POST /offers/:id/counter`). */
+export const counterOfferBodySchema = z.object({
+  proposal: offerProposalSchema,
+});
+export type CounterOfferBody = z.infer<typeof counterOfferBodySchema>;
+
+/**
+ * Award a sealed offer for a listing after its controlled reveal. `policy` defaults to
+ * MANUAL_SELECTION — the highest sealed proposal is NEVER auto-awarded (DECISIONS D4);
+ * MANUAL_SELECTION therefore requires an explicit `selectedOfferId`. AUTO_HIGHEST is only
+ * honoured when the authorised seller/operator explicitly opts into it here.
+ */
+export const awardSealedOfferSchema = z
+  .object({
+    policy: z.enum(offerAwardPolicies).default('MANUAL_SELECTION'),
+    selectedOfferId: z.string().min(1).optional(),
+  })
+  .refine((v) => v.policy !== 'MANUAL_SELECTION' || v.selectedOfferId != null, {
+    message:
+      'MANUAL_SELECTION requires an explicit selectedOfferId (D4: the highest never auto-awards)',
+    path: ['selectedOfferId'],
+  });
+export type AwardSealedOfferInput = z.infer<typeof awardSealedOfferSchema>;

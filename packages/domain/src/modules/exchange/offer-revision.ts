@@ -31,6 +31,70 @@ export function isCounterAuthor(author: OfferAuthorType): boolean {
   return author === 'seller' || author === 'operator';
 }
 
+/* ---------------- Binding total (money-critical, float-free) ---------------- */
+
+/** Quantity is Decimal(38,9); we scale by 10^9 and do all math in integer bigint. */
+const QTY_SCALE_FACTOR = 1_000_000_000n; // 10^9
+
+/**
+ * Parse a decimal quantity string (integer or up to 9 decimal places) to a scaled
+ * integer (value × 10^9). Never uses floating point — DECISIONS D5. Throws on any
+ * malformed input so a bad quantity can never silently corrupt a binding total.
+ */
+export function parseQuantityToScaled(q: string): bigint {
+  const m = /^(-?)(\d+)(?:\.(\d{1,9}))?$/.exec(q.trim());
+  if (!m) throw new IllegalTransition(`invalid quantity: "${q}"`);
+  const [, signGroup, wholeGroup, fracGroup] = m;
+  const sign = signGroup === '-' ? -1n : 1n;
+  const whole = BigInt(wholeGroup ?? '0');
+  const frac = fracGroup ? BigInt(fracGroup.padEnd(9, '0')) : 0n;
+  return sign * (whole * QTY_SCALE_FACTOR + frac);
+}
+
+/**
+ * The single binding total (integer minor units) a revision commits to when it is
+ * accepted/awarded. Prefers an explicit `totalPriceMinor`; otherwise derives
+ * `unitPriceMinor × quantity` — but ONLY when that product is an exact whole number
+ * of minor units. A non-exact product throws: any rounding policy is deferred to the
+ * fees/rounding engine (E8), never invented here. Returns a bigint, never a fraction,
+ * never a float (DECISIONS D5).
+ */
+export function bindingTotalMinor(rev: {
+  totalPriceMinor: bigint | null;
+  unitPriceMinor: bigint | null;
+  quantity: string | null;
+}): bigint {
+  if (rev.totalPriceMinor != null) return rev.totalPriceMinor;
+  if (rev.unitPriceMinor != null && rev.quantity != null) {
+    const scaledQty = parseQuantityToScaled(rev.quantity);
+    if (scaledQty <= 0n) {
+      throw new IllegalTransition('quantity must be positive to derive a binding total');
+    }
+    const scaledTotal = rev.unitPriceMinor * scaledQty; // still scaled by 10^9
+    if (scaledTotal % QTY_SCALE_FACTOR !== 0n) {
+      throw new IllegalTransition(
+        'unit price × quantity is not an exact number of minor units — agree an explicit total ' +
+          '(rounding is deferred to the fees/rounding engine, E8)',
+      );
+    }
+    return scaledTotal / QTY_SCALE_FACTOR;
+  }
+  throw new IllegalTransition('offer revision carries no binding price');
+}
+
+/** The comparable headline for ranking a sealed proposal, or null if none can be derived. */
+export function comparableHeadlineMinor(rev: {
+  totalPriceMinor: bigint | null;
+  unitPriceMinor: bigint | null;
+  quantity: string | null;
+}): bigint | null {
+  try {
+    return bindingTotalMinor(rev);
+  } catch {
+    return null;
+  }
+}
+
 /* ---------------- Sealed-offer confidentiality ---------------- */
 
 export interface SealedOffer {

@@ -15,6 +15,7 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { AuctionModule } from './modules/auction/auction.module';
 import { EoiModule } from './modules/eoi/eoi.module';
 import { ExchangeModule } from './modules/exchange/exchange.module';
+import { OffersModule } from './modules/offers/offers.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -58,6 +59,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     AuctionModule,
     EoiModule,
     ExchangeModule,
+    OffersModule,
     CommerceModule,
     ConnectModule,
     AiModule,

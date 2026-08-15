@@ -59,6 +59,13 @@ jobs:
       - name: E2E (auction engine — concurrency, soft-close, winner)
         run: pnpm run test:auction
 
+      # Commercial Offer Engine V2 (Evolution E4) — the money-critical negotiation +
+      # sealed-award path: append-only revisions, atomic accept (concurrent burst → one
+      # Sale), sealed confidentiality (no pre-reveal leak), and DECISIONS D4 (the highest
+      # sealed proposal never auto-awards; AUTO_HIGHEST only when explicitly configured).
+      - name: E2E (commercial offers — revisions, atomic accept, sealed D4)
+        run: pnpm run test:offers
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

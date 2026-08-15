@@ -1,14 +1,12 @@
 # SINGHA EVOLUTION — PHASE E4 REPORT (Commercial Offer Engine V2)
 
-**Verdict: E4a PASS (schema + the money-critical engine, exhaustively tested).** Additive,
-behind the (default-OFF) offer flags. Baseline BE `8353487` → this phase. The HTTP surface +
-atomic DB acceptance are **E4b** (see "Remaining").
+**Verdict: E4 PASS** — the pack's highest functional priority, money-critical, delivered additively
+and behind the (default-OFF) offer flags. Baseline BE `8353487` → this phase, shipped in two
+increments: **E4a** = the additive data model + the pure, unit-tested offer/sealed-selection
+**engine** (the DECISIONS D4 core); **E4b** = the HTTP API + the locked, atomic accept/award→`Sale`
+path + a real-Postgres concurrency/confidentiality E2E.
 
-E4 is the pack's highest functional priority and money-critical, so it ships in two increments:
-E4a = the additive data model + the pure, unit-tested offer/sealed-selection **engine** (the D4
-core); E4b = the API endpoints + the locked, atomic accept→Sale path + real-DB tests.
-
-## E4a delivered
+## E4a delivered (data model + engine)
 
 **Additive schema** (`schema.prisma`) — no existing table changed:
 
@@ -23,47 +21,73 @@ core); E4b = the API endpoints + the locked, atomic accept→Sale path + real-DB
 - Migration `20260815110000_evolution_e4_offer_engine`: 5 `ADD COLUMN` on `offer` +
   `CREATE TABLE offer_revision` + FK + index; **zero** DROP/RENAME.
 
-**Pure domain engine** (`@singha/domain` `exchange/offer-revision.ts`, 11 tests) — owns the rules
-so they can't drift:
+**Pure domain engine** (`@singha/domain` `exchange/offer-revision.ts`) — owns the rules so they
+can't drift:
 
 - Revision numbering (append-only) + counter-author identification.
-- **Sealed confidentiality** (pack doc 20): `sealedParticipationView` returns **counts only**
-  (participants / offers received), never amounts; `revealedRankedOffers` **throws** before a
-  reveal or for a buyer/unauthorised viewer — competitor prices can't leak.
-- **`selectSealedWinner` — the DECISIONS D4 core**: `MANUAL_SELECTION` (the default) never
-  auto-awards the highest — it requires an explicit chosen offer and returns exactly that one
-  (even the lowest, since a seller may pick on full terms); `AUTO_HIGHEST` picks the highest
-  **only** when explicitly configured; no winner before reveal.
+- **Binding total (money-critical, float-free — D5):** `bindingTotalMinor` prefers an explicit
+  total; else derives `unitPrice × quantity` using integer bigint math scaled by 10⁹, and
+  **throws** on a non-exact minor-unit product (any rounding is deferred to the fees engine, E8) —
+  it never returns a fraction or touches a float. `comparableHeadlineMinor` is the non-throwing
+  ranking variant.
+- **Sealed confidentiality** (pack doc 20): `sealedParticipationView` returns **counts only**;
+  `revealedRankedOffers` **throws** before a reveal or for an unauthorised viewer.
+- **`selectSealedWinner` — the D4 core:** `MANUAL_SELECTION` (the default) never auto-awards the
+  highest — it requires an explicit chosen offer; `AUTO_HIGHEST` picks the highest **only** when
+  explicitly configured; no winner before reveal.
 
-**Contracts** (`offer-domains.ts`) — `offerProposalSchema` (full commercial bundle; money in
-minor units, quantity as string; must carry a price), `submitOfferSchema` / `counterOfferSchema`,
-award-policy + author + freight enums.
+## E4b delivered (API + atomic binding)
+
+- **Runtime flags** `commercialOffersV2` / `sealedOffers` (default **OFF**) across `@singha/config`
+  (`feature-flags.ts` / `env.ts` / `index.ts`) + the DB `FeatureFlag` seed. `GET
+  /api/v1/feature-flags` surfaces them for the frontend.
+- **`offers` NestJS module** (`/api/v1/commercial-offers`), flag-gated in the service and
+  authorised on the server (`exchange:participate` = buyers submit/withdraw; `exchange:operate` =
+  seller/operator counter/reject/reveal/accept/award):
+  - open negotiation: **submit** (revision 1) → **counter** (appends a revision) → **accept**;
+  - sealed: **submit** (receipt only, no amount echoed) → **participation** (counts only) →
+    **reveal** (authorised) → **award**;
+  - **binding accept/award — the money core** (`bindOfferToSale`): locks the listing row
+    `FOR UPDATE`, verifies it is not already awarded, snapshots the selected `OfferRevision`,
+    binds the exact integer total, creates **one** `Sale` (UNIQUE per listing), marks the listing
+    sold, rejects the losing offers, reserves bid-capacity (§11), and emits `SALE_CONFIRMED` +
+    audit — all in one transaction via the existing `UnitOfWork`.
+- **Real-Postgres E2E** (`scripts/e2e-offers.mjs`, wired into `test:offers`, the acceptance chain,
+  and a dedicated CI step) proves end-to-end: append-only revisions; accept binds the terms on the
+  table; a **concurrent burst of accepts yields exactly one `Sale`**; unit-priced offers bind
+  `unitPrice × quantity` exactly; sealed **counts-only before reveal** (no leak to buyer or
+  operator roster); award **before reveal refused**; **D4** — `MANUAL_SELECTION` with no explicit
+  pick is refused (400) and the operator may bind the **lowest** revealed offer; `AUTO_HIGHEST`
+  binds the highest **only** when explicitly configured; buyers cannot counter/reveal/award.
 
 ## Self-review (pack 13)
 
-- **Gates:** `turbo build` 7/7; `typecheck` 13/13 (regenerated client; schema valid); `@singha/
-domain` 108 tests (11 new) + `@singha/contracts` 25; `lint` 0 errors; `format:check` clean.
-- **Migration safety:** additive-only (no DROP/RENAME); immutability enforced by the
-  `@@unique([offerId, revisionNumber])` constraint.
-- **D4 encoded as tests:** MANUAL_SELECTION refuses to pick without an explicit choice; the
-  would-be-highest is never auto-selected; AUTO_HIGHEST works only when set; default is
-  MANUAL_SELECTION. **Confidentiality** encoded: counts-only pre-reveal; ranked view gated on
-  reveal + role.
-- **Deterministic core:** all binding selection logic is pure code (no LLM; D6).
+- **Gates:** `turbo build` 7/7; `typecheck` 13/13; `@singha/domain` **114** tests (D4 + binding
+  total + confidentiality) + `@singha/contracts` 25 + `@singha/api` **27** (incl. the offers flag
+  /authorisation spec) + `@singha/config` 14; `lint` **0 errors** (3 pre-existing e2e-script
+  warnings only); `format:check` clean. The DB E2E runs under the ephemeral-Postgres harness in CI
+  (Postgres server binaries are unavailable in this sandbox).
+- **Migration safety:** E4b adds **no** schema (E4a's migration is additive-only); immutability is
+  enforced by `@@unique([offerId, revisionNumber])`.
+- **D4 encoded three ways:** default policy MANUAL_SELECTION; the contract refuses MANUAL_SELECTION
+  without an explicit selection; the domain refuses to auto-pick the highest. Confidentiality
+  encoded as counts-only pre-reveal + reveal/role-gated ranking. The E2E exercises all of it.
+- **Money integrity (D5):** every bound amount is an exact integer of minor units; a non-derivable
+  total throws rather than inventing rounding. Deterministic, no LLM in any binding path (D6).
+- **Single central ledger (Addendum A):** all offer/revision/sale rows live in the one
+  authoritative backend; no per-node state.
 
-## Remaining in E4 (E4b)
+## Boundaries (deliberate, deferred)
 
-- `offers` NestJS module (flag-gated `COMMERCIAL_OFFERS_V2` / `SEALED_OFFERS`): submit / counter /
-  reject / withdraw, sealed reveal (authorised), and **binding acceptance** — lock the
-  listing + offer rows, verify not already awarded, revalidate method/routing/KYC, snapshot the
-  selected revision, and create **one** `Sale` atomically with audit/outbox (reusing the existing
-  UoW/Sale/credit patterns).
-- Add the runtime `commercialOffersV2` / `sealedOffers` flags (default OFF); real-Postgres
-  integration + concurrency tests (concurrent acceptance / already-awarded race; sealed no-leak;
-  manual selection; counter revisions).
+- **Rounding of `unitPrice × quantity`** when it is not an exact number of minor units is **not**
+  invented here — it belongs to the fees/tax/rounding engine (**E8**); until then such a proposal
+  must carry an explicit total to be bound.
+- **FX / display currency** for a proposal's `currency` lands in **E5** (Google-currency adapter,
+  D12); E4 stores and binds the transaction currency as given.
+- **Listing-status gating** of when an offer may be accepted (draft vs published) follows the same
+  minimal posture as the legacy exchange module and is governed by the operator workflow later.
 
 ## Next
 
-Finish **E4b** (offer API + atomic acceptance + concurrency/confidentiality integration tests),
-then **E5** — currency / FX / display currency, with the **Google-currency** FX adapter (D12)
-behind the abstract provider layer.
+**E5** — currency / FX / display currency, with the **Google-currency** FX adapter (D12) behind
+the abstract provider layer + a credential-free fake; snapshot the binding rate onto the record.

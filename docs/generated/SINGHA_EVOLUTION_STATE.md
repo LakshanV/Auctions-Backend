@@ -27,7 +27,7 @@ phase. Code overrides stale docs.
 | **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS    |
 | E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS    |
 | E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS    |
-| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ◧ E4a PASS |
+| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ✅ PASS    |
 | E5     | Currency / FX / display currency (binding vs informational)                                                                                              | pending    |
 | E6     | Transaction Routing engine + two-layer Terms                                                                                                             | pending    |
 | E7     | Logistics / Ports / Incoterms                                                                                                                            | pending    |
@@ -120,3 +120,22 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   (build 7/7, typecheck 13/13, domain 108 + contracts 25 tests, lint 0, format clean).
   Remaining E4 (E4b): offers API + atomic accept→Sale + concurrency/confidentiality integration
   tests. See `SINGHA_EVOLUTION_PHASE_E4_REPORT.md`.
+- **E4 increment 2 (E4b, PASS) — E4 COMPLETE** — Commercial Offer Engine V2 HTTP surface + the
+  money-critical atomic binding. New runtime flags `commercialOffersV2`/`sealedOffers` (default
+  OFF) across `@singha/config` (3 files) + the DB `FeatureFlag` seed. `offers` NestJS module at
+  `/api/v1/commercial-offers` (server-authorised: `exchange:participate` buyers submit/withdraw;
+  `exchange:operate` seller/operator counter/reject/reveal/accept/award): submit→counter (appends
+  an immutable revision)→accept for open negotiation; submit(receipt)→participation(counts)→reveal
+  →award for sealed. The binding core (`bindOfferToSale`) row-locks the listing, verifies
+  not-already-awarded, snapshots the selected `OfferRevision`, binds the **exact integer** total
+  (`bindingTotalMinor`, float-free; a non-exact unit×qty defers to E8), creates **one** `Sale`
+  (UNIQUE per listing), rejects the losers, reserves bid-capacity (§11) and emits SALE_CONFIRMED +
+  audit — atomically via the existing `UnitOfWork`. Real-Postgres E2E `scripts/e2e-offers.mjs`
+  (wired into `test:offers` + acceptance chain + its own CI step) proves append-only revisions,
+  atomic accept (concurrent burst → exactly one Sale), sealed no-leak pre-reveal, and **D4**
+  (MANUAL_SELECTION never auto-awards the highest; the operator may bind the lowest; AUTO_HIGHEST
+  only when explicitly configured). New domain tests for the binding total (114 domain tests) +
+  an offers flag/authorisation unit spec (27 api tests). Gates green (build 7/7, typecheck 13/13,
+  lint 0 errors, format clean). No new migration (E4a's is additive; E4b is flags + code). See
+  `SINGHA_EVOLUTION_PHASE_E4_REPORT.md`. Next: **E5** (currency / FX / display currency —
+  Google-currency adapter, D12).

@@ -103,6 +103,9 @@ export const envSchema = z.object({
   FEATURE_LOGISTICS: boolFromEnv.default(false),
   FEATURE_LOGISTICS_QUOTES: boolFromEnv.default(false),
 
+  // Singha Evolution Fees / Tax / Rules engine (E8). Default OFF.
+  FEATURE_FEES_ENGINE: boolFromEnv.default(false),
+
   // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
   // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
   FX_API_URL: z.string().default(''),

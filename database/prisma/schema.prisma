@@ -2050,3 +2050,56 @@ model LogisticsShipmentEvent {
   @@index([shipmentId])
   @@map("logistics_shipment_event")
 }
+
+// Fee/tax rule (Evolution E8, pack doc 10). Versioned, configurable charge rule the fees engine
+// resolves per component (most-specific wins). `component`/`side`/`basis` are the taxonomy;
+// `appliesTo` is PRINCIPAL or BUYER_SUBTOTAL (for tax). Tax rule *values* are owner-gated (O3):
+// an unverified rule yields a non-binding preview. Old transactions stay reproducible because each
+// computed line snapshots the applied rule code+version+rate.
+model FeeRule {
+  id                String             @id
+  code              String
+  version           Int                @default(1)
+  priority          Int                @default(0)
+  active            Boolean            @default(true)
+  component         String
+  side              String
+  basis             String
+  rateBps           Int?               @map("rate_bps")
+  fixedMinor        BigInt?            @map("fixed_minor")
+  appliesTo         String             @default("PRINCIPAL") @map("applies_to")
+  operatorCode      String?            @map("operator_code")
+  jurisdiction      String?
+  category          String?
+  saleMethodCode    String?            @map("sale_method_code")
+  minPrincipalMinor BigInt?            @map("min_principal_minor")
+  maxPrincipalMinor BigInt?            @map("max_principal_minor")
+  verification      ConfigVerification @default(draft)
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@unique([code, version])
+  @@index([active, component])
+  @@map("fee_rule")
+}
+
+// Persisted charge breakdown snapshot (Evolution E8; reproducibility, pack doc 10). Append-only
+// record of a computed breakdown with the per-line applied rules (JSON), so an old transaction is
+// reproducible after rules change.
+model FeeBreakdown {
+  id                    String   @id
+  status                String
+  currency              String
+  principalMinor        BigInt   @map("principal_minor")
+  buyerFeesMinor        BigInt   @map("buyer_fees_minor")
+  taxMinor              BigInt   @map("tax_minor")
+  buyerTotalMinor       BigInt   @map("buyer_total_minor")
+  sellerCommissionMinor BigInt   @map("seller_commission_minor")
+  sellerProceedsMinor   BigInt   @map("seller_proceeds_minor")
+  lines                 Json?
+  input                 Json?
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("fee_breakdown")
+}

@@ -85,6 +85,12 @@ jobs:
       - name: E2E (logistics — Incoterms, deterministic quote engine)
         run: pnpm run test:logistics
 
+      # Fees / Tax rules engine (Evolution E8) — versioned, deterministic, float-free charge
+      # breakdown (premium + fee + tax-on-subtotal + seller commission), most-specific rule per
+      # component, reproducible per-line applied rules, and unverified tax → non-binding preview.
+      - name: E2E (fees / tax — deterministic breakdown, reproducibility, O3 preview)
+        run: pnpm run test:fees
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

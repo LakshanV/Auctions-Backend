@@ -8,6 +8,7 @@ export * from './modules/auction';
 export * from './modules/exchange';
 export * from './modules/routing';
 export * from './modules/logistics';
+export * from './modules/fees';
 export * from './modules/commerce';
 export * from './modules/audit';
 export * from './modules/member';

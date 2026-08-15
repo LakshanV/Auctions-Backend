@@ -92,6 +92,12 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Live logistics provider quotes, owner O6 (Evolution E7)',
   },
+  // Singha Evolution (E8) — Fees / Tax / Rules engine. OFF until surfaces land.
+  {
+    key: 'FEES_ENGINE',
+    enabled: false,
+    description: 'Versioned deterministic fee/tax charge-breakdown engine (Evolution E8)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

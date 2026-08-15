@@ -67,6 +67,11 @@ export interface FeatureFlags {
   // `logisticsQuotes` additionally gates live provider quotes (owner register O6).
   logistics: boolean;
   logisticsQuotes: boolean;
+
+  // Singha Evolution Fees / Tax / Rules engine (E8). Default OFF; gates the
+  // versioned, deterministic charge-breakdown engine. Tax rule values are
+  // owner-gated (O3) — an unverified rule yields a non-binding preview (D7).
+  feesEngine: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

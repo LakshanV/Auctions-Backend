@@ -83,6 +83,13 @@ export interface FeatureFlags {
   // buyer-initiated RFQ / Request-Supply / reverse-tender requests + supplier
   // proposals. A procurement award is buyer-explicit and never auto-awarded.
   procurement: boolean;
+
+  // Singha Evolution Supply Programmes + perishable goods (E10). Default OFF.
+  // `supplyProgrammes` gates the recurring-availability surface + buyer-side
+  // matching (a recommendation only, never an auto-award — D4); `perishableGoods`
+  // gates the agricultural/food specialist metadata + automatic-expiry predicate.
+  supplyProgrammes: boolean;
+  perishableGoods: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

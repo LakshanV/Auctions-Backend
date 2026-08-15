@@ -2219,3 +2219,69 @@ model ProcurementProposal {
   @@index([requestId])
   @@map("procurement_proposal")
 }
+
+// Supply Programme (Evolution E10, pack doc 09 §Supply Programme + owner req 23). A commodity
+// supplier's recurring availability — posted once instead of re-listing. Matching against buyer
+// demand recommends counterparties but never auto-awards (§09 / D4). Money is integer minor units;
+// quantities are Decimal(38,9).
+model SupplyProgramme {
+  id                   String    @id
+  supplierCustomerId   String?   @map("supplier_customer_id")
+  product              String
+  category             String?
+  originCountry        String?   @map("origin_country")
+  availableQuantity    Decimal?  @db.Decimal(38, 9) @map("available_quantity")
+  quantityUnitCode     String?   @map("quantity_unit_code")
+  frequency            String?
+  minOrderQuantity     Decimal?  @db.Decimal(38, 9) @map("min_order_quantity")
+  maxOrderQuantity     Decimal?  @db.Decimal(38, 9) @map("max_order_quantity")
+  pricingBasis         String?   @map("pricing_basis")
+  indicativePriceMinor BigInt?   @map("indicative_price_minor")
+  currency             String    @default("LKR")
+  packing              String?
+  quality              String?
+  incoterm             String?
+  validFrom            DateTime? @map("valid_from")
+  validUntil           DateTime? @map("valid_until")
+  leadTimeDays         Int?      @map("lead_time_days")
+  operatorCode         String?   @map("operator_code")
+  status               String    @default("draft")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([category])
+  @@map("supply_programme")
+}
+
+// Perishable-goods specialist metadata (Evolution E10, owner req 24). Attaches to a listing or a
+// supply programme via (subjectType, subjectId) — additive, so the Listing table is never mutated.
+// expiryDate / shipmentWindowEnd drive automatic expiry. Temperatures may be negative; moisture is a
+// percentage 0–100.
+model PerishableMetadata {
+  id                  String    @id
+  subjectType         String    @map("subject_type")
+  subjectId           String    @map("subject_id")
+  harvestDate         DateTime? @map("harvest_date")
+  packingDate         DateTime? @map("packing_date")
+  expiryDate          DateTime? @map("expiry_date")
+  variety             String?
+  grade               String?
+  size                String?
+  moisturePercent     Decimal?  @db.Decimal(6, 3) @map("moisture_percent")
+  qualitySpec         String?   @map("quality_spec")
+  coldChain           Boolean   @default(false) @map("cold_chain")
+  tempMinC            Decimal?  @db.Decimal(6, 2) @map("temp_min_c")
+  tempMaxC            Decimal?  @db.Decimal(6, 2) @map("temp_max_c")
+  phytosanitaryCert   Boolean   @default(false) @map("phytosanitary_cert")
+  originCert          Boolean   @default(false) @map("origin_cert")
+  availableQuantity   Decimal?  @db.Decimal(38, 9) @map("available_quantity")
+  minQuantity         Decimal?  @db.Decimal(38, 9) @map("min_quantity")
+  shipmentWindowStart DateTime? @map("shipment_window_start")
+  shipmentWindowEnd   DateTime? @map("shipment_window_end")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@unique([subjectType, subjectId])
+  @@map("perishable_metadata")
+}

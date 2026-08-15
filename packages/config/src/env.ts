@@ -113,6 +113,10 @@ export const envSchema = z.object({
   // Singha Evolution Procurement / two-sided market (E9). Default OFF.
   FEATURE_PROCUREMENT: boolFromEnv.default(false),
 
+  // Singha Evolution Supply Programmes + perishable goods (E10). Default OFF.
+  FEATURE_SUPPLY_PROGRAMMES: boolFromEnv.default(false),
+  FEATURE_PERISHABLE_GOODS: boolFromEnv.default(false),
+
   // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
   // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
   FX_API_URL: z.string().default(''),

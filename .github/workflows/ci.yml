@@ -103,6 +103,13 @@ jobs:
       - name: E2E (procurement — reverse tender, ranked recommendation, explicit award)
         run: pnpm run test:procurement
 
+      # Supply Programmes + perishable goods (Evolution E10, pack doc 09 §Supply Programme + owner
+      # reqs 23/24) — recurring availability, transition-guarded lifecycle, buyer-side matching that
+      # ranks cheapest-first as a RECOMMENDATION only (never an auto-award, §09 / D4), and perishable
+      # metadata with date/temperature validation + automatic-expiry predicate.
+      - name: E2E (supply — recurring programmes, advisory matching, perishable expiry)
+        run: pnpm run test:supply
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

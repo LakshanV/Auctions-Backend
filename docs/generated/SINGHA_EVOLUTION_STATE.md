@@ -33,7 +33,7 @@ phase. Code overrides stale docs.
 | E7     | Logistics / Ports / Incoterms                                                                                                                            | ✅ PASS |
 | E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | ✅ PASS |
 | E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | ✅ PASS |
-| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending |
+| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | ✅ PASS |
 | E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending |
 | E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
 | E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
@@ -259,3 +259,27 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
     accepted, cheapest loser rejected. Gates green (build 7/7, typecheck 13/13, domain 165 + api 47 +
     contracts 25 + config 14 tests, lint 0 errors, format clean). See
     `SINGHA_EVOLUTION_PHASE_E9_REPORT.md`. Next: **E10** (Supply Programmes + perishable-goods metadata).
+- **E10 (PASS)** — Supply Programmes + perishable goods (the recurring-availability side + the
+  agricultural/food specialist metadata). Contracts `supply-domains` (frequencies, programme
+  statuses, pricing bases; create programme, set status, buyer-side `recommendSupply` criteria;
+  `perishableMetadata` + `attachPerishable` for a listing or programme subject — decimal strings,
+  never floats). Pure `@singha/domain` `modules/supply` (10 tests): `assertSupplyProgrammeTransition`
+  (draft→active→paused, expired/withdrawn terminal); float-free `scaleDecimal` + `assertOrderQuantities`
+  (min ≤ max); `isSupplyProgrammeOfferable` (active + in validity window); `recommendProgrammes` —
+  cheapest-first matching that is a **recommendation only**, creating/binding nothing (§09 / D4); and
+  the perishable engine `assertPerishableConsistent` (date/temperature/moisture ordering → 422),
+  `perishableExpiresAt` + `isPerishableExpired` (the **automatic-expiry** predicate: earliest of
+  best-use date and shipment-window end). Two additive tables (`supply_programme`,
+  `perishable_metadata` keyed by `(subject_type, subject_id)` so it never mutates the Listing table)
+  via migration `20260815190000_...` (2 CREATE TABLE + indexes + unique, zero DROP/RENAME; money
+  BigInt, quantities Decimal(38,9), temps Decimal(6,2), moisture Decimal(6,3)). Flag-gated `supply`
+  module at `/api/v1/supply` (`exchange:participate`): supplier posts/manages programmes (owner-gated,
+  min>max 422, transition 409), buyer `recommend` returns `{ binding:false, recommendations }`
+  cheapest-first, perishable upsert (owner/operator-gated) + read with live `expired`/`expiresAt`.
+  New flags `supplyProgrammes` + `perishableGoods` (default OFF) across `@singha/config` (3 files) +
+  seed. Real-Postgres E2E `scripts/e2e-supply.mjs` (wired into `test:supply` + acceptance chain + a CI
+  step) proves the lifecycle guards, advisory matching (excludes draft/over-minimum), automatic
+  perishable expiry (future → not expired, past → expired), the 422/403/404 paths, and DB state. Gates
+  green (build 7/7, typecheck 13/13, domain 175 + api 49 + contracts 25 + config 14 tests, lint 0
+  errors, format clean). See `SINGHA_EVOLUTION_PHASE_E10_REPORT.md`. Next: **E11** (Singha ID + unified
+  Dashboard + Admin Control Centre).

@@ -109,6 +109,17 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Buyer-initiated RFQ / Request-Supply / reverse-tender + supplier proposals (E9)',
   },
+  // Singha Evolution (E10) — Supply Programmes + perishable goods. OFF until surfaces land.
+  {
+    key: 'SUPPLY_PROGRAMMES',
+    enabled: false,
+    description: 'Recurring supply programmes + buyer-side matching (recommendation only, E10)',
+  },
+  {
+    key: 'PERISHABLE_GOODS',
+    enabled: false,
+    description: 'Agricultural/food specialist metadata + automatic-expiry predicate (E10)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

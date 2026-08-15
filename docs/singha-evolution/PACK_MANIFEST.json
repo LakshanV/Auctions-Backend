@@ -1,0 +1,31 @@
+{
+  "pack": "Singha Platform Evolution \u2014 Full Autonomous AI Development Pack",
+  "canonical_repos": [
+    "MUA1234/Auctions-New",
+    "LakshanV/Auctions-Backend"
+  ],
+  "observed_heads": {
+    "frontend": "1172592fb009dafca89000b1265392dea5a88009",
+    "backend": "f1676fbe1258c164708a4c667d39b8e83b0cb61c"
+  },
+  "note": "Claude must fetch latest origin/main before implementation.",
+  "files": [
+    "00_EXECUTE_THIS_FIRST.md",
+    "01_OWNER_MASTER_REQUIREMENTS.md",
+    "02_REPOSITORY_AUDIT_CURRENT_STATE.md",
+    "03_CURRENT_TO_TARGET_GAP_ANALYSIS.md",
+    "04_EXECUTIVE_VISION_AND_BRAND.md",
+    "05_PRESERVATION_AND_TARGET_DOMAIN.md",
+    "06_DATA_LISTING_QUANTITY_CURRENCY.md",
+    "07_OPERATOR_LOCATION_ROUTING_TERMS.md",
+    "08_OFFER_ENGINE_HIGHEST_PRIORITY.md",
+    "09_AUCTION_PROCUREMENT_SUPPLY.md",
+    "10_LOGISTICS_PAYMENT_FEES_TAX.md",
+    "11_SINGHA_ID_DASHBOARD_ADMIN_FRONTEND_SEO.md",
+    "12_AI_SECURITY_ANTI_CLONE.md",
+    "13_TESTING_SELF_REVIEW_AND_FLAGS.md",
+    "14_CLAUDE_COST_PHASES_DEPLOYMENT.md",
+    "15_MASTER_PROMPT_FOR_CLAUDE_CODE.md",
+    "16_ACCEPTANCE_AND_OWNER_ACTIONS.md"
+  ]
+}

@@ -95,6 +95,13 @@ export interface FeatureFlags {
   // capability-based verification surface. A gated activity requires a verified, unexpired capability
   // grant; the evidence bar per activity/market is owner-gated (register O7).
   singhaId: boolean;
+
+  // Singha Evolution unified Dashboard + Control Centre (E11b). Default OFF. `dashboard` gates the
+  // member's cross-domain command centre (Buying/Selling/Verification projection); `controlCentre`
+  // gates the operator-scoped admin overview (config + record counts + attention alerts). Both are
+  // read-only projections and never own authoritative data.
+  dashboard: boolean;
+  controlCentre: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

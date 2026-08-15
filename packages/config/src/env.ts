@@ -120,6 +120,10 @@ export const envSchema = z.object({
   // Singha Evolution Singha ID (E11). Default OFF.
   FEATURE_SINGHA_ID: boolFromEnv.default(false),
 
+  // Singha Evolution unified Dashboard + Control Centre (E11b). Default OFF.
+  FEATURE_DASHBOARD: boolFromEnv.default(false),
+  FEATURE_CONTROL_CENTRE: boolFromEnv.default(false),
+
   // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
   // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
   FX_API_URL: z.string().default(''),

@@ -126,6 +126,17 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Geography-neutral member profile + capability-based verification (E11)',
   },
+  // Singha Evolution (E11b) — unified Dashboard + operator Control Centre. OFF until wired.
+  {
+    key: 'DASHBOARD',
+    enabled: false,
+    description: 'Member cross-domain command-centre projection (E11b)',
+  },
+  {
+    key: 'CONTROL_CENTRE',
+    enabled: false,
+    description: 'Operator-scoped admin overview (config + record counts + alerts, E11b)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

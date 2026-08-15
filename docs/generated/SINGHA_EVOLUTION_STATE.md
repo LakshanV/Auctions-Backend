@@ -34,7 +34,7 @@ phase. Code overrides stale docs.
 | E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | ✅ PASS |
 | E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | ✅ PASS |
 | E10    | Supply Programmes + perishable-goods metadata                                                                                                            | ✅ PASS |
-| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending |
+| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | ✅ PASS |
 | E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
 | E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
 | E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
@@ -283,22 +283,36 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   green (build 7/7, typecheck 13/13, domain 175 + api 49 + contracts 25 + config 14 tests, lint 0
   errors, format clean). See `SINGHA_EVOLUTION_PHASE_E10_REPORT.md`. Next: **E11** (Singha ID + unified
   Dashboard + Admin Control Centre).
-- **E11 increment 1 (E11a, PASS)** — Singha ID: one geography-neutral member profile +
+- **E11 increment 1 (E11a, PASS)** — Singha ID: one geography-neutral member profile with
   **capability-based verification**. Contracts `singha-id-domains` (capabilities, statuses; update
   profile, request/decide capability). Pure `@singha/domain` `modules/singha-id` (6 tests):
   `activityRequiresCapability` (browse-class open, gated activities map to a capability),
   `effectiveCapabilityStatus` (a verified grant past its expiry reads expired), `evaluateCapability`
-  (open → permitted; gated → needs a verified, unexpired grant, else VERIFICATION_REQUIRED/PENDING/
-  EXPIRED/REJECTED), `assertCapabilityDecidable` (only pending can be decided). Two additive tables
-  (`customer_profile` 1:1, `customer_capability`) via migration `20260815200000_...` (2 CREATE TABLE
-  - indexes + unique, zero DROP/RENAME — the customer table is never mutated). Flag-gated `singha-id`
-    module at `/api/v1/singha-id` (profile get/update + capability request/list/evaluate for the member;
-    operator-only `capabilities/decide` = `exchange:operate`). New flag `singhaId` (default OFF) across
-    `@singha/config` (3 files) + seed. Real-Postgres E2E `scripts/e2e-singha-id.mjs` (wired into
-    `test:singha-id` + acceptance chain + a CI step) proves the profile round-trip, open browse, gated
-    place_bid (VERIFICATION_REQUIRED → pending → operator-verified → permitted), member decide 403,
-    non-pending decide 409, expired grant no longer permits, unknown decide 404. Gates green (build 7/7,
-    typecheck 13/13, domain 181 + api 50 + contracts 25 + config 14 tests, lint 0 errors, format clean).
-    The verification _evidence bar_ per activity/market is owner-gated (O7). Remaining E11 (E11b): unified
-    Dashboard + operator-scoped Control Centre read surfaces. See `SINGHA_EVOLUTION_PHASE_E11_REPORT.md`
-    (authored at E11 completion).
+  (open yields permitted; a gated activity needs a verified, unexpired grant, else
+  VERIFICATION_REQUIRED/PENDING/EXPIRED/REJECTED), `assertCapabilityDecidable` (only pending can be
+  decided). Two additive tables (`customer_profile` 1:1 and `customer_capability`) via migration
+  `20260815200000_...` (two CREATE TABLE with indexes and a unique index, zero DROP/RENAME — the
+  customer table is never mutated). Flag-gated `singha-id` module at `/api/v1/singha-id` (profile
+  get/update and capability request/list/evaluate for the member; operator-only `capabilities/decide`
+  needs `exchange:operate`). New flag `singhaId` (default OFF) across `@singha/config` (3 files) and
+  seed. Real-Postgres E2E `scripts/e2e-singha-id.mjs` (wired into `test:singha-id`, the acceptance
+  chain and a CI step) proves the profile round-trip, open browse, gated place_bid
+  (VERIFICATION_REQUIRED then pending then operator-verified then permitted), member decide 403,
+  non-pending decide 409, expired grant no longer permits, unknown decide 404. Gates green (build 7/7,
+  typecheck 13/13, domain 181, api 50, contracts 25, config 14 tests, lint 0 errors, format clean).
+  The verification _evidence bar_ per activity/market is owner-gated (O7).
+- **E11 increment 2 (E11b, PASS) — E11 COMPLETE** — unified Dashboard and operator Control Centre,
+  two read-only cross-domain projections. Pure `@singha/domain` `modules/dashboard` (5 tests):
+  `countByStatus` (stable-sorted grouping), `buildDashboard` (Buying/Selling/Verification sections
+  with per-status totals), `controlCentreAlerts` (pending verifications and missing operators/markets).
+  No new tables — the projections own no authoritative data. Flag-gated `dashboard` module:
+  `GET /api/v1/dashboard` (`exchange:participate`) aggregates the caller's watch, offers, procurement
+  requests, supply programmes and capabilities; `GET /api/v1/control-centre/overview`
+  (`exchange:operate`) returns config and record counts with attention alerts, **operator-scoped** by
+  an optional `operatorCode` (operator-scoped records filter by it; global config is unscoped). New
+  flags `dashboard` and `controlCentre` (default OFF) across `@singha/config` (3 files) and seed.
+  Real-Postgres E2E `scripts/e2e-dashboard.mjs` (wired into `test:dashboard`, the acceptance chain and
+  a CI step) proves the cross-domain aggregation, the operate-gated Control Centre (member 403),
+  pending-verification alerts, and operatorCode scoping. Gates green (build 7/7, typecheck 13/13,
+  domain 186, api 52, contracts 25, config 14 tests, lint 0 errors, format clean). See
+  `SINGHA_EVOLUTION_PHASE_E11_REPORT.md`. Next: **E12** (Discovery / AI / Intelligence expansion).

@@ -117,6 +117,13 @@ jobs:
       - name: E2E (singha-id — profile + capability-based verification)
         run: pnpm run test:singha-id
 
+      # Unified Dashboard + operator Control Centre (Evolution E11b, pack doc 11) — read-only
+      # projections: a member's cross-domain command centre (Buying/Selling/Verification) and the
+      # operator-scoped admin overview (config + record counts + attention alerts, operate-gated,
+      # operatorCode-scoped).
+      - name: E2E (dashboard — member command centre + operator control centre)
+        run: pnpm run test:dashboard
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

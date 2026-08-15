@@ -24,6 +24,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { SupplyModule } from './modules/supply/supply.module';
 import { SinghaIdModule } from './modules/singha-id/singha-id.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -76,6 +77,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     ProcurementModule,
     SupplyModule,
     SinghaIdModule,
+    DashboardModule,
     CommerceModule,
     ConnectModule,
     AiModule,

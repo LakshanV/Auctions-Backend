@@ -1,9 +1,10 @@
 # SINGHA EVOLUTION — PHASE E8 REPORT (Fees / Tax / Rules engine + Payment orchestration)
 
-**Verdict: E8a PASS** (the versioned, deterministic Fees / Tax rules engine). Additive, behind the
-default-OFF `feesEngine` flag. Baseline BE `60e1073` → this phase. Payment orchestration is **E8b**
-(see "Remaining"). Tax rule _values_ are owner-gated (register O3): an unverified applied rule
-yields a non-binding preview — the engine itself is fully buildable and shipped now.
+**Verdict: E8 PASS** — additive, behind the default-OFF `feesEngine` / `operatorPayments` flags.
+Baseline BE `60e1073` → this phase, shipped in two increments: **E8a** = the versioned, deterministic
+Fees / Tax rules engine; **E8b** = payment orchestration (regulated-route resolution + signed,
+idempotent webhooks). Tax rule _values_ (O3) and payment providers (O4) are owner-gated: unverified
+config yields a non-binding preview — the engines are fully buildable and shipped now.
 
 ## E8a delivered
 
@@ -48,15 +49,42 @@ snapshot the binding path (E8b / commerce) will consume.
   component — deterministic and reproducible.
 - **Migration safety:** additive-only (two new tables); existing tables untouched.
 
-## Remaining in E8 (E8b)
+## E8b delivered (payment orchestration)
 
-- **Payment orchestration** (pack §10): resolve a regulated payment route from operator / currency /
-  locations / transaction type / provider eligibility (one UX, operator-specific routes) —
-  **without** creating unlicensed internal banking/escrow. A `PaymentRoute` config + a deterministic
-  resolver returning the route or `MANUAL_REVIEW_REQUIRED`/`OPERATOR_PAYMENTS`-gated (owner O4).
-  Signed/idempotent webhook intake. Persist the fee breakdown against the transaction at bind time.
+- **Pure domain** (`payments.ts`, 5 tests) — `resolvePaymentRoute`: deterministic, operator-scoped,
+  most-specific-wins resolution to an **external regulated** provider (there is deliberately no
+  internal-ledger/escrow provider kind). An unverified/unlicensed route → non-binding preview (O4);
+  no route → `MANUAL_REVIEW_REQUIRED`. Bank-transfer / offline routes flag `requiresManualSettlement`
+  (Singha holds no balance).
+- **Schema** — three additive tables (`payment_route` config, `payment_intent` snapshot,
+  `payment_webhook_event` idempotency) via migration `20260815170000_evolution_e8b_payments`
+  (`CREATE TABLE` × 3 + indexes, **zero** DROP/RENAME/ALTER).
+- **API** (`modules/payments`, flag-gated `operatorPayments`) — `POST /payments/resolve-route`
+  (`exchange:operate`) resolves + persists an intent; `POST /payments/webhook` is public but
+  **HMAC-SHA256 signature-verified** (constant-time) and **idempotent** (UNIQUE provider+eventId —
+  a replay is a no-op). No money moves; settlement happens on the external provider.
+- **Config** — `operatorPayments` flag (default OFF) + server-only `PAYMENT_WEBHOOK_SECRET`.
+
+## Self-review (pack 13)
+
+- **Gates:** `turbo build` 7/7; `typecheck` 13/13; `@singha/domain` **158** tests (7 fees + 5
+  payments) + `@singha/contracts` 25 + `@singha/api` **46** (3 fees + 4 payments specs) +
+  `@singha/config` 14; `lint` **0 errors**; `format:check` clean. Real-Postgres E2E
+  `scripts/e2e-fees.mjs` + `scripts/e2e-payments.mjs` (both wired into their `test:*` scripts + the
+  acceptance chain + CI steps) prove the fee breakdown + reproducibility + O3 preview, and the
+  regulated-route resolution + O4 preview + signed/idempotent webhooks + server-side authorisation.
+- **No unlicensed banking:** routes reference external regulated providers only; Singha persists a
+  routing _intent_, never a balance/ledger. Webhooks are signed + idempotent.
+- **Migration safety:** additive-only (five new tables across E8a+E8b); existing tables untouched.
+
+## Owner actions (non-blocking)
+
+- **O3 — tax/VAT/GST values per jurisdiction/method.** The fee/tax engine is live; unverified tax
+  rules return `MANUAL_REVIEW_REQUIRED` until the owner confirms the values.
+- **O4 — regulated payment/settlement providers + credentials per operator.** The route resolver is
+  live; unverified routes return `MANUAL_REVIEW_REQUIRED` until the owner verifies each route.
 
 ## Next
 
-Finish **E8b** (payment orchestration), then **E9** — Procurement / Wanted / RFQ / Reverse Tender
-(the two-sided market), which reuses the E4 offer engine and E6 routing.
+**E9** — Procurement / Wanted / RFQ / Reverse Tender (the two-sided market), reusing the E4 offer
+engine and E6 routing.

@@ -72,6 +72,12 @@ export interface FeatureFlags {
   // versioned, deterministic charge-breakdown engine. Tax rule values are
   // owner-gated (O3) — an unverified rule yields a non-binding preview (D7).
   feesEngine: boolean;
+
+  // Singha Evolution Payment orchestration (E8b). Default OFF; gates the regulated
+  // payment-route resolver + signed/idempotent webhook intake. Routes reference
+  // EXTERNAL regulated providers only (no internal banking/escrow); a route that is
+  // not owner-verified/licensed yields MANUAL_REVIEW_REQUIRED (owner O4).
+  operatorPayments: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

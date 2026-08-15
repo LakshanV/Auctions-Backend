@@ -21,24 +21,24 @@ phase. Code overrides stale docs.
 
 ## Phase tracker
 
-| Phase  | Scope                                                                                                                                                    | Status     |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS    |
-| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS    |
-| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS    |
-| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS    |
-| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ✅ PASS    |
-| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | ✅ PASS    |
-| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | ✅ PASS    |
-| E7     | Logistics / Ports / Incoterms                                                                                                                            | ✅ PASS    |
-| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | ◧ E8a PASS |
-| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending    |
-| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending    |
-| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending    |
-| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending    |
-| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending    |
-| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending    |
-| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending    |
+| Phase  | Scope                                                                                                                                                    | Status  |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS |
+| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS |
+| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS |
+| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS |
+| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ✅ PASS |
+| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | ✅ PASS |
+| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | ✅ PASS |
+| E7     | Logistics / Ports / Incoterms                                                                                                                            | ✅ PASS |
+| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | ✅ PASS |
+| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending |
+| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending |
+| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending |
+| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
+| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
+| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
+| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
 
 Each phase: implement → test → self-review (15-point, pack `13`) → correct → retest →
 `SINGHA_EVOLUTION_PHASE_<N>_REPORT.md` with verdict PASS / PASS_WITH_OWNER_ACTIONS / BLOCKED.
@@ -222,3 +222,20 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   7/7, typecheck 13/13, domain 153 + api 42 + contracts 25 + config 14 tests, lint 0 errors, format
   clean). Remaining E8 (E8b): payment orchestration (regulated routes, owner O4). See
   `SINGHA_EVOLUTION_PHASE_E8_REPORT.md`.
+- **E8 increment 2 (E8b, PASS) — E8 COMPLETE** — Payment orchestration. Contracts
+  `payments-domains` (route resolution, provider kinds, webhook). Pure `@singha/domain`
+  `modules/payments` (5 tests): `resolvePaymentRoute` — deterministic, operator-scoped,
+  most-specific-wins resolution to an **external regulated** provider (no internal ledger/escrow
+  kind exists); unverified route → non-binding preview (O4); no route → MANUAL_REVIEW_REQUIRED;
+  bank-transfer/offline → requiresManualSettlement. Three additive tables (`payment_route`,
+  `payment_intent`, `payment_webhook_event`) via migration `20260815170000_...` (3 CREATE TABLE +
+  indexes, zero DROP/RENAME). Flag-gated `payments` module: `POST /api/v1/payments/resolve-route`
+  (`exchange:operate`) resolves + persists an intent; `POST /api/v1/payments/webhook` is
+  HMAC-SHA256 signature-verified (constant-time) + idempotent (UNIQUE provider+eventId). New flag
+  `operatorPayments` (default OFF) + server-only `PAYMENT_WEBHOOK_SECRET`. Real-Postgres E2E
+  `scripts/e2e-payments.mjs` (wired into `test:payments` + acceptance chain + a CI step) proves
+  verified-route resolution, no-route/unverified MANUAL_REVIEW, bank-transfer manual settlement,
+  signed+idempotent webhooks (bad sig 401, replay no-op), and server-side authorisation. Gates
+  green (build 7/7, typecheck 13/13, domain 158 + api 46 + contracts 25 + config 14 tests, lint 0
+  errors, format clean). See `SINGHA_EVOLUTION_PHASE_E8_REPORT.md`. Next: **E9** (Procurement / RFQ
+  / Reverse Tender).

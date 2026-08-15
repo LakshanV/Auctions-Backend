@@ -91,6 +91,11 @@ jobs:
       - name: E2E (fees / tax — deterministic breakdown, reproducibility, O3 preview)
         run: pnpm run test:fees
 
+      # Payment orchestration (Evolution E8b) — deterministic regulated-route resolution (external
+      # providers only; unverified → MANUAL_REVIEW per O4) + signed, idempotent webhook intake.
+      - name: E2E (payments — regulated route resolution, signed idempotent webhooks)
+        run: pnpm run test:payments
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

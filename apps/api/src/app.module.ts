@@ -20,6 +20,7 @@ import { FxModule } from './modules/fx/fx.module';
 import { RoutingModule } from './modules/routing/routing.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { FeesModule } from './modules/fees/fees.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -68,6 +69,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     RoutingModule,
     LogisticsModule,
     FeesModule,
+    PaymentsModule,
     CommerceModule,
     ConnectModule,
     AiModule,

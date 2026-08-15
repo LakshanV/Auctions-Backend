@@ -98,6 +98,11 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Versioned deterministic fee/tax charge-breakdown engine (Evolution E8)',
   },
+  {
+    key: 'OPERATOR_PAYMENTS',
+    enabled: false,
+    description: 'Regulated payment-route resolver + signed idempotent webhooks, O4 (Evolution E8)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

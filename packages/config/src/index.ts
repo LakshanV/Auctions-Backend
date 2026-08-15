@@ -65,6 +65,7 @@ export interface AppConfig {
   providers: ProviderConfig;
   supabase: SupabaseConfig;
   fx: FxProviderConfig;
+  payments: { webhookSecret: string };
 }
 
 const configured = (value: string): ProviderStatus => ({ configured: value.trim().length > 0 });
@@ -137,6 +138,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       logistics: env.FEATURE_LOGISTICS,
       logisticsQuotes: env.FEATURE_LOGISTICS_QUOTES,
       feesEngine: env.FEATURE_FEES_ENGINE,
+      operatorPayments: env.FEATURE_OPERATOR_PAYMENTS,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },
@@ -164,6 +166,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       apiKey: env.FX_API_KEY,
       configured: env.FX_API_URL.trim().length > 0,
     },
+    payments: { webhookSecret: env.PAYMENT_WEBHOOK_SECRET },
   };
 }
 

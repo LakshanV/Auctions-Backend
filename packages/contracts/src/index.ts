@@ -11,5 +11,6 @@ export * from './fx-domains';
 export * from './routing-domains';
 export * from './logistics-domains';
 export * from './fees-domains';
+export * from './payments-domains';
 export * from './discovery';
 export * from './engagement';

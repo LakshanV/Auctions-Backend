@@ -21,24 +21,24 @@ phase. Code overrides stale docs.
 
 ## Phase tracker
 
-| Phase  | Scope                                                                                                                                                    | Status  |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS |
-| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS |
-| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS |
-| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS |
-| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | pending |
-| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | pending |
-| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | pending |
-| E7     | Logistics / Ports / Incoterms                                                                                                                            | pending |
-| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | pending |
-| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending |
-| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending |
-| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending |
-| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
-| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
-| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
-| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
+| Phase  | Scope                                                                                                                                                    | Status     |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS    |
+| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS    |
+| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS    |
+| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS    |
+| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ◧ E4a PASS |
+| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | pending    |
+| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | pending    |
+| E7     | Logistics / Ports / Incoterms                                                                                                                            | pending    |
+| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | pending    |
+| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending    |
+| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending    |
+| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending    |
+| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending    |
+| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending    |
+| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending    |
+| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending    |
 
 Each phase: implement → test → self-review (15-point, pack `13`) → correct → retest →
 `SINGHA_EVOLUTION_PHASE_<N>_REPORT.md` with verdict PASS / PASS_WITH_OWNER_ACTIONS / BLOCKED.
@@ -108,3 +108,15 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   (`listing-domains`); domain `saleMethodCodeForLegacyEnum`; real-Postgres integration test.
   Gates green (build 7/7, typecheck 13/13, domain 97 + contracts 25 tests, lint 0, format clean).
   See `SINGHA_EVOLUTION_PHASE_E3_REPORT.md`. Next: **E4 — Commercial Offer Engine V2**.
+- **E4 increment 1 (E4a, PASS)** — Commercial Offer Engine V2, data model + the money-critical
+  engine. Additive schema: immutable `OfferRevision` (full commercial terms: total/unit price,
+  currency, Decimal quantity, Incoterm, delivery, payment, freight, validity, conditions) +
+  `Offer` extensions (`currentRevisionId`/`saleMethodCode`/`sealed`/`revealedAt`/`awardPolicy`);
+  additive migration `20260815110000_...` (5 ADD COLUMN + offer_revision table, zero DROP/RENAME).
+  Pure `@singha/domain` `offer-revision` engine (11 tests) encoding **D4** (MANUAL_SELECTION
+  default never auto-awards the highest; AUTO_HIGHEST only when configured) + sealed
+  confidentiality (counts-only pre-reveal; ranked view gated on reveal + role). Contracts
+  `offer-domains`. Owner directive D12 (Google-currency FX source, E5) recorded. Gates green
+  (build 7/7, typecheck 13/13, domain 108 + contracts 25 tests, lint 0, format clean).
+  Remaining E4 (E4b): offers API + atomic accept→Sale + concurrency/confidentiality integration
+  tests. See `SINGHA_EVOLUTION_PHASE_E4_REPORT.md`.

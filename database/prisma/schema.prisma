@@ -441,12 +441,58 @@ model Offer {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  listing Listing      @relation(fields: [listingId], references: [id])
-  events  OfferEvent[]
+  // Commercial Offer Engine V2 (E4, additive). Full proposal terms live in immutable
+  // OfferRevisions; `amountMinor` stays the legacy headline. `sealed` offers are confidential
+  // (no pre-reveal), and `awardPolicy` defaults to MANUAL_SELECTION — the highest sealed
+  // proposal NEVER auto-awards (DECISIONS D4). `saleMethodCode` ties to the E2 taxonomy.
+  currentRevisionId String?   @map("current_revision_id")
+  saleMethodCode    String?   @map("sale_method_code")
+  sealed            Boolean   @default(false)
+  revealedAt        DateTime? @map("revealed_at")
+  awardPolicy       String?   @map("award_policy")
+
+  listing   Listing         @relation(fields: [listingId], references: [id])
+  events    OfferEvent[]
+  revisions OfferRevision[]
 
   @@index([listingId])
   @@index([customerId])
   @@map("offer")
+}
+
+// Immutable commercial proposal snapshot (E4, pack doc 08). Each proposal/counter appends a
+// new revision — prior terms are NEVER overwritten; `Offer.currentRevisionId` points at the
+// latest. Money is integer minor units; quantity is Decimal. Confidentiality: competitor
+// revisions are never returned before a controlled reveal (enforced in the service + domain).
+model OfferRevision {
+  id                    String    @id
+  offerId               String    @map("offer_id")
+  revisionNumber        Int       @map("revision_number")
+  authorType            String    @map("author_type")
+  authorId              String?   @map("author_id")
+  totalPriceMinor       BigInt?   @map("total_price_minor")
+  unitPriceMinor        BigInt?   @map("unit_price_minor")
+  currency              String    @default("LKR")
+  quantity              Decimal?  @db.Decimal(38, 9)
+  quantityUnitCode      String?   @map("quantity_unit_code")
+  incoterm              String?
+  originLocationId      String?   @map("origin_location_id")
+  destinationLocationId String?   @map("destination_location_id")
+  deliveryDate          DateTime? @map("delivery_date")
+  deliveryWindowStart   DateTime? @map("delivery_window_start")
+  deliveryWindowEnd     DateTime? @map("delivery_window_end")
+  paymentTerms          String?   @map("payment_terms")
+  freightResponsibility String?   @map("freight_responsibility")
+  validUntil            DateTime? @map("valid_until")
+  notes                 String?
+  conditions            Json?
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  offer Offer @relation(fields: [offerId], references: [id])
+
+  @@unique([offerId, revisionNumber])
+  @@index([offerId])
+  @@map("offer_revision")
 }
 
 enum OfferEventType {

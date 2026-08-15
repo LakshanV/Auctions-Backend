@@ -110,3 +110,15 @@ Keep Vercel (web) / Railway (API+worker) during development. Architect for later
 portability: standard Node/Nest/Next, Postgres, a Redis abstraction, an S3-compatible storage
 adapter, env-driven config, health checks (pack `14`). No deployment change without a
 documented reason.
+
+## D12 — FX rate source is Google currency (owner directive; resolves register O5)
+
+The FX rate source is **Google's currency conversion** (owner directive), placed behind the
+abstract FX provider layer (D5 / pack §14) so it is swappable. Rules unchanged: display-currency
+conversion is **informational only** and never mutates the binding **transaction currency**; any
+rate used in a binding calculation is **snapshotted** (base, quote, rate, `provider = "google"`,
+quotedAt, expiresAt/staleness, margin). Implemented in **E5** — the concrete Google adapter +
+caching/staleness + a credential-free fake for tests; E4 offers simply carry their transaction
+currency so E5 layers conversion on top. Google has no official currency API, so the adapter
+wraps whichever Google-backed endpoint the owner confirms at E5; until then a fake provides
+deterministic rates and no binding path depends on a live rate.

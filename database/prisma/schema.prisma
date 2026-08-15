@@ -261,6 +261,26 @@ model Listing {
   opensAt           DateTime? @map("opens_at")
   closesAt          DateTime? @map("closes_at")
 
+  // Singha Evolution E3 — universal listing (additive, all nullable; consumers migrate later).
+  // Configurable sale method alongside the enum (DECISIONS D3); backfilled from `saleMethod`.
+  saleMethodCode         String?  @map("sale_method_code")
+  // Quantity + unit engine (pack doc 13; DECISIONS D5 — Decimal, never float).
+  quantityAvailable      Decimal? @map("quantity_available") @db.Decimal(38, 9)
+  minOrderQuantity       Decimal? @map("min_order_quantity") @db.Decimal(38, 9)
+  quantityUnitCode       String?  @map("quantity_unit_code")
+  pricingBasis           String?  @map("pricing_basis")
+  unitPriceMinor         BigInt?  @map("unit_price_minor")
+  // Structured location roles (pack doc 15) — distinct from the flat locationCity/Region above.
+  assetLocationId        String?  @map("asset_location_id")
+  sellerLocationId       String?  @map("seller_location_id")
+  custodianLocationId    String?  @map("custodian_location_id")
+  pickupLocationId       String?  @map("pickup_location_id")
+  exportOriginLocationId String?  @map("export_origin_location_id")
+  destinationLocationId  String?  @map("destination_location_id")
+  // Operator + origin-node attribution (Addendum A: origination is attribution, not ownership).
+  operatorId             String?  @map("operator_id")
+  originNodeId           String?  @map("origin_node_id")
+
   asset           Asset             @relation(fields: [assetId], references: [id])
   auction         Auction?
   eois            Eoi[]
@@ -274,9 +294,20 @@ model Listing {
   eventLots       AuctionEventLot[]
   discoveryEvents DiscoveryEvent[]
 
+  assetLocation        Location?   @relation("ListingAssetLocation", fields: [assetLocationId], references: [id])
+  sellerLocation       Location?   @relation("ListingSellerLocation", fields: [sellerLocationId], references: [id])
+  custodianLocation    Location?   @relation("ListingCustodianLocation", fields: [custodianLocationId], references: [id])
+  pickupLocation       Location?   @relation("ListingPickupLocation", fields: [pickupLocationId], references: [id])
+  exportOriginLocation Location?   @relation("ListingExportOriginLocation", fields: [exportOriginLocationId], references: [id])
+  destinationLocation  Location?   @relation("ListingDestinationLocation", fields: [destinationLocationId], references: [id])
+  operator             Operator?   @relation(fields: [operatorId], references: [id])
+  originNode           MarketNode? @relation(fields: [originNodeId], references: [id])
+
   @@index([assetId])
   @@index([status])
   @@index([featured])
+  @@index([operatorId])
+  @@index([originNodeId])
   @@map("listing")
 }
 
@@ -704,8 +735,9 @@ model Operator {
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
 
-  markets OperatorMarket[]
-  nodes   MarketNodeOperator[]
+  markets  OperatorMarket[]
+  nodes    MarketNodeOperator[]
+  listings Listing[]
 
   @@map("operator")
 }
@@ -738,6 +770,14 @@ model Location {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  // Listing role back-relations (E3) — one Location may fill many roles across listings.
+  assetListings        Listing[] @relation("ListingAssetLocation")
+  sellerListings       Listing[] @relation("ListingSellerLocation")
+  custodianListings    Listing[] @relation("ListingCustodianLocation")
+  pickupListings       Listing[] @relation("ListingPickupLocation")
+  exportOriginListings Listing[] @relation("ListingExportOriginLocation")
+  destinationListings  Listing[] @relation("ListingDestinationLocation")
+
   @@index([countryCode])
   @@map("location")
 }
@@ -766,6 +806,7 @@ model MarketNode {
 
   primaryMarket Market?              @relation(fields: [primaryMarketId], references: [id])
   operators     MarketNodeOperator[]
+  listings      Listing[]
 
   @@index([primaryMarketId])
   @@map("market_node")

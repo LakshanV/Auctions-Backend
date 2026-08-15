@@ -26,7 +26,7 @@ phase. Code overrides stale docs.
 | **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS |
 | **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS |
 | E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS |
-| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | pending |
+| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS |
 | **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | pending |
 | E5     | Currency / FX / display currency (binding vs informational)                                                                                              | pending |
 | E6     | Transaction Routing engine + two-layer Terms                                                                                                             | pending |
@@ -95,3 +95,16 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   owner-gated/Addendum-A defaults hold (draft / DISCOVERY / capabilities-off) + unique constraints.
   Gates green (build 7/7, typecheck 13/13, domain 96 + api 24 tests, lint 0 errors, format clean).
   See `SINGHA_EVOLUTION_PHASE_E2_REPORT.md`. Next: **E3** (Universal Listing evolution).
+- **E2 review (PASS + hardened)** — adversarial review of the E2 diff returned PASS with one low
+  finding (D3/D4 example-tested but not structurally enforced). Fixed: a zod `superRefine` on the
+  sale-method schema (offer ⟹ not auto-bind; isAuction ⟺ auction) + all-rows integrity tests
+  (D4 across every row, D3 1:1 + reverse uniqueness + coverage, negative tests). No future edit
+  can silently reintroduce sealed-offer auto-award.
+- **E3 (PASS)** — Universal Listing expand step (additive, consumers untouched): new nullable
+  `Listing` columns — `sale_method_code` (+ migration backfill from the enum, + dual-write on
+  create), Decimal quantity/unit + pricing basis + unit price, six structured-location role FKs,
+  and operator/origin-node attribution (Addendum A). Additive migration
+  (`20260815100000_...`, 14 ADD COLUMN + backfill + 8 FK, zero DROP/RENAME); contracts
+  (`listing-domains`); domain `saleMethodCodeForLegacyEnum`; real-Postgres integration test.
+  Gates green (build 7/7, typecheck 13/13, domain 97 + contracts 25 tests, lint 0, format clean).
+  See `SINGHA_EVOLUTION_PHASE_E3_REPORT.md`. Next: **E4 — Commercial Offer Engine V2**.

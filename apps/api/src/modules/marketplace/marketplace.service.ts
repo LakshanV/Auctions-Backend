@@ -7,7 +7,7 @@ import {
   type UpdateListingContentInput,
   newId,
 } from '@singha/contracts';
-import { assertListingTransition } from '@singha/domain';
+import { assertListingTransition, saleMethodCodeForLegacyEnum } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
@@ -33,6 +33,10 @@ export class MarketplaceService {
           id,
           assetId: input.assetId,
           saleMethod: input.saleMethod,
+          // Dual-write the configurable sale-method code alongside the enum (Evolution E3,
+          // DECISIONS D3) so new rows match the migration backfill; the enum stays authoritative
+          // until a later phase switches consumers over.
+          saleMethodCode: saleMethodCodeForLegacyEnum(input.saleMethod),
           publicRef: input.publicRef,
           title: input.title,
           status: 'draft',

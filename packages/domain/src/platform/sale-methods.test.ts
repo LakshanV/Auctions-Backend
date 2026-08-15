@@ -5,6 +5,7 @@ import {
   bindsAutomatically,
   isAuctionMethod,
   saleMethodByCode,
+  saleMethodCodeForLegacyEnum,
   saleMethodForLegacyEnum,
   saleMethodsInFamily,
 } from './sale-methods';
@@ -63,5 +64,13 @@ describe('sale-method taxonomy (Evolution E2)', () => {
     expect(saleMethodByCode('NOPE')).toBeUndefined();
     expect(bindsAutomatically('NOPE')).toBe(false);
     expect(isAuctionMethod('NOPE')).toBe(false);
+  });
+
+  it('maps each legacy enum value to its code for dual-write, with a safe fallback (E3)', () => {
+    for (const value of saleMethodValues) {
+      // Codes equal the enum values for legacy methods, so the backfill and dual-write agree.
+      expect(saleMethodCodeForLegacyEnum(value)).toBe(value);
+    }
+    expect(saleMethodCodeForLegacyEnum('SOMETHING_ELSE')).toBe('SOMETHING_ELSE');
   });
 });

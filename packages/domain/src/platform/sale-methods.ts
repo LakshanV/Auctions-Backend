@@ -57,3 +57,12 @@ export function bindsAutomatically(code: string): boolean {
 
 /** The legacy `SaleMethod` enum values, each guaranteed a 1:1 active definition (D3). */
 export const LEGACY_SALE_METHODS = saleMethodValues;
+
+/**
+ * The configurable sale-method code for a legacy `SaleMethod` enum value — used to dual-write
+ * `listing.sale_method_code` on new listings (E3) so it matches the migration backfill. Falls
+ * back to the enum value itself (codes equal the enum values for legacy methods).
+ */
+export function saleMethodCodeForLegacyEnum(enumValue: string): string {
+  return saleMethodForLegacyEnum(enumValue)?.code ?? enumValue;
+}

@@ -38,7 +38,7 @@ phase. Code overrides stale docs.
 | E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | ✅ PASS |
 | E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | ✅ PASS |
 | E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | ✅ PASS |
-| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
+| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | ✅ PASS |
 
 Each phase: implement → test → self-review (15-point, pack `13`) → correct → retest →
 `SINGHA_EVOLUTION_PHASE_<N>_REPORT.md` with verdict PASS / PASS_WITH_OWNER_ACTIONS / BLOCKED.
@@ -371,3 +371,14 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   green (build 7/7, typecheck 13/13, domain 202, api 54, contracts 25, config 35, database 29 passed
   plus 11 DB-gated skipped, lint 0 errors, format clean). See `SINGHA_EVOLUTION_PHASE_E14_REPORT.md`.
   Next: **E15** (Controlled pilot and FINAL GO/NO-GO).
+- **E15 (PASS) — PROGRAM COMPLETE (E0–E15)** — Controlled pilot and final go/no-go. Documentation
+  only. `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md` records the verdict: controlled internal pilot **GO
+  (conditional)** — every phase E0–E14 is PASS, additive, flag-gated (default OFF) and CI-green;
+  public binding launch is **NO-GO until owner gates O1–O8 clear** and the pre-launch checklist plus
+  owner sign-off complete. It maps every product/offer/routing/UX acceptance criterion (pack doc 16)
+  to its phase and proving E2E, gives the staged flag-enablement pilot plan (each step with its smoke
+  test and flag-disable rollback; full chain `pnpm run test:acceptance`), and lists the pre-public-GO
+  checklist. Gates unchanged from E14 and green (build 7/7, typecheck 13/13, domain 202, api 54,
+  contracts 25, config 35, database 29 passed, lint 0 errors, format clean). The Singha Platform
+  Evolution program is complete; the remaining gate to public launch is the owner-action reviews
+  (O1–O8) and the controlled pilot. See `SINGHA_EVOLUTION_PHASE_E15_REPORT.md`.

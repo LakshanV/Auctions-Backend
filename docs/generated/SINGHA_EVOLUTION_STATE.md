@@ -37,7 +37,7 @@ phase. Code overrides stale docs.
 | E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | ✅ PASS |
 | E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | ✅ PASS |
 | E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | ✅ PASS |
-| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
+| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | ✅ PASS |
 | E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
 
 Each phase: implement → test → self-review (15-point, pack `13`) → correct → retest →
@@ -359,3 +359,15 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   25, config 14 tests, lint 0 errors, format clean). Binding node origination stays owner-gated (O1/O4).
   See `SINGHA_EVOLUTION_PHASE_E13_REPORT.md`. Next: **E14** (Hardening / compatibility /
   legacy-retirement decisions).
+- **E14 (PASS)** — Hardening / compatibility / legacy-retirement. No runtime change: two automated
+  compatibility guards now enforce the evolution invariants permanently in CI, plus a decisions doc.
+  `database/src/evolution-migrations.guard.test.ts` (29 checks) scans every evolution migration and
+  fails on DROP/RENAME/TRUNCATE/ALTER COLUMN, asserting each is additive (rule 10 — "existing tables
+  untouched" is now a test). `packages/config/src/evolution-flags.guard.test.ts` (21 checks) asserts
+  every evolution flag defaults OFF (ship-dark). `SINGHA_EVOLUTION_HARDENING.md` records the rollback
+  posture (disable-flag then forward-fix; additive migrations never down-migrated), the
+  legacy-retirement register (superseded V1 assumptions vs. explicitly preserved — nothing dropped or
+  renamed), the consolidated security/confidentiality posture, and the deployment checklist. Gates
+  green (build 7/7, typecheck 13/13, domain 202, api 54, contracts 25, config 35, database 29 passed
+  plus 11 DB-gated skipped, lint 0 errors, format clean). See `SINGHA_EVOLUTION_PHASE_E14_REPORT.md`.
+  Next: **E15** (Controlled pilot and FINAL GO/NO-GO).

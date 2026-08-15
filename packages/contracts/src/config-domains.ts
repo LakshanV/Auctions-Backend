@@ -14,25 +14,45 @@ import { saleMethodValues } from './commands';
 export const saleMethodFamilies = ['auction', 'offer', 'fixed', 'eoi', 'procurement'] as const;
 export type SaleMethodFamily = (typeof saleMethodFamilies)[number];
 
-export const saleMethodDefinitionSchema = z.object({
-  code: z.string().min(1),
-  label: z.string().min(1),
-  family: z.enum(saleMethodFamilies),
-  /** True only for genuine auction mechanics (Timed/Live/Premier). */
-  isAuction: z.boolean(),
-  /**
-   * Whether accepting/winning under this method creates a binding sale automatically.
-   * MUST be false for every offer/sealed method (DECISIONS D4 — no silent auto-award;
-   * a sealed offer's highest proposal never binds without explicit manual selection).
-   */
-  bindsAutomatically: z.boolean(),
-  /** Whether enabling this method needs operator/jurisdiction eligibility (DECISIONS D7). */
-  requiresEligibility: z.boolean(),
-  /** Maps to the legacy `SaleMethod` enum value during migration, else null. */
-  legacyEnum: z.enum(saleMethodValues).nullable(),
-  active: z.boolean(),
-  sortOrder: z.number().int(),
-});
+export const saleMethodDefinitionSchema = z
+  .object({
+    code: z.string().min(1),
+    label: z.string().min(1),
+    family: z.enum(saleMethodFamilies),
+    /** True only for genuine auction mechanics (Timed/Live/Premier). */
+    isAuction: z.boolean(),
+    /**
+     * Whether accepting/winning under this method creates a binding sale automatically.
+     * MUST be false for every offer/sealed method (DECISIONS D4 — no silent auto-award;
+     * a sealed offer's highest proposal never binds without explicit manual selection).
+     */
+    bindsAutomatically: z.boolean(),
+    /** Whether enabling this method needs operator/jurisdiction eligibility (DECISIONS D7). */
+    requiresEligibility: z.boolean(),
+    /** Maps to the legacy `SaleMethod` enum value during migration, else null. */
+    legacyEnum: z.enum(saleMethodValues).nullable(),
+    active: z.boolean(),
+    sortOrder: z.number().int(),
+  })
+  // Structural guards so a future edit can't silently break the non-negotiables:
+  //  - D4: an offer/sealed method must never auto-bind (no silent auto-award of the highest).
+  //  - consistency: `isAuction` is true iff the method is in the `auction` family.
+  .superRefine((m, ctx) => {
+    if (m.family === 'offer' && m.bindsAutomatically) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['bindsAutomatically'],
+        message: `offer method "${m.code}" must not bind automatically (DECISIONS D4)`,
+      });
+    }
+    if (m.isAuction !== (m.family === 'auction')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['isAuction'],
+        message: `sale method "${m.code}": isAuction must equal (family === 'auction')`,
+      });
+    }
+  });
 export type SaleMethodDefinitionSpec = z.infer<typeof saleMethodDefinitionSchema>;
 
 /** The canonical sale-method taxonomy. The six legacy enum values are active; the

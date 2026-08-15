@@ -12,3 +12,5 @@ database/prisma/migrations
 # Canonical AI development pack — kept verbatim as split from the source pack.
 CLAUDE.md
 docs/*.md
+# Vendored Singha Evolution pack (reference; owner-edited verbatim, e.g. Addendum A).
+docs/singha-evolution/

@@ -31,6 +31,14 @@ export interface FeatureFlags {
   engagementV3: boolean;
   dashboardV3Beta: boolean;
   liveV3: boolean;
+
+  // Singha Evolution config foundations (E2). Default OFF; these gate the new
+  // config-domain surfaces (Operator/Market/Node, structured Location, quantity
+  // units, configurable sale-method taxonomy) until each is fully wired.
+  multiOperator: boolean;
+  structuredLocations: boolean;
+  quantityUnits: boolean;
+  saleMethodConfig: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

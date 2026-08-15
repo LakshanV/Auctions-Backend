@@ -82,6 +82,12 @@ export const envSchema = z.object({
   FEATURE_V3_DASHBOARD_BETA: boolFromEnv.default(false),
   FEATURE_V3_LIVE: boolFromEnv.default(false),
 
+  // Singha Evolution config foundations (E2). All default OFF.
+  FEATURE_MULTI_OPERATOR: boolFromEnv.default(false),
+  FEATURE_STRUCTURED_LOCATIONS: boolFromEnv.default(false),
+  FEATURE_QUANTITY_UNITS: boolFromEnv.default(false),
+  FEATURE_SALE_METHOD_CONFIG: boolFromEnv.default(false),
+
   STORAGE_ENDPOINT: z.string().default(''),
   STORAGE_BUCKET: z.string().default(''),
   STORAGE_ACCESS_KEY: z.string().default(''),

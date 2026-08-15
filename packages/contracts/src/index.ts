@@ -4,5 +4,6 @@ export * from './api';
 export * from './rbac';
 export * from './categories';
 export * from './commands';
+export * from './config-domains';
 export * from './discovery';
 export * from './engagement';

@@ -1,4 +1,4 @@
-import { newId } from '@singha/contracts';
+import { newId, SALE_METHOD_DEFINITIONS, UNIT_DEFINITIONS } from '@singha/contracts';
 import { disconnectPrisma, getPrisma } from '../src/client';
 
 /**
@@ -31,7 +31,32 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     description: 'Social auto-publish (off until enabled)',
   },
   { key: 'WHATSAPP_BID_INTENT', enabled: false, description: 'WhatsApp bid-intent flow' },
+  // Singha Evolution (E2) — config foundations. All OFF until their surfaces land.
+  {
+    key: 'MULTI_OPERATOR',
+    enabled: false,
+    description: 'Operator/Market/Node config (Evolution E2)',
+  },
+  {
+    key: 'STRUCTURED_LOCATIONS',
+    enabled: false,
+    description: 'First-class structured Location (Evolution E2/E3)',
+  },
+  {
+    key: 'QUANTITY_UNITS',
+    enabled: false,
+    description: 'Quantity + unit engine (Evolution E2/E3)',
+  },
+  {
+    key: 'SALE_METHOD_CONFIG',
+    enabled: false,
+    description: 'Configurable sale-method taxonomy (Evolution E2/E3)',
+  },
 ];
+
+// Sale-method + unit taxonomies are the canonical, versioned constants from
+// @singha/contracts (SALE_METHOD_DEFINITIONS / UNIT_DEFINITIONS) so seed, domain
+// logic and contracts never drift (Evolution E2, DECISIONS D3/D4; pack doc 13).
 
 const CONFIG: { key: string; value: string; approvalRequired: boolean }[] = [
   { key: 'buyer_premium_pct', value: '0', approvalRequired: true },
@@ -63,7 +88,41 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(`Seeded ${FLAGS.length} feature flags and ${CONFIG.length} business-config rows.`);
+  for (const m of SALE_METHOD_DEFINITIONS) {
+    await prisma.saleMethodDefinition.upsert({
+      where: { code: m.code },
+      update: {
+        label: m.label,
+        family: m.family,
+        isAuction: m.isAuction,
+        bindsAutomatically: m.bindsAutomatically,
+        requiresEligibility: m.requiresEligibility,
+        legacyEnum: m.legacyEnum,
+        active: m.active,
+        sortOrder: m.sortOrder,
+      },
+      create: { id: newId(), ...m },
+    });
+  }
+
+  for (const u of UNIT_DEFINITIONS) {
+    await prisma.unitDefinition.upsert({
+      where: { code: u.code },
+      update: {
+        label: u.label,
+        plural: u.plural,
+        kind: u.kind,
+        active: u.active,
+        sortOrder: u.sortOrder,
+      },
+      create: { id: newId(), ...u },
+    });
+  }
+
+  console.log(
+    `Seeded ${FLAGS.length} feature flags, ${CONFIG.length} business-config rows, ` +
+      `${SALE_METHOD_DEFINITIONS.length} sale methods and ${UNIT_DEFINITIONS.length} units.`,
+  );
 }
 
 main()

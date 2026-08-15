@@ -21,24 +21,24 @@ phase. Code overrides stale docs.
 
 ## Phase tracker
 
-| Phase | Scope | Status |
-|---|---|---|
-| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding | ✅ PASS |
-| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit | ✅ PASS |
-| E2 | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition` | pending |
-| E3 | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas | pending |
-| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION) | pending |
-| E5 | Currency / FX / display currency (binding vs informational) | pending |
-| E6 | Transaction Routing engine + two-layer Terms | pending |
-| E7 | Logistics / Ports / Incoterms | pending |
-| E8 | Fees / Tax / Rules engine + Payment orchestration (regulated routes) | pending |
-| E9 | Procurement / Wanted / RFQ / Reverse Tender (two-sided market) | pending |
-| E10 | Supply Programmes + perishable-goods metadata | pending |
-| E11 | Singha ID extensions + unified Dashboard + Admin Control Centre | pending |
-| E12 | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence) | pending |
-| E13 | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
-| E14 | Hardening / compatibility / legacy-retirement decisions | pending |
-| E15 | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md` | pending |
+| Phase  | Scope                                                                                                                                                    | Status     |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS    |
+| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS    |
+| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ◧ E2a PASS |
+| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | pending    |
+| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | pending    |
+| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | pending    |
+| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | pending    |
+| E7     | Logistics / Ports / Incoterms                                                                                                                            | pending    |
+| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | pending    |
+| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending    |
+| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending    |
+| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending    |
+| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending    |
+| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending    |
+| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending    |
+| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending    |
 
 Each phase: implement → test → self-review (15-point, pack `13`) → correct → retest →
 `SINGHA_EVOLUTION_PHASE_<N>_REPORT.md` with verdict PASS / PASS_WITH_OWNER_ACTIONS / BLOCKED.
@@ -51,22 +51,23 @@ Never PASS only because code builds.
 These are owner-only per pack `16`; Claude ships config as `DRAFT/UNVERIFIED` and returns
 `MANUAL_REVIEW_REQUIRED` for binding paths that depend on them. None blocks E0–E5 build work.
 
-| # | Needed decision / credential | Blocks |
-|---|---|---|
-| O1 | Legal entity names + which operator contracts in each market (SL/AU/IN) | E6 terms binding, invoices |
-| O2 | Auction licensing eligibility per market (where auctions are legally permitted) | E-auction eligibility enablement |
-| O3 | Tax/VAT/GST conclusions per jurisdiction/method | E8 tax rule *values* (engine is buildable now) |
-| O4 | Regulated payment/settlement providers + credentials per operator | E8 real settlement, `OPERATOR_PAYMENTS` |
-| O5 | FX provider + credentials | E5 live FX (fake/adapter buildable now) |
-| O6 | Logistics provider(s) + credentials; port master data | E7 live quotes (structure buildable now) |
-| O7 | KYC/licence requirements per activity/market | E11 verification gating *values* |
-| O8 | Final public rollout approval; DNS/hosting; Hostinger move | E15 GO |
+| #   | Needed decision / credential                                                    | Blocks                                         |
+| --- | ------------------------------------------------------------------------------- | ---------------------------------------------- |
+| O1  | Legal entity names + which operator contracts in each market (SL/AU/IN)         | E6 terms binding, invoices                     |
+| O2  | Auction licensing eligibility per market (where auctions are legally permitted) | E-auction eligibility enablement               |
+| O3  | Tax/VAT/GST conclusions per jurisdiction/method                                 | E8 tax rule _values_ (engine is buildable now) |
+| O4  | Regulated payment/settlement providers + credentials per operator               | E8 real settlement, `OPERATOR_PAYMENTS`        |
+| O5  | FX provider + credentials                                                       | E5 live FX (fake/adapter buildable now)        |
+| O6  | Logistics provider(s) + credentials; port master data                           | E7 live quotes (structure buildable now)       |
+| O7  | KYC/licence requirements per activity/market                                    | E11 verification gating _values_               |
+| O8  | Final public rollout approval; DNS/hosting; Hostinger move                      | E15 GO                                         |
 
 Until each is confirmed, the corresponding capability stays flag-off and non-binding.
 
 ---
 
 ## Change log
+
 - **E0 (PASS)** — pack read in full; vendored to `docs/singha-evolution/` in both repos;
   baseline SHAs recorded; `DECISIONS` + this `STATE` created. Gap analysis
   (`SINGHA_EVOLUTION_CURRENT_TO_TARGET.md`) authored from a real code audit of both repos.
@@ -76,3 +77,13 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   `neutralIaV1` with its own `?evo=on` preview channel + 3 editorial routes; language glossary +
   build-enforced guard test; hydration verified clean. See
   `SINGHA_EVOLUTION_PHASE_E1_REPORT.md` (authored in the frontend repo). Next: **E2**.
+- **E2 increment 1 (E2a, PASS)** — additive backend config foundations: 8 config-only tables +
+  4 enums (`unit_definition`, `sale_method_definition`, `market`, `operator`, `operator_market`,
+  `location`, `market_node`, `market_node_operator`) via an additive-only migration; canonical
+  sale-method (17) + unit (19) taxonomies in `@singha/contracts` consumed by the seed; pure
+  `@singha/domain` sale-method logic enforcing D3 (legacy enum 1:1) + D4 (offers never auto-bind)
+  with 6 tests; runtime flags `multiOperator`/`structuredLocations`/`quantityUnits`/
+  `saleMethodConfig` (default OFF). Owner-gated Operator/Node config ships `draft`. All new tables
+  are central config (Addendum A — no per-country ledgers). Gates green (build/typecheck/lint/
+  format/96 domain tests). See `SINGHA_EVOLUTION_PHASE_E2_REPORT.md`. Remaining E2 (increment 2):
+  flag-gated HTTP read surfaces + Operator/Node admin + real-Postgres integration test.

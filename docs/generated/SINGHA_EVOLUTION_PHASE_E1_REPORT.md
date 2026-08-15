@@ -5,6 +5,7 @@ the geography-neutral navigation ships behind a default-OFF preview flag so noth
 is exposed. Baseline FE `1172592` → this phase.
 
 ## Scope delivered
+
 **A. Brand & language (un-gated — visible in production).** Customer-facing copy moved from
 "Singha Auctions / Sri Lanka / auction-as-the-whole-product" to **Singha**, geography-neutral,
 multi-method (assets **and** commodities; offers, buy now, tenders, auctions). Touched:
@@ -26,6 +27,7 @@ phrase — Global Marketplace, Singha Global, Auction Account/Shipping, Worldwid
 in customer-facing source.
 
 ## Self-review (pack 13)
+
 - **Hydration:** the flag is client-only (cookie), so the nav swap first produced a hydration
   mismatch under `?evo=on`. Fixed with a mount gate in `Header` (server + first client render
   agree; production keeps the default nav with no flash) — verified **0** hydration/pageerror
@@ -40,6 +42,7 @@ in customer-facing source.
 - **Secrets:** none.
 
 ## Limitations / follow-ups
+
 - Neutral IA is preview-only until the commerce it points at matures (Exchange/Wanted through
   E4/E9); Dashboard/Live/Events remain reachable via account menu, home and Exchange surfaces.
 - Legal entity naming on invoices/terms stays owner-gated (register O1), surfaced in E6.
@@ -47,6 +50,7 @@ in customer-facing source.
   onto `SaleMethodDefinition` is E2/E3 work.
 
 ## Next
+
 **E2 — config foundations:** `Operator`, `Market/Jurisdiction`, `Location` (roles),
 `UnitDefinition`, `SaleMethodDefinition`, and the `MarketNode` concept (Addendum A). Additive,
 flag-off, backend-led.

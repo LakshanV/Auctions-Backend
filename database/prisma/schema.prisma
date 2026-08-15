@@ -129,19 +129,19 @@ model Customer {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  externalIdentities   ExternalIdentity[]
-  organizationMembers  OrganizationMember[]
-  ownedAssets          Asset[]
-  memberships          Membership[]
-  accessGrants         MembershipAccessGrant[]
-  securityInstruments  SecurityInstrument[]
-  creditFacilities     CreditFacility[]
-  creditReservations   CreditReservation[]
-  performanceEvents    PerformanceEvent[]
-  performanceSnapshots PerformanceSnapshot[]
-  memberFlags          MemberFlag[]
-  discoveryEvents      DiscoveryEvent[]
-  buyerTwin            BuyerTwinProjection?
+  externalIdentities     ExternalIdentity[]
+  organizationMembers    OrganizationMember[]
+  ownedAssets            Asset[]
+  memberships            Membership[]
+  accessGrants           MembershipAccessGrant[]
+  securityInstruments    SecurityInstrument[]
+  creditFacilities       CreditFacility[]
+  creditReservations     CreditReservation[]
+  performanceEvents      PerformanceEvent[]
+  performanceSnapshots   PerformanceSnapshot[]
+  memberFlags            MemberFlag[]
+  discoveryEvents        DiscoveryEvent[]
+  buyerTwin              BuyerTwinProjection?
   notificationPreference NotificationPreference?
   notificationDeliveries NotificationDelivery[]
 
@@ -587,6 +587,201 @@ model BusinessConfig {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("business_config")
+}
+
+// ---------------------------------------------------------------------------
+// Singha Evolution — configuration foundations (E2). ADDITIVE, config-only:
+// these are lookup/config tables resolved at request time, NOT per-country
+// ledgers (Addendum A — one authoritative datastore for binding records).
+// Owner/legal-gated config (Operator/MarketNode legal identity) ships `draft`
+// and is treated as MANUAL_REVIEW_REQUIRED for binding paths until verified
+// (DECISIONS D7). Gated by MULTI_OPERATOR / STRUCTURED_LOCATIONS /
+// QUANTITY_UNITS / SALE_METHOD_CONFIG, all default OFF.
+// ---------------------------------------------------------------------------
+
+enum UnitKind {
+  count
+  weight
+  volume
+  area
+  length
+}
+
+enum OperatorType {
+  company
+  subsidiary
+  sister_company
+  trading_business
+  custodian
+  agent
+  representative
+  marketplace_operator
+  local_service_company
+}
+
+// Verification state for owner/legal-gated config (DECISIONS D7). Binding methods
+// that depend on `draft`/`unverified` config must return MANUAL_REVIEW_REQUIRED.
+enum ConfigVerification {
+  draft
+  unverified
+  verified
+}
+
+enum MarketNodeMode {
+  DISCOVERY
+  LOCAL_COMMERCE
+}
+
+// Configurable unit of measure for the quantity engine (DECISIONS D5). Conversion
+// factors are added in E3 when quantity arithmetic lands (Decimal there).
+model UnitDefinition {
+  id        String   @id
+  code      String   @unique
+  label     String
+  plural    String?
+  kind      UnitKind
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("unit_definition")
+}
+
+// Configurable sale-method taxonomy (DECISIONS D3): the app moves off the fixed
+// `SaleMethod` enum onto these codes additively. `legacyEnum` maps a definition to
+// the existing enum value during migration. `bindsAutomatically` is FALSE for every
+// sealed/offer method (DECISIONS D4 — no silent auto-award of the highest proposal).
+model SaleMethodDefinition {
+  id                  String      @id
+  code                String      @unique
+  label               String
+  family              String
+  isAuction           Boolean     @default(false) @map("is_auction")
+  bindsAutomatically  Boolean     @default(false) @map("binds_automatically")
+  requiresEligibility Boolean     @default(false) @map("requires_eligibility")
+  legacyEnum          SaleMethod? @map("legacy_enum")
+  active              Boolean     @default(true)
+  sortOrder           Int         @default(0) @map("sort_order")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  @@map("sale_method_definition")
+}
+
+// A market / jurisdiction (e.g. Sri Lanka, Australia, India). Config only.
+model Market {
+  id              String   @id
+  code            String   @unique
+  name            String
+  countryCode     String   @map("country_code")
+  defaultCurrency String   @map("default_currency")
+  defaultLanguage String?  @map("default_language")
+  defaultTimezone String?  @map("default_timezone")
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  operators OperatorMarket[]
+  nodes     MarketNode[]
+
+  @@map("market")
+}
+
+// A configurable legal/routing operator (pack 07) — NOT equal to Organization.
+// Legal identity is owner-gated (register O1): `verification` stays `draft` until
+// confirmed; binding paths requiring an unverified operator return MANUAL_REVIEW_REQUIRED.
+model Operator {
+  id           String             @id
+  code         String             @unique
+  publicName   String             @map("public_name")
+  legalName    String?            @map("legal_name")
+  type         OperatorType       @default(marketplace_operator)
+  verification ConfigVerification @default(draft)
+  disclosure   String?
+  active       Boolean            @default(true)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  markets OperatorMarket[]
+  nodes   MarketNodeOperator[]
+
+  @@map("operator")
+}
+
+model OperatorMarket {
+  id         String @id
+  operatorId String @map("operator_id")
+  marketId   String @map("market_id")
+
+  operator Operator @relation(fields: [operatorId], references: [id])
+  market   Market   @relation(fields: [marketId], references: [id])
+
+  @@unique([operatorId, marketId])
+  @@index([marketId])
+  @@map("operator_market")
+}
+
+// First-class structured location (pack 15). The role wiring on Listing
+// (asset/seller/custodian/pickup/export-origin/destination) lands additively in E3;
+// coordinates use Decimal there. Central table — never a per-node copy (Addendum A).
+model Location {
+  id          String   @id
+  countryCode String   @map("country_code")
+  region      String?
+  city        String?
+  locality    String?
+  addressLine String?  @map("address_line")
+  postalCode  String?  @map("postal_code")
+  visibility  String   @default("public")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([countryCode])
+  @@map("location")
+}
+
+// Satellite Market Node (Addendum A): a configurable presentation + origination +
+// local-routing surface, NOT a system of record. In BOTH modes all binding state
+// uses the central canonical records; a node is data resolved at request time.
+// Local-commerce capabilities are gated + owner-verified before any binding use.
+model MarketNode {
+  id                     String             @id
+  code                   String             @unique
+  name                   String
+  mode                   MarketNodeMode     @default(DISCOVERY)
+  primaryMarketId        String?            @map("primary_market_id")
+  defaultCurrency        String?            @map("default_currency")
+  defaultLanguage        String?            @map("default_language")
+  defaultLocationCountry String?            @map("default_location_country")
+  canOriginateListings   Boolean            @default(false) @map("can_originate_listings")
+  canTakeOffers          Boolean            @default(false) @map("can_take_offers")
+  canRunAuctions         Boolean            @default(false) @map("can_run_auctions")
+  canAcceptPayments      Boolean            @default(false) @map("can_accept_payments")
+  verification           ConfigVerification @default(draft)
+  active                 Boolean            @default(true)
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  primaryMarket Market?              @relation(fields: [primaryMarketId], references: [id])
+  operators     MarketNodeOperator[]
+
+  @@index([primaryMarketId])
+  @@map("market_node")
+}
+
+model MarketNodeOperator {
+  id         String @id
+  nodeId     String @map("node_id")
+  operatorId String @map("operator_id")
+
+  node     MarketNode @relation(fields: [nodeId], references: [id])
+  operator Operator   @relation(fields: [operatorId], references: [id])
+
+  @@unique([nodeId, operatorId])
+  @@index([operatorId])
+  @@map("market_node_operator")
 }
 
 // ---------------------------------------------------------------------------
@@ -1499,15 +1694,15 @@ model RecommendationImpression {
 // consent/quiet-hours/frequency POLICY lives in the domain engine; this is durable
 // customer preference state only. Money-free, PII-light.
 model NotificationPreference {
-  customerId           String   @id @map("customer_id")
-  channels             Json     @default("{\"in_app\":true,\"push\":false,\"email\":true,\"sms\":false,\"whatsapp\":false}")
-  engagementOptIn      Boolean  @default(false) @map("engagement_opt_in")
-  quietStartMinute     Int?     @map("quiet_start_minute")
-  quietEndMinute       Int?     @map("quiet_end_minute")
-  timezoneOffsetMinutes Int     @default(0) @map("timezone_offset_minutes")
-  frequencyCapPerDay   Int      @default(8) @map("frequency_cap_per_day")
-  mutedCategories      String[] @default([]) @map("muted_categories")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  customerId            String   @id @map("customer_id")
+  channels              Json     @default("{\"in_app\":true,\"push\":false,\"email\":true,\"sms\":false,\"whatsapp\":false}")
+  engagementOptIn       Boolean  @default(false) @map("engagement_opt_in")
+  quietStartMinute      Int?     @map("quiet_start_minute")
+  quietEndMinute        Int?     @map("quiet_end_minute")
+  timezoneOffsetMinutes Int      @default(0) @map("timezone_offset_minutes")
+  frequencyCapPerDay    Int      @default(8) @map("frequency_cap_per_day")
+  mutedCategories       String[] @default([]) @map("muted_categories")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -1518,21 +1713,21 @@ model NotificationPreference {
 // a send (per channel), a suppression (with reason), a transient failure, or a
 // dead-lettered give-up. Never mutated destructively — status transitions append.
 model NotificationDelivery {
-  id               String   @id
-  customerId       String   @map("customer_id")
-  eventType        String   @map("event_type")
-  classification   String
-  channel          String?
-  status           String
-  suppressedReason String?  @map("suppressed_reason")
-  dedupeKey        String   @map("dedupe_key")
-  title            String
-  body             String
-  providerMessageId String? @map("provider_message_id")
-  attempts         Int      @default(0)
-  lastError        String?  @map("last_error")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                String   @id
+  customerId        String   @map("customer_id")
+  eventType         String   @map("event_type")
+  classification    String
+  channel           String?
+  status            String
+  suppressedReason  String?  @map("suppressed_reason")
+  dedupeKey         String   @map("dedupe_key")
+  title             String
+  body              String
+  providerMessageId String?  @map("provider_message_id")
+  attempts          Int      @default(0)
+  lastError         String?  @map("last_error")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 

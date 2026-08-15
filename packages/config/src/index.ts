@@ -116,6 +116,10 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       engagementV3: env.FEATURE_V3_ENGAGEMENT,
       dashboardV3Beta: env.FEATURE_V3_DASHBOARD_BETA,
       liveV3: env.FEATURE_V3_LIVE,
+      multiOperator: env.FEATURE_MULTI_OPERATOR,
+      structuredLocations: env.FEATURE_STRUCTURED_LOCATIONS,
+      quantityUnits: env.FEATURE_QUANTITY_UNITS,
+      saleMethodConfig: env.FEATURE_SALE_METHOD_CONFIG,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },

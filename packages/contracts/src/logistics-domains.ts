@@ -72,6 +72,29 @@ export const quoteRequestSchema = z.object({
 });
 export type QuoteRequest = z.infer<typeof quoteRequestSchema>;
 
+/** Shipment lifecycle states (Evolution E7b). */
+export const shipmentStatuses = [
+  'BOOKED',
+  'PICKED_UP',
+  'IN_TRANSIT',
+  'ARRIVED',
+  'DELIVERED',
+  'CANCELLED',
+] as const;
+export type ShipmentStatus = (typeof shipmentStatuses)[number];
+
+/**
+ * Append a shipment event. If `status` is set it advances the shipment (validated against the
+ * lifecycle); otherwise it is an informational note on the timeline.
+ */
+export const shipmentEventSchema = z.object({
+  type: z.string().min(1),
+  status: z.enum(shipmentStatuses).optional(),
+  note: z.string().optional(),
+  locationCode: z.string().optional(),
+});
+export type ShipmentEventInput = z.infer<typeof shipmentEventSchema>;
+
 /** A resolved quote — deterministic, with persisted assumptions + expiry (never a booking). */
 export const quoteResultSchema = z.object({
   id: z.string(),

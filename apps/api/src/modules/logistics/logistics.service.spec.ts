@@ -4,6 +4,7 @@ import { LogisticsService } from './logistics.service';
 import { FakeLogisticsProvider } from './logistics.provider';
 import { type AppConfigService } from '../../config/config.service';
 import { type PrismaService } from '../../prisma/prisma.service';
+import { type UnitOfWork } from '../../shared/persistence/unit-of-work';
 
 type Features = Record<string, boolean>;
 
@@ -18,7 +19,8 @@ function makeService(features: Features, nodes: Record<string, unknown> = {}): L
     },
   } as unknown as PrismaService;
   const config = { get: () => ({ features }) } as unknown as AppConfigService;
-  return new LogisticsService(prisma, config, new FakeLogisticsProvider());
+  const uow = {} as unknown as UnitOfWork;
+  return new LogisticsService(prisma, config, uow, new FakeLogisticsProvider());
 }
 
 const LK = { code: 'LKCMB', countryCode: 'LK' };

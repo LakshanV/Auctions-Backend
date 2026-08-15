@@ -182,6 +182,92 @@ async function main() {
       row?.provider === 'fake' && Number(row?.amountMinor) === 12_500,
       'quote persisted with provider + exact minor-unit amount',
     );
+
+    // ---- E7b: book a quote → booking + shipment (a quote is not a booking) ----
+    const staff = await token(['auction_staff']);
+    const booked = await post(`/logistics/quotes/${quoteId}/book`, { token: buyer });
+    check(
+      booked.status === 201 &&
+        booked.json?.status === 'BOOKED' &&
+        typeof booked.json?.shipmentId === 'string' &&
+        booked.json?.amountMinor === 12_500,
+      'booking an accepted quote creates a booking + shipment (snapshots the 12,500 amount)',
+    );
+    const shipmentId = booked.json?.shipmentId;
+
+    // Re-booking the same quote is refused (a quote books at most once).
+    const rebook = await post(`/logistics/quotes/${quoteId}/book`, { token: buyer });
+    check(rebook.status === 409, `re-booking a quote -> 409 (got ${rebook.status})`);
+
+    // Shipment starts BOOKED with one timeline event.
+    const ship0 = await get(`/logistics/shipments/${shipmentId}`, { token: buyer });
+    check(
+      ship0.json?.status === 'BOOKED' && (ship0.json?.events ?? []).length === 1,
+      'shipment starts BOOKED with a single timeline event',
+    );
+
+    // A buyer cannot advance a shipment (operator/carrier action).
+    const buyerAdvance = await post(`/logistics/shipments/${shipmentId}/events`, {
+      token: buyer,
+      body: { type: 'PICKUP', status: 'PICKED_UP' },
+    });
+    check(
+      buyerAdvance.status === 403,
+      `buyer cannot advance a shipment -> 403 (got ${buyerAdvance.status})`,
+    );
+
+    // Operator advances BOOKED → PICKED_UP → IN_TRANSIT.
+    const pick = await post(`/logistics/shipments/${shipmentId}/events`, {
+      token: staff,
+      body: { type: 'PICKUP', status: 'PICKED_UP', locationCode: 'LKCMB' },
+    });
+    check(pick.json?.status === 'PICKED_UP', 'operator advances shipment to PICKED_UP');
+    const transit = await post(`/logistics/shipments/${shipmentId}/events`, {
+      token: staff,
+      body: { type: 'DEPART', status: 'IN_TRANSIT' },
+    });
+    check(transit.json?.status === 'IN_TRANSIT', 'operator advances shipment to IN_TRANSIT');
+
+    // An illegal skip (IN_TRANSIT → DELIVERED) is refused by the lifecycle.
+    const skip = await post(`/logistics/shipments/${shipmentId}/events`, {
+      token: staff,
+      body: { type: 'DELIVER', status: 'DELIVERED' },
+    });
+    check(
+      skip.status === 409,
+      `illegal shipment skip IN_TRANSIT→DELIVERED -> 409 (got ${skip.status})`,
+    );
+
+    const shipN = await get(`/logistics/shipments/${shipmentId}`, { token: buyer });
+    check(
+      shipN.json?.status === 'IN_TRANSIT' &&
+        shipN.json?.events?.map((e) => e.status).join(',') === 'BOOKED,PICKED_UP,IN_TRANSIT',
+      'shipment timeline is append-only (BOOKED → PICKED_UP → IN_TRANSIT)',
+    );
+
+    // An expired quote cannot be booked.
+    const freshQuote = await post('/logistics/quotes', {
+      token: buyer,
+      body: {
+        originNodeCode: 'LKCMB',
+        destinationNodeCode: 'AUSYD',
+        transportMode: 'ROAD',
+        incoterm: 'EXW',
+        chargeableUnits: 5,
+        currency: 'USD',
+      },
+    });
+    await prisma.logisticsQuote.update({
+      where: { id: freshQuote.json.id },
+      data: { expiresAt: new Date('2020-01-01T00:00:00Z') },
+    });
+    const expiredBook = await post(`/logistics/quotes/${freshQuote.json.id}/book`, {
+      token: buyer,
+    });
+    check(
+      expiredBook.status === 409,
+      `booking an expired quote -> 409 (got ${expiredBook.status})`,
+    );
   } finally {
     await prisma.$disconnect();
     child.kill('SIGKILL');

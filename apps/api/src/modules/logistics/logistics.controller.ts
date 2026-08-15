@@ -1,7 +1,15 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { type QuoteRequest, Permission, quoteRequestSchema } from '@singha/contracts';
+import {
+  type QuoteRequest,
+  Permission,
+  type ShipmentEventInput,
+  quoteRequestSchema,
+  shipmentEventSchema,
+} from '@singha/contracts';
 import { LogisticsService } from './logistics.service';
+import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
+import { type Principal } from '../../shared/auth/principal';
 import { ZodBody } from '../../shared/validation/zod.pipe';
 
 /**
@@ -33,5 +41,27 @@ export class LogisticsController {
   @RequirePermissions(Permission.ExchangeParticipate)
   getQuote(@Param('id') id: string) {
     return this.logistics.getQuote(id);
+  }
+
+  @Post('quotes/:id/book')
+  @RequirePermissions(Permission.ExchangeParticipate)
+  book(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.logistics.bookQuote(principal, id);
+  }
+
+  @Get('shipments/:id')
+  @RequirePermissions(Permission.ExchangeParticipate)
+  getShipment(@Param('id') id: string) {
+    return this.logistics.getShipment(id);
+  }
+
+  @Post('shipments/:id/events')
+  @RequirePermissions(Permission.ExchangeOperate)
+  appendEvent(
+    @CurrentActor() principal: Principal,
+    @Param('id') id: string,
+    @Body(new ZodBody(shipmentEventSchema)) input: ShipmentEventInput,
+  ) {
+    return this.logistics.appendShipmentEvent(principal, id, input);
   }
 }

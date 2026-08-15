@@ -1991,6 +1991,62 @@ model LogisticsQuote {
   expiresAt           DateTime @map("expires_at")
   createdAt           DateTime @default(now()) @map("created_at")
 
+  booking LogisticsBooking?
+
   @@index([status, createdAt])
   @@map("logistics_quote")
+}
+
+// Logistics booking (Evolution E7b, pack doc 10). A booking references an accepted, still-fresh
+// quote and SNAPSHOTS its commercial terms (a quote is not a booking). One booking per quote.
+model LogisticsBooking {
+  id                  String   @id
+  quoteId             String   @unique @map("quote_id")
+  originNodeCode      String   @map("origin_node_code")
+  destinationNodeCode String   @map("destination_node_code")
+  transportMode       String   @map("transport_mode")
+  incoterm            String
+  freightArranger     String   @map("freight_arranger")
+  amountMinor         BigInt   @map("amount_minor")
+  currency            String   @default("LKR")
+  provider            String
+  bookedByCustomerId  String?  @map("booked_by_customer_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  quote    LogisticsQuote     @relation(fields: [quoteId], references: [id])
+  shipment LogisticsShipment?
+
+  @@map("logistics_booking")
+}
+
+// Logistics shipment (Evolution E7b, pack doc 10). Created from a booking; moves through an
+// append-only event timeline. `status` follows the domain shipment state machine.
+model LogisticsShipment {
+  id        String   @id
+  bookingId String   @unique @map("booking_id")
+  status    String   @default("BOOKED")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  booking LogisticsBooking         @relation(fields: [bookingId], references: [id])
+  events  LogisticsShipmentEvent[]
+
+  @@map("logistics_shipment")
+}
+
+// Append-only shipment event (Evolution E7b). `status` is set when the event advances the
+// shipment (validated against the lifecycle); otherwise it is an informational timeline note.
+model LogisticsShipmentEvent {
+  id           String   @id
+  shipmentId   String   @map("shipment_id")
+  type         String
+  status       String?
+  note         String?
+  locationCode String?  @map("location_code")
+  occurredAt   DateTime @default(now()) @map("occurred_at")
+
+  shipment LogisticsShipment @relation(fields: [shipmentId], references: [id])
+
+  @@index([shipmentId])
+  @@map("logistics_shipment_event")
 }

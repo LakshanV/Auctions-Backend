@@ -1,9 +1,17 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { INCOTERMS, type QuoteRequest, newId } from '@singha/contracts';
-import { resolveFreightArranger } from '@singha/domain';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { INCOTERMS, type QuoteRequest, type ShipmentEventInput, newId } from '@singha/contracts';
+import {
+  type ShipmentStatus,
+  assertShipmentTransition,
+  canBookQuote,
+  resolveFreightArranger,
+} from '@singha/domain';
 import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
+import { UnitOfWork } from '../../shared/persistence/unit-of-work';
+import { toActor } from '../../shared/auth/actor';
+import { type Principal } from '../../shared/auth/principal';
 import { LOGISTICS_PROVIDER, type LogisticsProvider } from './logistics.provider';
 
 /** Freight quotes are valid for 24h (config-tunable later). A quote is never a booking. */
@@ -21,6 +29,7 @@ export class LogisticsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
+    private readonly uow: UnitOfWork,
     @Inject(LOGISTICS_PROVIDER) private readonly provider: LogisticsProvider,
   ) {}
 
@@ -97,6 +106,139 @@ export class LogisticsService {
     const row = await this.prisma.logisticsQuote.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Quote not found');
     return this.view(row);
+  }
+
+  /**
+   * Book an accepted, still-fresh quote (E7b). Atomic under a quote row lock: a quote can be
+   * booked at most once (UNIQUE booking per quote + the lock), an expired or already-accepted
+   * quote is rejected, and the quote's terms are SNAPSHOTTED onto the booking (a quote is not a
+   * booking). Creates the booking, an initial shipment (BOOKED) and its first timeline event.
+   */
+  async bookQuote(principal: Principal, quoteId: string) {
+    this.requireFeature();
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      await ctx.tx.$queryRawUnsafe(
+        'SELECT id FROM logistics_quote WHERE id = $1 FOR UPDATE',
+        quoteId,
+      );
+      const quote = await ctx.tx.logisticsQuote.findUnique({ where: { id: quoteId } });
+      if (!quote) throw new NotFoundException('Quote not found');
+      if (!canBookQuote(quote.status, quote.expiresAt, new Date())) {
+        throw new ConflictException(
+          quote.status === 'ACCEPTED' ? 'Quote already booked' : 'Quote is not bookable (expired)',
+        );
+      }
+      const existing = await ctx.tx.logisticsBooking.findUnique({ where: { quoteId } });
+      if (existing) throw new ConflictException('Quote already booked');
+
+      const bookingId = newId();
+      const shipmentId = newId();
+      await ctx.tx.logisticsBooking.create({
+        data: {
+          id: bookingId,
+          quoteId,
+          originNodeCode: quote.originNodeCode,
+          destinationNodeCode: quote.destinationNodeCode,
+          transportMode: quote.transportMode,
+          incoterm: quote.incoterm,
+          freightArranger: quote.freightArranger,
+          amountMinor: quote.amountMinor,
+          currency: quote.currency,
+          provider: quote.provider,
+          bookedByCustomerId: principal.customerId ?? undefined,
+        },
+      });
+      await ctx.tx.logisticsQuote.update({ where: { id: quoteId }, data: { status: 'ACCEPTED' } });
+      await ctx.tx.logisticsShipment.create({
+        data: { id: shipmentId, bookingId, status: 'BOOKED' },
+      });
+      await ctx.tx.logisticsShipmentEvent.create({
+        data: {
+          id: newId(),
+          shipmentId,
+          type: 'BOOKED',
+          status: 'BOOKED',
+          note: 'Booking confirmed',
+        },
+      });
+      ctx.audit({
+        action: 'LOGISTICS_QUOTE_BOOKED',
+        targetType: 'LogisticsBooking',
+        targetId: bookingId,
+        after: { quoteId, shipmentId, amountMinor: Number(quote.amountMinor) },
+      });
+      return {
+        bookingId,
+        shipmentId,
+        quoteId,
+        status: 'BOOKED',
+        amountMinor: Number(quote.amountMinor),
+        currency: quote.currency,
+        freightArranger: quote.freightArranger,
+      };
+    });
+  }
+
+  /** A shipment + its append-only event timeline. */
+  async getShipment(id: string) {
+    this.requireFeature();
+    const shipment = await this.prisma.logisticsShipment.findUnique({
+      where: { id },
+      include: { events: { orderBy: { occurredAt: 'asc' } } },
+    });
+    if (!shipment) throw new NotFoundException('Shipment not found');
+    return {
+      id: shipment.id,
+      bookingId: shipment.bookingId,
+      status: shipment.status,
+      events: shipment.events.map((e) => ({
+        type: e.type,
+        status: e.status,
+        note: e.note,
+        locationCode: e.locationCode,
+        occurredAt: e.occurredAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
+   * Append an event to a shipment's timeline (E7b). When the event carries a `status` it advances
+   * the shipment, validated against the pure lifecycle state machine; otherwise it is a note.
+   */
+  async appendShipmentEvent(principal: Principal, shipmentId: string, input: ShipmentEventInput) {
+    this.requireFeature();
+    const shipment = await this.prisma.logisticsShipment.findUnique({ where: { id: shipmentId } });
+    if (!shipment) throw new NotFoundException('Shipment not found');
+    if (input.status) {
+      assertShipmentTransition(shipment.status as ShipmentStatus, input.status);
+    }
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      await ctx.tx.logisticsShipmentEvent.create({
+        data: {
+          id: newId(),
+          shipmentId,
+          type: input.type,
+          status: input.status,
+          note: input.note,
+          locationCode: input.locationCode,
+        },
+      });
+      const updated = input.status
+        ? await ctx.tx.logisticsShipment.update({
+            where: { id: shipmentId },
+            data: { status: input.status },
+          })
+        : shipment;
+      ctx.audit({
+        action: 'LOGISTICS_SHIPMENT_EVENT',
+        targetType: 'LogisticsShipment',
+        targetId: shipmentId,
+        after: { type: input.type, status: input.status ?? shipment.status },
+      });
+      return { shipmentId, status: updated.status, type: input.type };
+    });
   }
 
   private view(q: {

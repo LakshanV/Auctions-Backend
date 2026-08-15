@@ -78,6 +78,11 @@ export interface FeatureFlags {
   // EXTERNAL regulated providers only (no internal banking/escrow); a route that is
   // not owner-verified/licensed yields MANUAL_REVIEW_REQUIRED (owner O4).
   operatorPayments: boolean;
+
+  // Singha Evolution Procurement / two-sided market (E9). Default OFF; gates
+  // buyer-initiated RFQ / Request-Supply / reverse-tender requests + supplier
+  // proposals. A procurement award is buyer-explicit and never auto-awarded.
+  procurement: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

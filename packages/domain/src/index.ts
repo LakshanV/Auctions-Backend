@@ -10,6 +10,7 @@ export * from './modules/routing';
 export * from './modules/logistics';
 export * from './modules/fees';
 export * from './modules/payments';
+export * from './modules/procurement';
 export * from './modules/commerce';
 export * from './modules/audit';
 export * from './modules/member';

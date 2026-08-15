@@ -32,7 +32,7 @@ phase. Code overrides stale docs.
 | E6     | Transaction Routing engine + two-layer Terms                                                                                                             | ✅ PASS |
 | E7     | Logistics / Ports / Incoterms                                                                                                                            | ✅ PASS |
 | E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | ✅ PASS |
-| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending |
+| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | ✅ PASS |
 | E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending |
 | E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending |
 | E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
@@ -239,3 +239,23 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   green (build 7/7, typecheck 13/13, domain 158 + api 46 + contracts 25 + config 14 tests, lint 0
   errors, format clean). See `SINGHA_EVOLUTION_PHASE_E8_REPORT.md`. Next: **E9** (Procurement / RFQ
   / Reverse Tender).
+- **E9 (PASS)** — Procurement / Wanted / RFQ / Reverse Tender (the buyer-initiated two-sided market).
+  Contracts `procurement-domains` (`RFQ`/`REQUEST_SUPPLY`/`REVERSE_TENDER`, statuses; create request,
+  submit proposal reusing the E4 `offerProposalSchema`, award requiring an explicit
+  `selectedProposalId`). Pure `@singha/domain` `modules/procurement` (7 tests): `PROCUREMENT_TRANSITIONS`
+  - `assertProcurementTransition` (open→closed→awarded, closed can reopen, terminal awarded/cancelled);
+    `procurementParticipation` + `rankProcurementProposals` (cheapest-first **recommendation only**, exact
+    bigint compare, reusing E4 `comparableHeadlineMinor`); and `selectProcurementWinner`, which
+    **structurally requires** a closed window **and** an explicit buyer selection — the cheapest is never
+    auto-awarded (§09 / D4). Two additive tables (`procurement_request`, `procurement_proposal`) via
+    migration `20260815180000_...` (2 CREATE TABLE + indexes, zero DROP/RENAME; money `BigInt`, quantity
+    `Decimal(38,9)`). Flag-gated `procurement` module at `/api/v1/procurement` (`exchange:participate`):
+    buyer posts/closes/awards (ownership-enforced, non-owner 403), suppliers submit while open, owner-only
+    ranked proposal view; award marks winner `accepted` + losers `rejected` atomically via `UnitOfWork` +
+    audit. New flag `procurement` (default OFF) across `@singha/config` (3 files) + seed. Real-Postgres
+    E2E `scripts/e2e-procurement.mjs` (wired into `test:procurement` + acceptance chain + a CI step) proves
+    RFQ post, three proposals, award-before-close 409, non-owner close/view 403, cheapest-first ranking
+    (B,C,A), and the buyer awarding the **dearest (A) explicitly** — DB confirms request awarded→A, A
+    accepted, cheapest loser rejected. Gates green (build 7/7, typecheck 13/13, domain 165 + api 47 +
+    contracts 25 + config 14 tests, lint 0 errors, format clean). See
+    `SINGHA_EVOLUTION_PHASE_E9_REPORT.md`. Next: **E10** (Supply Programmes + perishable-goods metadata).

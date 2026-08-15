@@ -110,6 +110,9 @@ export const envSchema = z.object({
   FEATURE_OPERATOR_PAYMENTS: boolFromEnv.default(false),
   PAYMENT_WEBHOOK_SECRET: z.string().default(''),
 
+  // Singha Evolution Procurement / two-sided market (E9). Default OFF.
+  FEATURE_PROCUREMENT: boolFromEnv.default(false),
+
   // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
   // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
   FX_API_URL: z.string().default(''),

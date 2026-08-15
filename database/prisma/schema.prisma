@@ -2164,3 +2164,58 @@ model PaymentWebhookEvent {
   @@unique([provider, eventId])
   @@map("payment_webhook_event")
 }
+
+// Procurement request (Evolution E9, pack doc 09) — the buyer-initiated "I NEED SOMETHING TO BUY"
+// side: RFQ / Request-Supply / reverse-tender. Suppliers respond with proposals; the buyer awards
+// ONE explicitly (matching never auto-awards). `type`/`status` follow the domain taxonomy.
+model ProcurementRequest {
+  id                 String    @id
+  type               String
+  status             String    @default("open")
+  title              String
+  category           String?
+  specification      String?
+  quantity           Decimal?  @db.Decimal(38, 9)
+  quantityUnitCode   String?   @map("quantity_unit_code")
+  destinationCountry String?   @map("destination_country")
+  deliveryBy         DateTime? @map("delivery_by")
+  currency           String    @default("LKR")
+  paymentTerms       String?   @map("payment_terms")
+  operatorCode       String?   @map("operator_code")
+  buyerCustomerId    String?   @map("buyer_customer_id")
+  submissionCloseAt  DateTime? @map("submission_close_at")
+  awardedProposalId  String?   @map("awarded_proposal_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  proposals ProcurementProposal[]
+
+  @@index([status])
+  @@map("procurement_request")
+}
+
+// A supplier's proposal to a procurement request (Evolution E9). The commercial bundle mirrors an
+// E4 offer revision (total/unit price in minor units, quantity Decimal, Incoterm, delivery, payment,
+// validity). Append-only per supplier submission.
+model ProcurementProposal {
+  id                 String    @id
+  requestId          String    @map("request_id")
+  supplierCustomerId String?   @map("supplier_customer_id")
+  status             String    @default("open")
+  totalPriceMinor    BigInt?   @map("total_price_minor")
+  unitPriceMinor     BigInt?   @map("unit_price_minor")
+  currency           String    @default("LKR")
+  quantity           Decimal?  @db.Decimal(38, 9)
+  quantityUnitCode   String?   @map("quantity_unit_code")
+  incoterm           String?
+  deliveryDate       DateTime? @map("delivery_date")
+  paymentTerms       String?   @map("payment_terms")
+  validUntil         DateTime? @map("valid_until")
+  notes              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  request ProcurementRequest @relation(fields: [requestId], references: [id])
+
+  @@index([requestId])
+  @@map("procurement_proposal")
+}

@@ -12,5 +12,6 @@ export * from './routing-domains';
 export * from './logistics-domains';
 export * from './fees-domains';
 export * from './payments-domains';
+export * from './procurement-domains';
 export * from './discovery';
 export * from './engagement';

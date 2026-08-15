@@ -103,6 +103,12 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Regulated payment-route resolver + signed idempotent webhooks, O4 (Evolution E8)',
   },
+  // Singha Evolution (E9) — Procurement / two-sided market. OFF until surfaces land.
+  {
+    key: 'PROCUREMENT',
+    enabled: false,
+    description: 'Buyer-initiated RFQ / Request-Supply / reverse-tender + supplier proposals (E9)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

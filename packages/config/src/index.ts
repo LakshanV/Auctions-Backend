@@ -139,6 +139,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       logisticsQuotes: env.FEATURE_LOGISTICS_QUOTES,
       feesEngine: env.FEATURE_FEES_ENGINE,
       operatorPayments: env.FEATURE_OPERATOR_PAYMENTS,
+      procurement: env.FEATURE_PROCUREMENT,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },

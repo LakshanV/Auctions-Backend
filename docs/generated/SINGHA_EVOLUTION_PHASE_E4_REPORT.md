@@ -40,7 +40,7 @@ can't drift:
 
 - **Runtime flags** `commercialOffersV2` / `sealedOffers` (default **OFF**) across `@singha/config`
   (`feature-flags.ts` / `env.ts` / `index.ts`) + the DB `FeatureFlag` seed. `GET
-  /api/v1/feature-flags` surfaces them for the frontend.
+/api/v1/feature-flags` surfaces them for the frontend.
 - **`offers` NestJS module** (`/api/v1/commercial-offers`), flag-gated in the service and
   authorised on the server (`exchange:participate` = buyers submit/withdraw; `exchange:operate` =
   seller/operator counter/reject/reveal/accept/award):

@@ -66,6 +66,12 @@ jobs:
       - name: E2E (commercial offers — revisions, atomic accept, sealed D4)
         run: pnpm run test:offers
 
+      # Currency / FX (Evolution E5) — informational display conversion (never binding, D5),
+      # float-free exact math, and rate-snapshot persistence + cache reuse (Google adapter D12,
+      # fake in CI).
+      - name: E2E (currency / FX — display conversion, snapshot cache)
+        run: pnpm run test:fx
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

@@ -48,6 +48,13 @@ export interface FeatureFlags {
   // (DECISIONS D4).
   commercialOffersV2: boolean;
   sealedOffers: boolean;
+
+  // Singha Evolution Currency / FX (E5). Default OFF; gate the multi-currency
+  // surface (supported-currency list) and the informational display-currency
+  // conversion (`fxDisplay`). Display conversion never mutates the binding
+  // transaction currency (DECISIONS D5); the FX source is swappable (Google, D12).
+  multiCurrency: boolean;
+  fxDisplay: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

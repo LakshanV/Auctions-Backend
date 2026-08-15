@@ -92,6 +92,15 @@ export const envSchema = z.object({
   FEATURE_COMMERCIAL_OFFERS_V2: boolFromEnv.default(false),
   FEATURE_SEALED_OFFERS: boolFromEnv.default(false),
 
+  // Singha Evolution Currency / FX (E5). All default OFF.
+  FEATURE_MULTI_CURRENCY: boolFromEnv.default(false),
+  FEATURE_FX_DISPLAY: boolFromEnv.default(false),
+
+  // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
+  // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
+  FX_API_URL: z.string().default(''),
+  FX_API_KEY: z.string().default(''),
+
   STORAGE_ENDPOINT: z.string().default(''),
   STORAGE_BUCKET: z.string().default(''),
   STORAGE_ACCESS_KEY: z.string().default(''),

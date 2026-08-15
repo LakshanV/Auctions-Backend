@@ -1842,3 +1842,23 @@ model ProductEvent {
   @@index([customerId, createdAt])
   @@map("product_event")
 }
+
+// Immutable FX rate snapshot (Evolution E5, pack docs 09/10; DECISIONS D5 + D12). The record a
+// display conversion returns and a binding calculation (E6/E8) embeds — base/quote/rate/provider/
+// quotedAt/expiry/margin. `rate` is stored as its exact decimal string (quote units per 1 base
+// unit; never a float — the authoritative math parses it to a 10^9-scaled integer). Also serves
+// as the rate cache: a fresh row (now < expiresAt) is reused instead of re-quoting the provider.
+model FxRateSnapshot {
+  id        String   @id
+  base      String
+  quote     String
+  rate      String
+  provider  String
+  marginBps Int      @default(0) @map("margin_bps")
+  quotedAt  DateTime @map("quoted_at")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([base, quote, provider, quotedAt])
+  @@map("fx_rate_snapshot")
+}

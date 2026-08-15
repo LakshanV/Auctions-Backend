@@ -21,6 +21,14 @@ export interface ProviderConfig {
   live: ProviderStatus;
   youtube: ProviderStatus;
   payment: ProviderStatus;
+  fx: ProviderStatus;
+}
+
+/** FX provider config (server-only; the API key is NEVER placed in the client-facing view). */
+export interface FxProviderConfig {
+  apiUrl: string;
+  apiKey: string;
+  configured: boolean;
 }
 
 /** Fully-resolved, typed application configuration used by server processes. */
@@ -56,6 +64,7 @@ export interface AppConfig {
   features: FeatureFlags;
   providers: ProviderConfig;
   supabase: SupabaseConfig;
+  fx: FxProviderConfig;
 }
 
 const configured = (value: string): ProviderStatus => ({ configured: value.trim().length > 0 });
@@ -122,6 +131,8 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       saleMethodConfig: env.FEATURE_SALE_METHOD_CONFIG,
       commercialOffersV2: env.FEATURE_COMMERCIAL_OFFERS_V2,
       sealedOffers: env.FEATURE_SEALED_OFFERS,
+      multiCurrency: env.FEATURE_MULTI_CURRENCY,
+      fxDisplay: env.FEATURE_FX_DISPLAY,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },
@@ -134,6 +145,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       live: configured(env.LIVE_PROVIDER_KEY),
       youtube: configured(env.YOUTUBE_API_KEY),
       payment: configured(env.PAYMENT_PROVIDER_KEY),
+      fx: { configured: env.FX_API_URL.trim().length > 0 },
     },
     supabase: {
       url: env.SUPABASE_URL,
@@ -142,6 +154,11 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       publishableKey: env.SUPABASE_PUBLISHABLE_KEY,
       storageBucket: env.SUPABASE_STORAGE_BUCKET,
       configured: supabaseConfigured,
+    },
+    fx: {
+      apiUrl: env.FX_API_URL,
+      apiKey: env.FX_API_KEY,
+      configured: env.FX_API_URL.trim().length > 0,
     },
   };
 }

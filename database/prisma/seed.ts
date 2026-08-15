@@ -64,6 +64,17 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     description:
       'Confidential sealed offers: controlled reveal + explicit award, D4 (Evolution E4)',
   },
+  // Singha Evolution (E5) — Currency / FX. OFF until their surfaces land.
+  {
+    key: 'MULTI_CURRENCY',
+    enabled: false,
+    description: 'Multi-currency support + supported-currency list (Evolution E5)',
+  },
+  {
+    key: 'FX_DISPLAY',
+    enabled: false,
+    description: 'Informational display-currency conversion, non-binding, D5 (Evolution E5)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

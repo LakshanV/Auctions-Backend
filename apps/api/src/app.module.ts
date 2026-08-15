@@ -31,6 +31,7 @@ import { DevModule } from './modules/dev/dev.module';
 import { MemberModule } from './modules/member/member.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
+import { PlatformConfigModule } from './modules/platform-config/platform-config.module';
 import { PrincipalMiddleware } from './shared/auth/principal.middleware';
 
 /**
@@ -73,6 +74,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     MemberModule,
     DiscoveryModule,
     EngagementModule,
+    PlatformConfigModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: SecurityThrottlerGuard }],
 })

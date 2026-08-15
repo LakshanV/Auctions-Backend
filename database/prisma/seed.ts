@@ -81,6 +81,17 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Deterministic transaction routing engine + two-layer terms (Evolution E6)',
   },
+  // Singha Evolution (E7) — Logistics / Ports / Incoterms. OFF until surfaces land.
+  {
+    key: 'LOGISTICS',
+    enabled: false,
+    description: 'Logistics surface + deterministic instant freight estimates (Evolution E7)',
+  },
+  {
+    key: 'LOGISTICS_QUOTES',
+    enabled: false,
+    description: 'Live logistics provider quotes, owner O6 (Evolution E7)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

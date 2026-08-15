@@ -61,6 +61,12 @@ export interface FeatureFlags {
   // resolution, or MANUAL_REVIEW_REQUIRED) and the terms resolution surface. Binding
   // routes depend on owner-verified config (DECISIONS D7).
   transactionRouting: boolean;
+
+  // Singha Evolution Logistics / Ports / Incoterms (E7). Default OFF. `logistics`
+  // gates the logistics surface + deterministic instant estimates (fake provider);
+  // `logisticsQuotes` additionally gates live provider quotes (owner register O6).
+  logistics: boolean;
+  logisticsQuotes: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

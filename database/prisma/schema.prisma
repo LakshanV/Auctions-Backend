@@ -1940,3 +1940,57 @@ model RoutingDecision {
   @@index([status, createdAt])
   @@map("routing_decision")
 }
+
+// Logistics node (Evolution E7, pack doc 10) — a neutral port / airport / inland depot / pickup
+// site. `kind` is PORT | AIRPORT | INLAND_DEPOT | PICKUP_SITE. Owner-configurable master data.
+model LogisticsNode {
+  id          String   @id
+  code        String   @unique
+  name        String
+  kind        String
+  countryCode String?  @map("country_code")
+  city        String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([kind, active])
+  @@map("logistics_node")
+}
+
+// Logistics provider (Evolution E7, pack doc 10). Live quotes await owner register O6; until then
+// a credential-free fake supplies deterministic estimates. `modes` lists supported transport modes.
+model LogisticsProvider {
+  id           String             @id
+  code         String             @unique
+  name         String
+  modes        Json?
+  active       Boolean            @default(true)
+  verification ConfigVerification @default(draft)
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  @@map("logistics_provider")
+}
+
+// Logistics quote (Evolution E7, pack doc 10). A quote is NOT a booking: it persists its
+// assumptions, provider and expiry, and money stays in integer minor units (D5). A booking (E7b)
+// references an accepted, still-fresh quote.
+model LogisticsQuote {
+  id                  String   @id
+  originNodeCode      String   @map("origin_node_code")
+  destinationNodeCode String   @map("destination_node_code")
+  transportMode       String   @map("transport_mode")
+  incoterm            String
+  freightArranger     String   @map("freight_arranger")
+  chargeableUnits     Int      @map("chargeable_units")
+  amountMinor         BigInt   @map("amount_minor")
+  currency            String   @default("LKR")
+  provider            String
+  assumptions         Json?
+  status              String   @default("QUOTED")
+  quotedAt            DateTime @map("quoted_at")
+  expiresAt           DateTime @map("expires_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("logistics_quote")
+}

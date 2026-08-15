@@ -21,24 +21,24 @@ phase. Code overrides stale docs.
 
 ## Phase tracker
 
-| Phase  | Scope                                                                                                                                                    | Status  |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS |
-| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS |
-| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS |
-| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS |
-| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ✅ PASS |
-| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | ✅ PASS |
-| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | ✅ PASS |
-| E7     | Logistics / Ports / Incoterms                                                                                                                            | pending |
-| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | pending |
-| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending |
-| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending |
-| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending |
-| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
-| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
-| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
-| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
+| Phase  | Scope                                                                                                                                                    | Status     |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **E0** | Audit + baseline + `CURRENT_TO_TARGET` gap analysis + vendored pack + evidence scaffolding                                                               | ✅ PASS    |
+| **E1** | Brand / product language + geography-neutral frontend IA (Explore/Exchange/Sell/Wanted/Services); language glossary audit                                | ✅ PASS    |
+| E2     | Config foundations: `Operator`, `Market/Jurisdiction`, `Location` (roles), `UnitDefinition`, `SaleMethodDefinition`                                      | ✅ PASS    |
+| E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS    |
+| **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ✅ PASS    |
+| E5     | Currency / FX / display currency (binding vs informational)                                                                                              | ✅ PASS    |
+| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | ✅ PASS    |
+| E7     | Logistics / Ports / Incoterms                                                                                                                            | ◧ E7a PASS |
+| E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | pending    |
+| E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending    |
+| E10    | Supply Programmes + perishable-goods metadata                                                                                                            | pending    |
+| E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | pending    |
+| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending    |
+| E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending    |
+| E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending    |
+| E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending    |
 
 Each phase: implement → test → self-review (15-point, pack `13`) → correct → retest →
 `SINGHA_EVOLUTION_PHASE_<N>_REPORT.md` with verdict PASS / PASS_WITH_OWNER_ACTIONS / BLOCKED.
@@ -174,3 +174,20 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   (build 7/7, typecheck 13/13, domain 136 + api 35 + contracts 25 + config 14 tests, lint 0 errors,
   format clean). Binding routes await owner O1 (verified operator/terms). See
   `SINGHA_EVOLUTION_PHASE_E6_REPORT.md`. Next: **E7** (Logistics / Ports / Incoterms).
+- **E7 increment 1 (E7a, PASS)** — Logistics config + Incoterms + the deterministic quote engine.
+  Contracts `logistics-domains` (INCOTERMS EXW/FCA/FOB/CFR/CIF/DAP, node kinds, transport modes,
+  freight arrangers, quote schemas). Pure `@singha/domain` `modules/logistics` (7 tests):
+  `resolveFreightArranger` (Incoterm-driven), `estimateFreightMinor` (base × units × zone in exact
+  integer minor-unit bigint, half-up, float-free — D5/D6), `isQuoteFresh`/`canBookQuote`
+  (quote ≠ booking). Swappable `LogisticsProvider` adapter + credential-free `FakeLogisticsProvider`
+  (live quotes await O6). Three additive tables (`logistics_node`, `logistics_provider`,
+  `logistics_quote`) via migration `20260815140000_...` (3 CREATE TABLE + indexes, zero
+  DROP/RENAME). Flag-gated `logistics` module at `/api/v1/logistics` (incoterms/nodes reads +
+  quote request/read); a quote persists assumptions/provider/expiry. New flags
+  `logistics`/`logisticsQuotes` (default OFF) across `@singha/config` (3 files) + seed.
+  Real-Postgres E2E `scripts/e2e-logistics.mjs` (wired into `test:logistics` + acceptance chain +
+  a CI step) proves the reads, the exact estimate (SEA_FCL LK→AU ×10 = 12,500; AIR CIF ×2 =
+  17,500), Incoterm-driven freight responsibility, quote-not-a-booking expiry, and anonymous
+  denial. Gates green (build 7/7, typecheck 13/13, domain 143 + api 39 + contracts 25 + config 14
+  tests, lint 0 errors, format clean). Remaining E7 (E7b): Booking + Shipment + ShipmentEvent
+  lifecycle. See `SINGHA_EVOLUTION_PHASE_E7_REPORT.md`.

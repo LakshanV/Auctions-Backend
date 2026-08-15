@@ -283,3 +283,22 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   green (build 7/7, typecheck 13/13, domain 175 + api 49 + contracts 25 + config 14 tests, lint 0
   errors, format clean). See `SINGHA_EVOLUTION_PHASE_E10_REPORT.md`. Next: **E11** (Singha ID + unified
   Dashboard + Admin Control Centre).
+- **E11 increment 1 (E11a, PASS)** — Singha ID: one geography-neutral member profile +
+  **capability-based verification**. Contracts `singha-id-domains` (capabilities, statuses; update
+  profile, request/decide capability). Pure `@singha/domain` `modules/singha-id` (6 tests):
+  `activityRequiresCapability` (browse-class open, gated activities map to a capability),
+  `effectiveCapabilityStatus` (a verified grant past its expiry reads expired), `evaluateCapability`
+  (open → permitted; gated → needs a verified, unexpired grant, else VERIFICATION_REQUIRED/PENDING/
+  EXPIRED/REJECTED), `assertCapabilityDecidable` (only pending can be decided). Two additive tables
+  (`customer_profile` 1:1, `customer_capability`) via migration `20260815200000_...` (2 CREATE TABLE
+  - indexes + unique, zero DROP/RENAME — the customer table is never mutated). Flag-gated `singha-id`
+    module at `/api/v1/singha-id` (profile get/update + capability request/list/evaluate for the member;
+    operator-only `capabilities/decide` = `exchange:operate`). New flag `singhaId` (default OFF) across
+    `@singha/config` (3 files) + seed. Real-Postgres E2E `scripts/e2e-singha-id.mjs` (wired into
+    `test:singha-id` + acceptance chain + a CI step) proves the profile round-trip, open browse, gated
+    place_bid (VERIFICATION_REQUIRED → pending → operator-verified → permitted), member decide 403,
+    non-pending decide 409, expired grant no longer permits, unknown decide 404. Gates green (build 7/7,
+    typecheck 13/13, domain 181 + api 50 + contracts 25 + config 14 tests, lint 0 errors, format clean).
+    The verification _evidence bar_ per activity/market is owner-gated (O7). Remaining E11 (E11b): unified
+    Dashboard + operator-scoped Control Centre read surfaces. See `SINGHA_EVOLUTION_PHASE_E11_REPORT.md`
+    (authored at E11 completion).

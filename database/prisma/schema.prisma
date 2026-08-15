@@ -2285,3 +2285,40 @@ model PerishableMetadata {
   @@unique([subjectType, subjectId])
   @@map("perishable_metadata")
 }
+
+// Singha ID profile (Evolution E11, pack doc 11 §Singha ID). One geography-neutral profile extends
+// the existing Customer 1:1 (additive — the customer table is never mutated). Preferences only; no
+// country-specific accounts.
+model CustomerProfile {
+  id                String   @id
+  customerId        String   @unique @map("customer_id")
+  countryResidency  String?  @map("country_residency")
+  displayCurrency   String?  @map("display_currency")
+  language          String?
+  timezone          String?
+  companyRoles      Json?    @map("company_roles")
+  notificationPrefs Json?    @map("notification_prefs")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("customer_profile")
+}
+
+// Capability-based verification grant (Evolution E11). A member requests a capability; an operator
+// decides it (O7 governs the evidence bar). A gated activity requires a verified, unexpired grant.
+model CustomerCapability {
+  id                 String    @id
+  customerId         String    @map("customer_id")
+  capability         String
+  status             String    @default("pending")
+  evidenceRef        String?   @map("evidence_ref")
+  decidedByCustomerId String?  @map("decided_by_customer_id")
+  verifiedAt         DateTime? @map("verified_at")
+  expiresAt          DateTime? @map("expires_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@unique([customerId, capability])
+  @@index([customerId])
+  @@map("customer_capability")
+}

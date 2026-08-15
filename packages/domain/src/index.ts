@@ -12,6 +12,7 @@ export * from './modules/fees';
 export * from './modules/payments';
 export * from './modules/procurement';
 export * from './modules/supply';
+export * from './modules/singha-id';
 export * from './modules/commerce';
 export * from './modules/audit';
 export * from './modules/member';

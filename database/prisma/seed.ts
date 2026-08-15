@@ -120,6 +120,12 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Agricultural/food specialist metadata + automatic-expiry predicate (E10)',
   },
+  // Singha Evolution (E11) — Singha ID profile + capability-based verification. OFF until wired.
+  {
+    key: 'SINGHA_ID',
+    enabled: false,
+    description: 'Geography-neutral member profile + capability-based verification (E11)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

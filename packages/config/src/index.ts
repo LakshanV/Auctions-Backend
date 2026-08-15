@@ -142,6 +142,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       procurement: env.FEATURE_PROCUREMENT,
       supplyProgrammes: env.FEATURE_SUPPLY_PROGRAMMES,
       perishableGoods: env.FEATURE_PERISHABLE_GOODS,
+      singhaId: env.FEATURE_SINGHA_ID,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },

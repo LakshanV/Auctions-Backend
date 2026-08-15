@@ -110,6 +110,13 @@ jobs:
       - name: E2E (supply — recurring programmes, advisory matching, perishable expiry)
         run: pnpm run test:supply
 
+      # Singha ID (Evolution E11, pack doc 11 §Singha ID) — one geography-neutral member profile +
+      # capability-based verification: browse-class activities are open, a gated activity requires a
+      # verified/unexpired capability an operator grants (O7 governs the evidence bar), non-pending
+      # decisions 409, expired grants stop permitting.
+      - name: E2E (singha-id — profile + capability-based verification)
+        run: pnpm run test:singha-id
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

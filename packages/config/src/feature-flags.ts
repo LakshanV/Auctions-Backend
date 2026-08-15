@@ -90,6 +90,11 @@ export interface FeatureFlags {
   // gates the agricultural/food specialist metadata + automatic-expiry predicate.
   supplyProgrammes: boolean;
   perishableGoods: boolean;
+
+  // Singha Evolution Singha ID (E11). Default OFF; gates the geography-neutral member profile +
+  // capability-based verification surface. A gated activity requires a verified, unexpired capability
+  // grant; the evidence bar per activity/market is owner-gated (register O7).
+  singhaId: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

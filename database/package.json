@@ -25,6 +25,7 @@
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "seed:evolution": "tsx prisma/seed-evolution.ts",
     "clean": "rimraf dist"
   },
   "prisma": {

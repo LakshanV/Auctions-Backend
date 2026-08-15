@@ -75,6 +75,12 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Informational display-currency conversion, non-binding, D5 (Evolution E5)',
   },
+  // Singha Evolution (E6) — Transaction Routing + two-layer Terms. OFF until surfaces land.
+  {
+    key: 'TRANSACTION_ROUTING',
+    enabled: false,
+    description: 'Deterministic transaction routing engine + two-layer terms (Evolution E6)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

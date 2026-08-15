@@ -55,6 +55,12 @@ export interface FeatureFlags {
   // transaction currency (DECISIONS D5); the FX source is swappable (Google, D12).
   multiCurrency: boolean;
   fxDisplay: boolean;
+
+  // Singha Evolution Transaction Routing + two-layer Terms (E6). Default OFF; gates
+  // the deterministic routing engine (operator/payment-route/terms/verification
+  // resolution, or MANUAL_REVIEW_REQUIRED) and the terms resolution surface. Binding
+  // routes depend on owner-verified config (DECISIONS D7).
+  transactionRouting: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

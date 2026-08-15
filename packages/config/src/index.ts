@@ -133,6 +133,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       sealedOffers: env.FEATURE_SEALED_OFFERS,
       multiCurrency: env.FEATURE_MULTI_CURRENCY,
       fxDisplay: env.FEATURE_FX_DISPLAY,
+      transactionRouting: env.FEATURE_TRANSACTION_ROUTING,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },

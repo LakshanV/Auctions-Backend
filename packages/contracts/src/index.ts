@@ -8,5 +8,6 @@ export * from './config-domains';
 export * from './listing-domains';
 export * from './offer-domains';
 export * from './fx-domains';
+export * from './routing-domains';
 export * from './discovery';
 export * from './engagement';

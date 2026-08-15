@@ -96,6 +96,9 @@ export const envSchema = z.object({
   FEATURE_MULTI_CURRENCY: boolFromEnv.default(false),
   FEATURE_FX_DISPLAY: boolFromEnv.default(false),
 
+  // Singha Evolution Transaction Routing + Terms (E6). Default OFF.
+  FEATURE_TRANSACTION_ROUTING: boolFromEnv.default(false),
+
   // FX rate provider (Evolution E5 / DECISIONS D12 — Google currency). Empty = not configured,
   // so the deterministic fake is used and no binding path depends on a live rate. Server-only.
   FX_API_URL: z.string().default(''),

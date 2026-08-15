@@ -72,6 +72,13 @@ jobs:
       - name: E2E (currency / FX — display conversion, snapshot cache)
         run: pnpm run test:fx
 
+      # Transaction Routing + two-layer Terms (Evolution E6) — the deterministic, explainable,
+      # versioned resolution of operator/payment-route/terms/verification (or
+      # MANUAL_REVIEW_REQUIRED), most-specific-rule wins, unverified config is a non-binding
+      # preview (D7), and decision snapshots persist.
+      - name: E2E (transaction routing — deterministic resolution, D7 gating)
+        run: pnpm run test:routing
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

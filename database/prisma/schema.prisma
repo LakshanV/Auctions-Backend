@@ -1862,3 +1862,81 @@ model FxRateSnapshot {
   @@index([base, quote, provider, quotedAt])
   @@map("fx_rate_snapshot")
 }
+
+// Transaction Routing rule (Evolution E6, pack doc 07). Deterministic, versioned config the
+// Routing Engine matches over — NO country if/else forest. NULL condition = wildcard. An
+// unverified rule resolves only as a non-binding PREVIEW (DECISIONS D7). Owner-gated config.
+model RoutingRule {
+  id                      String             @id
+  code                    String
+  version                 Int                @default(1)
+  priority                Int                @default(0)
+  active                  Boolean            @default(true)
+  // Match conditions (null = wildcard).
+  saleMethodCode          String?            @map("sale_method_code")
+  category                String?
+  marketCode              String?            @map("market_code")
+  jurisdiction            String?
+  operatorCode            String?            @map("operator_code")
+  originNodeCode          String?            @map("origin_node_code")
+  destinationCountry      String?            @map("destination_country")
+  // Resolution outputs.
+  transactionOperatorCode String?            @map("transaction_operator_code")
+  paymentRouteCode        String?            @map("payment_route_code")
+  termsCode               String?            @map("terms_code")
+  disclosure              String?
+  requiresKyc             Boolean            @default(false) @map("requires_kyc")
+  requiresLicence         Boolean            @default(false) @map("requires_licence")
+  verification            ConfigVerification @default(draft)
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  @@unique([code, version])
+  @@index([active])
+  @@map("routing_rule")
+}
+
+// Two-layer Terms document (Evolution E6, pack doc 07). `layer` is PLATFORM or TRANSACTION.
+// Transaction terms resolve by operator/jurisdiction/category/method (null = wildcard). The legal
+// wording itself stays owner/legal-reviewed content referenced by `bodyRef` — Claude never invents
+// law (DECISIONS D7); an unverified document binds only after owner verification.
+model TermsDocument {
+  id             String             @id
+  code           String
+  version        Int                @default(1)
+  layer          String
+  operatorCode   String?            @map("operator_code")
+  jurisdiction   String?
+  category       String?
+  saleMethodCode String?            @map("sale_method_code")
+  bodyRef        String?            @map("body_ref")
+  verification   ConfigVerification @default(draft)
+  active         Boolean            @default(true)
+  effectiveFrom  DateTime?          @map("effective_from")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  @@unique([code, version])
+  @@index([layer, active])
+  @@map("terms_document")
+}
+
+// Persisted routing decision snapshot (Evolution E6; Addendum A — routing input + persistence).
+// An explainable audit record of what the engine resolved for a given transaction shape, incl. the
+// matched rule + version and the RESOLVED / MANUAL_REVIEW_REQUIRED outcome. Append-only.
+model RoutingDecision {
+  id                      String   @id
+  status                  String
+  saleMethodCode          String?  @map("sale_method_code")
+  matchedRuleCode         String?  @map("matched_rule_code")
+  matchedRuleVersion      Int?     @map("matched_rule_version")
+  transactionOperatorCode String?  @map("transaction_operator_code")
+  paymentRouteCode        String?  @map("payment_route_code")
+  termsCode               String?  @map("terms_code")
+  reason                  String?
+  input                   Json?
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("routing_decision")
+}

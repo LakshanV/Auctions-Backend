@@ -17,6 +17,7 @@ import { EoiModule } from './modules/eoi/eoi.module';
 import { ExchangeModule } from './modules/exchange/exchange.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { FxModule } from './modules/fx/fx.module';
+import { RoutingModule } from './modules/routing/routing.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
 import { AiModule } from './modules/ai/ai.module';
@@ -62,6 +63,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     ExchangeModule,
     OffersModule,
     FxModule,
+    RoutingModule,
     CommerceModule,
     ConnectModule,
     AiModule,

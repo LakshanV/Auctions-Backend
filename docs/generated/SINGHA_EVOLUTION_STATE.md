@@ -29,7 +29,7 @@ phase. Code overrides stale docs.
 | E3     | Universal Listing evolution (quantity/unit, structured location, sale-method code, operator link) + category schemas                                     | ✅ PASS |
 | **E4** | **Commercial Offer Engine V2 — highest functional priority** (Offer + immutable OfferRevision, sealed = MANUAL_SELECTION)                                | ✅ PASS |
 | E5     | Currency / FX / display currency (binding vs informational)                                                                                              | ✅ PASS |
-| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | pending |
+| E6     | Transaction Routing engine + two-layer Terms                                                                                                             | ✅ PASS |
 | E7     | Logistics / Ports / Incoterms                                                                                                                            | pending |
 | E8     | Fees / Tax / Rules engine + Payment orchestration (regulated routes)                                                                                     | pending |
 | E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | pending |
@@ -157,3 +157,20 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   api 32 + contracts 25 + config 14 tests, lint 0 errors, format clean). No binding path uses a
   live rate yet. See `SINGHA_EVOLUTION_PHASE_E5_REPORT.md`. Next: **E6** (Transaction Routing +
   two-layer Terms).
+- **E6 (PASS)** — Transaction Routing engine + two-layer Terms. Contracts `routing-domains`
+  (routing input/resolution, terms resolution). Pure `@singha/domain` `modules/routing` (11 tests):
+  `resolveRouting` — table-driven, specificity-scored, deterministic total ordering
+  (specificity→priority→code→version), explainable `trace`, **no country if/else forest**; an
+  unverified matched rule is a non-binding preview and a verified rule holds for unmet KYC/licence
+  (D7); no match → MANUAL_REVIEW_REQUIRED. `resolveTerms` — platform (highest version) + most-
+  specific transaction terms; RESOLVED only when both owner-`verified`. Three additive tables
+  (`routing_rule`, `terms_document`, `routing_decision`) via migration `20260815130000_...`
+  (3 CREATE TABLE + indexes, zero DROP/RENAME); decisions persist as an explainable audit snapshot
+  (Addendum A). Flag-gated `routing` module at `/api/v1/routing` (`resolve`/`terms`,
+  `exchange:operate`) — preview + audit only, no binding. New flag `transactionRouting` (default
+  OFF) across `@singha/config` (3 files) + seed. Real-Postgres E2E `scripts/e2e-routing.mjs`
+  (wired into `test:routing` + acceptance chain + a CI step) proves no-match/verified/most-specific/
+  draft-preview/KYC-hold resolution, two-layer terms, and server-side authorisation. Gates green
+  (build 7/7, typecheck 13/13, domain 136 + api 35 + contracts 25 + config 14 tests, lint 0 errors,
+  format clean). Binding routes await owner O1 (verified operator/terms). See
+  `SINGHA_EVOLUTION_PHASE_E6_REPORT.md`. Next: **E7** (Logistics / Ports / Incoterms).

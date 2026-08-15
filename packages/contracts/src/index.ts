@@ -15,5 +15,6 @@ export * from './payments-domains';
 export * from './procurement-domains';
 export * from './supply-domains';
 export * from './singha-id-domains';
+export * from './insight-domains';
 export * from './discovery';
 export * from './engagement';

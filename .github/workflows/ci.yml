@@ -124,6 +124,13 @@ jobs:
       - name: E2E (dashboard — member command centre + operator control centre)
         run: pnpm run test:dashboard
 
+      # Singha Intelligence expansion (Evolution E12, pack doc 12 §AI) — DETERMINISTIC matching,
+      # offer/pricing comparison and fraud/risk scoring. Every output is a derived, non-binding
+      # recommendation (no LLM binds; deterministic code owns money/eligibility/state) and is
+      # persisted as an append-only IntelligenceReport.
+      - name: E2E (insight — deterministic matching / pricing / offer / risk intelligence)
+        run: pnpm run test:insight
+
       # Member identity, credit, security & performance engine (Revision 05):
       # Client ID uniqueness, configurable 5% rule, verified/expired security,
       # concurrency-safe credit reservation (no over-commit), temporary onsite

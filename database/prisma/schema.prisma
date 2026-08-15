@@ -2322,3 +2322,18 @@ model CustomerCapability {
   @@index([customerId])
   @@map("customer_capability")
 }
+
+// Intelligence report (Evolution E12, pack doc 12 §AI). An append-only, derived, NON-BINDING snapshot
+// of a deterministic intelligence computation (match / offer comparison / price comparables / risk).
+// Derived records never overwrite facts (rule 3); nothing here binds a transaction (rule 11 / doc 12).
+model IntelligenceReport {
+  id                   String   @id
+  kind                 String
+  requestedByCustomerId String? @map("requested_by_customer_id")
+  subjectRef           String?  @map("subject_ref")
+  result               Json
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([kind])
+  @@map("intelligence_report")
+}

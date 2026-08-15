@@ -35,7 +35,7 @@ phase. Code overrides stale docs.
 | E9     | Procurement / Wanted / RFQ / Reverse Tender (two-sided market)                                                                                           | ✅ PASS |
 | E10    | Supply Programmes + perishable-goods metadata                                                                                                            | ✅ PASS |
 | E11    | Singha ID extensions + unified Dashboard + Admin Control Centre                                                                                          | ✅ PASS |
-| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | pending |
+| E12    | Discovery / AI / Intelligence expansion (matching, offer/pricing/logistics intelligence)                                                                 | ✅ PASS |
 | E13    | **Satellite Market Node** (Discovery + Local Commerce modes, central canonical ledger) + SEO/local-site integration (canonical, hreflang, landing pages) | pending |
 | E14    | Hardening / compatibility / legacy-retirement decisions                                                                                                  | pending |
 | E15    | Controlled pilot + `SINGHA_EVOLUTION_FINAL_GO_NO_GO.md`                                                                                                  | pending |
@@ -316,3 +316,23 @@ Until each is confirmed, the corresponding capability stays flag-off and non-bin
   pending-verification alerts, and operatorCode scoping. Gates green (build 7/7, typecheck 13/13,
   domain 186, api 52, contracts 25, config 14 tests, lint 0 errors, format clean). See
   `SINGHA_EVOLUTION_PHASE_E11_REPORT.md`. Next: **E12** (Discovery / AI / Intelligence expansion).
+- **E12 (PASS)** — Singha Intelligence expansion: deterministic matching, offer/pricing comparison and
+  fraud/risk scoring. Contracts `insight-domains` (insight kinds; match/compare/pricing/risk schemas).
+  Pure `@singha/domain` `modules/insight` (6 tests): `scoreMatch`/`rankMatches` (hard-filter miss
+  yields null, otherwise an explainable weighted score, best-fit then cheapest — advisory only),
+  `compareProposals` (normalized headline ranking, `binding:false`, never selects a winner — D4),
+  `priceComparables` (exact integer count/min/median/max/spread, integer-division median — float-free),
+  `assessRisk` (low/medium/high band with the flags that fired — a review signal, never an auto-block).
+  One additive table `intelligence_report` (append-only derived snapshot) via migration
+  `20260815210000_...` (one CREATE TABLE with an index, zero DROP/RENAME). Flag-gated `insight` module
+  at `/api/v1/insight` (`match`/`offers/compare`/`pricing/comparables` are `exchange:participate`;
+  `risk` is `exchange:operate`); every response is `binding:false` and persisted as an
+  IntelligenceReport. Deterministic, no LLM — money/eligibility/state are never model-decided and
+  nothing binds (rule 3, rule 11, doc 12). New flag `insightEngine` (default OFF) across
+  `@singha/config` (3 files) and seed. Real-Postgres E2E `scripts/e2e-insight.mjs` (wired into
+  `test:insight`, the acceptance chain and a CI step) proves advisory matching, exact pricing
+  comparables, offer comparison without selection, operator-only risk (buyer 403), anonymous denial,
+  and non-binding persisted reports. Gates green (build 7/7, typecheck 13/13, domain 192, api 53,
+  contracts 25, config 14 tests, lint 0 errors, format clean). See
+  `SINGHA_EVOLUTION_PHASE_E12_REPORT.md`. Next: **E13** (Satellite Market Node and SEO/local-site
+  integration).

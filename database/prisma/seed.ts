@@ -137,6 +137,12 @@ const FLAGS: { key: string; enabled: boolean; description: string }[] = [
     enabled: false,
     description: 'Operator-scoped admin overview (config + record counts + alerts, E11b)',
   },
+  // Singha Evolution (E12) — deterministic Intelligence expansion. OFF until wired.
+  {
+    key: 'INSIGHT_ENGINE',
+    enabled: false,
+    description: 'Deterministic matching / offer / pricing / risk intelligence (derived, E12)',
+  },
 ];
 
 // Sale-method + unit taxonomies are the canonical, versioned constants from

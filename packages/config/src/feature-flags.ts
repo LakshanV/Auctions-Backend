@@ -102,6 +102,11 @@ export interface FeatureFlags {
   // read-only projections and never own authoritative data.
   dashboard: boolean;
   controlCentre: boolean;
+
+  // Singha Evolution Intelligence expansion (E12). Default OFF; gates the deterministic
+  // intelligence surface — matching, offer/pricing comparison and risk signals. Every output is a
+  // derived, non-binding recommendation (no LLM binds; deterministic code owns money/eligibility).
+  insightEngine: boolean;
 }
 
 export type FeatureFlagName = keyof FeatureFlags;

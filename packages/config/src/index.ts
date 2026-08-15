@@ -145,6 +145,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       singhaId: env.FEATURE_SINGHA_ID,
       dashboard: env.FEATURE_DASHBOARD,
       controlCentre: env.FEATURE_CONTROL_CENTRE,
+      insightEngine: env.FEATURE_INSIGHT_ENGINE,
     },
     providers: {
       storage: { configured: supabaseConfigured || env.STORAGE_ENDPOINT.trim().length > 0 },

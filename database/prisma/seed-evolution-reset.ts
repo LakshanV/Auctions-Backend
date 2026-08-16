@@ -183,13 +183,10 @@ async function main(): Promise<void> {
       },
     })
   ).count;
-  del.bids = (
-    await prisma.bid.deleteMany({
-      where: {
-        OR: [{ bidderId: { in: evoCustomerIds } }, { auctionId: { in: evoAuctionIds } }],
-      },
-    })
-  ).count;
+  // Bid ledger is append-only (DB trigger rejects DELETE — rule #5), so the seed
+  // no longer creates demo bids and there is nothing to remove here. If a legacy
+  // run created bids, they are immutable by design and must be cleared out-of-band.
+  del.bids = 0;
 
   // ---------------------------------------------------------------------------
   // 7. EVO auctions -> listings -> assets (LOT-DEMO left untouched).

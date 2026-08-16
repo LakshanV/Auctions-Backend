@@ -876,40 +876,13 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------
-  // 8. Bids — evo-seller places append-only bids on OPEN LOT-DEMO auctions. We do
-  //    NOT mutate the auction (no winner / sold / close): the denormalized
-  //    projection is rebuildable from this ledger. Guarded on idempotencyKey.
+  // 8. Bids — intentionally NOT seeded. The Bid ledger is append-only (a DB
+  //    trigger rejects DELETE — non-negotiable rule #5), so a demo bid can never
+  //    be cleaned up and its append-only row would pin the demo customer forever
+  //    (FK), breaking the reset guarantee. Per the "where safely representable"
+  //    caveat, bids are omitted so ALL preview data stays fully resettable.
+  //    (Bidding activity is still demonstrable via the offers/auctions surfaces.)
   // ---------------------------------------------------------------------------
-  const bidSpecs: Array<{ ref: string; amountMinor: bigint; idem: string }> = [
-    { ref: 'LOT-DEMO-1', amountMinor: LKR(20_250_000), idem: 'EVO-PREVIEW-BID-LOTDEMO1' },
-    { ref: 'LOT-DEMO-3', amountMinor: LKR(8_200_000), idem: 'EVO-PREVIEW-BID-LOTDEMO3' },
-  ];
-  for (const b of bidSpecs) {
-    const listing = await prisma.listing.findUnique({
-      where: { publicRef: b.ref },
-      include: { auction: true },
-    });
-    if (!listing?.auction || listing.auction.status !== 'open') continue;
-    const already = await prisma.bid.findFirst({ where: { idempotencyKey: b.idem } });
-    if (already) continue;
-    const maxSeq = await prisma.bid.aggregate({
-      where: { auctionId: listing.auction.id },
-      _max: { sequence: true },
-    });
-    await prisma.bid.create({
-      data: {
-        id: newId(),
-        auctionId: listing.auction.id,
-        sequence: (maxSeq._max.sequence ?? 0) + 1,
-        bidderId: sellerId,
-        amountMinor: b.amountMinor,
-        source: 'online',
-        status: 'accepted',
-        idempotencyKey: b.idem,
-      },
-    });
-    counts.bids += 1;
-  }
 
   // ---------------------------------------------------------------------------
   // 9. Logistics — indicative quote (LKCMB -> AEJEA), a booking off it, and a
@@ -1020,7 +993,7 @@ async function main(): Promise<void> {
       `  singha profile:           ${counts.profile}\n` +
       `    capabilities:           ${counts.capabilities} (sell=verified, export=pending, high_value_trade=rejected)\n` +
       `  watchlist:                ${counts.watches}\n` +
-      `  bids (open auctions):     ${counts.bids}\n` +
+      `  bids:                     omitted by design (append-only ledger — keeps preview fully resettable)\n` +
       `  logistics chains:         ${counts.logistics} (quote+booking+shipment+events)`,
   );
 }

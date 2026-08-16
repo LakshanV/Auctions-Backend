@@ -1,3 +1,7 @@
+import { interpretSearchQuery, type SearchInterpretation } from './ai.search-interpreter';
+
+export type { SearchInterpretation };
+
 /** A drafted listing (DERIVED content — never written over the asset's facts). */
 export interface ListingDraft {
   title: string;
@@ -33,6 +37,15 @@ export interface AiProvider {
   ): Promise<ListingDraft>;
   assist(prompt: string, context?: Record<string, unknown>): Promise<AssistReply>;
   translate(text: string, targetLang: string, sourceLang?: string): Promise<TranslateReply>;
+  /**
+   * AIC-3 — interpret a natural-language search query into STRUCTURED catalogue filters (the
+   * "LLM interprets" seam, docs/10 "Customer AI" search/discovery). This is the model's ENTIRE
+   * job: it NEVER sees inventory, NEVER ranks and NEVER returns a result — only a best-guess
+   * filter object. The caller (`AssistantService.search`) re-validates every field against the
+   * SAME `catalogueQuerySchema` the public catalogue itself enforces, and only
+   * `CatalogueV2Service` — the one authoritative executor — ever queries the database.
+   */
+  interpretSearch(query: string): Promise<SearchInterpretation>;
 }
 
 export const AI_PROVIDER = Symbol('AI_PROVIDER');
@@ -80,6 +93,13 @@ export class MockAiProvider implements AiProvider {
       detectedSourceLang: sourceLang ?? 'auto',
       confidence: 0.5,
     };
+  }
+
+  /** Deterministic keyword->filter mapper (see `ai.search-interpreter.ts`) — no external call,
+   * no randomness, so the guard/interpret/validate/execute flow is fully exercised without a
+   * real model configured. Swapping in a real model later means replacing only this method. */
+  async interpretSearch(query: string): Promise<SearchInterpretation> {
+    return interpretSearchQuery(query);
   }
 
   private headline(category: string, a: Record<string, unknown>): string {

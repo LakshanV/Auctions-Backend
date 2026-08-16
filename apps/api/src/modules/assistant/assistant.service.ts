@@ -8,7 +8,10 @@ import {
 import {
   type AskAssistantInput,
   type AssistantChannelRequestInput,
+  type AssistantSearchInput,
+  type CatalogueQuery,
   DomainEventName,
+  catalogueQuerySchema,
   newId,
 } from '@singha/contracts';
 import { guardAiRequest } from '@singha/domain';
@@ -31,6 +34,46 @@ import {
 // through the sanctioned AI_PROVIDER token, never its internals).
 const SAFE_REFUSAL =
   'I can’t help with that request. A Singha specialist can assist you with anything about a lot, bidding or your account.';
+
+/**
+ * AIC-3 — the exact filter keys `AiProvider.interpretSearch()` may populate. Deliberately
+ * excludes `sort`/`page`/`limit`: the model interprets INTENT into FILTERS — it never ranks or
+ * paginates (those stay the assistant's own schema-default concern, never the model's to set).
+ */
+const SEARCH_FILTER_KEYS = [
+  'category',
+  'saleMethod',
+  'status',
+  'search',
+  'location',
+  'featured',
+  'endingSoon',
+  'auctionEventId',
+] as const satisfies readonly (keyof CatalogueQuery)[];
+
+/**
+ * AIC-3's one architectural rule, enforced here: the model's interpreted filters are
+ * re-validated field-by-field against the EXISTING `catalogueQuerySchema` (@singha/contracts) —
+ * the SAME schema the public `/api/v2/catalogue` endpoint itself enforces — before
+ * `CatalogueV2Service` ever sees them. Each key is checked INDEPENDENTLY against that schema's
+ * own field validator (`catalogueQuerySchema.shape`), so one bad/unknown key (a hallucinated
+ * filter name, an out-of-enum value) only ever drops THAT key; every other, still-valid key
+ * survives — "the safe subset", never an all-or-nothing wipe, never a thrown error, and never a
+ * fabricated filter the schema itself wouldn't accept from a real HTTP caller.
+ */
+export function sanitizeSearchFilters(raw: unknown): Partial<CatalogueQuery> {
+  const safe: Partial<CatalogueQuery> = {};
+  if (raw == null || typeof raw !== 'object') return safe;
+  const shape = catalogueQuerySchema.shape;
+  for (const key of SEARCH_FILTER_KEYS) {
+    if (!(key in raw)) continue;
+    const parsed = shape[key].safeParse((raw as Record<string, unknown>)[key]);
+    if (parsed.success && parsed.data !== undefined) {
+      (safe as Record<string, unknown>)[key] = parsed.data;
+    }
+  }
+  return safe;
+}
 
 /**
  * AIC-1 — customer-facing AI conversation assistant (docs/10 "Customer AI"). Extends the existing
@@ -350,6 +393,129 @@ export class AssistantService {
       return { channel: input.channel, deepLink, callbackRequested, continuityToken };
     });
   }
+
+  /**
+   * AIC-3 — AI-assisted search (docs/10 "Customer AI" search/discovery). The ONE architectural
+   * rule: the model INTERPRETS free text into structured filters; it never sees inventory, never
+   * ranks and never returns a result. `CatalogueV2Service.list()` — the SAME authoritative
+   * service the public catalogue itself calls — is the ONLY source of returned items. Read-only
+   * (constraint 3): this never creates a bid/offer/EOI/intent; the only writes are governance
+   * (an AiRun) and, optionally, one system Message summarizing the search onto an EXISTING,
+   * owned conversation — search never mints a fresh one the way `ask()` does.
+   */
+  async search(principal: Principal, input: AssistantSearchInput) {
+    this.requireFeature();
+    const customerId = this.requireCustomerId(principal);
+
+    // Unlike ask(), search never MINTS a fresh conversation — resolveConversationId is only
+    // invoked (for its ownership check, D-0040's 404-not-403 rule) when the caller actually
+    // passed one to attach the summary to.
+    let conversationId: string | undefined;
+    if (input.conversationId) {
+      const resolved = await this.resolveConversationId(customerId, input.conversationId);
+      conversationId = resolved.id;
+    }
+
+    const actor = toActor(principal);
+    const aiRunId = newId();
+
+    // Constraint 2 — the boundary guard runs BEFORE the query ever reaches a provider. A
+    // flagged/oversized query is refused: a safe empty result + a blocked AiRun, and
+    // CatalogueV2Service.list is NEVER called — nothing is ever "sent onward".
+    const guard = guardAiRequest('assistant', input.query);
+    if (!guard.allowed) {
+      return this.uow.execute(actor, async (ctx) => {
+        await ctx.tx.aiRun.create({
+          data: {
+            id: aiRunId,
+            taskType: 'assistant',
+            model: this.ai.model,
+            provider: this.ai.name,
+            actorId: actor.id,
+            subjectType: conversationId ? 'Conversation' : 'Search',
+            subjectId: conversationId,
+            prompt: input.query,
+            output: {
+              blocked: true,
+              refusalReason: guard.refusalReason,
+              reasons: guard.injection.reasons,
+              modelTier: guard.tier,
+            } as unknown as object,
+            confidence: 0,
+          },
+        });
+        ctx.audit({
+          action: 'AI_ASSISTANT_SEARCH_BLOCKED',
+          targetType: 'AiRun',
+          targetId: aiRunId,
+        });
+        return { query: input.query, interpreted: {}, results: [], total: 0, refused: true };
+      });
+    }
+
+    // The ONE architectural rule (LLM interprets, catalogue executes): the model returns
+    // FILTERS ONLY, never results/inventory. Every field is re-validated against the SAME
+    // catalogueQuerySchema the public catalogue enforces — dropping anything invalid rather than
+    // ever forwarding an unvalidated model output — before CatalogueV2Service (the only thing
+    // that ever queries the database here) runs.
+    const interpretation = await this.ai.interpretSearch(input.query);
+    const sanitized = sanitizeSearchFilters(interpretation.filters);
+    // Never fabricate: if nothing the model returned survives validation, fall back to the
+    // safest possible minimal query — the raw text as a plain search term — rather than either
+    // an unfiltered browse-everything or a thrown error.
+    const filters: Partial<CatalogueQuery> =
+      Object.keys(sanitized).length > 0 ? sanitized : { search: input.query.slice(0, 120) };
+
+    const parsedQuery = catalogueQuerySchema.safeParse(filters);
+    const catalogueQuery = parsedQuery.success ? parsedQuery.data : catalogueQuerySchema.parse({});
+    const catalogueResult = await this.catalogue.list(catalogueQuery);
+
+    return this.uow.execute(actor, async (ctx) => {
+      await ctx.tx.aiRun.create({
+        data: {
+          id: aiRunId,
+          taskType: 'assistant',
+          model: this.ai.model,
+          provider: this.ai.name,
+          actorId: actor.id,
+          subjectType: conversationId ? 'Conversation' : 'Search',
+          subjectId: conversationId,
+          prompt: input.query,
+          output: {
+            interpretedFilters: filters,
+            resultCount: catalogueResult.total,
+            modelTier: guard.tier,
+          } as unknown as object,
+          confidence: interpretation.confidence,
+        },
+      });
+
+      if (conversationId) {
+        const count = catalogueResult.total;
+        await ctx.tx.message.create({
+          data: {
+            id: newId(),
+            conversationId,
+            direction: 'outbound',
+            provenance: 'system',
+            text: `Searched the catalogue for "${input.query}" — ${count} result${count === 1 ? '' : 's'} found.`,
+            payload: {
+              searchSummary: { query: input.query, filters, resultCount: count },
+            } as unknown as object,
+          },
+        });
+      }
+
+      ctx.audit({ action: 'AI_ASSISTANT_SEARCH', targetType: 'AiRun', targetId: aiRunId });
+      return {
+        query: input.query,
+        interpreted: filters,
+        results: catalogueResult.items,
+        total: catalogueResult.total,
+        refused: false,
+      };
+    });
+  }
 }
 
 /** The only shapes AssistantService ever writes to Message.payload (self-assembled, safe). */
@@ -368,5 +534,15 @@ interface ItemContextPayload {
     phone?: string;
     latestQuestion?: string;
     subject?: unknown;
+  };
+  /**
+   * AIC-3 — recorded on the OPTIONAL system Message `search()` appends when called with an
+   * owned `conversationId`. `filters` is the VALIDATED subset actually run against the
+   * catalogue (never the model's raw/unvalidated output).
+   */
+  searchSummary?: {
+    query: string;
+    filters: Partial<CatalogueQuery>;
+    resultCount: number;
   };
 }

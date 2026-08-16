@@ -437,6 +437,23 @@ export const assistantChannelRequestResponseSchema = z.object({
 });
 export type AssistantChannelRequestResponse = z.infer<typeof assistantChannelRequestResponseSchema>;
 
+/**
+ * AIC-3 — AI-assisted search (docs/10 "Customer AI" search/discovery). `query` is free text, so
+ * it goes through `guardAiRequest('assistant', ...)` exactly like `askAssistantSchema.message`
+ * before anything ever reaches a provider — the 2000 ceiling mirrors that schema's (and
+ * `POLICIES.assistant.maxInputChars`). `conversationId` is OPTIONAL and, unlike `ask()`, is
+ * NEVER minted fresh here: when supplied it must be an existing conversation the caller already
+ * owns (`AssistantService.search` reuses `resolveConversationId`'s ownership check, never its
+ * mint-a-new-id branch) so the search's summary can be appended to it; when omitted, the search
+ * simply has no conversation to attach a summary Message to. The model never receives/returns
+ * this DTO directly — it only ever sees `query` (see `AiProvider.interpretSearch`).
+ */
+export const assistantSearchSchema = z.object({
+  conversationId: z.string().min(1).optional(),
+  query: z.string().min(1).max(2000),
+});
+export type AssistantSearchInput = z.infer<typeof assistantSearchSchema>;
+
 // --- Singha Social Publisher (docs/11) -------------------------------------
 export const socialPlatformValues = ['facebook', 'instagram'] as const;
 

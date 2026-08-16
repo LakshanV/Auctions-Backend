@@ -58,7 +58,9 @@ async function main(): Promise<void> {
     select: { id: true },
   });
   const offerIds = offers.map((o) => o.id);
-  del.offerEvents = (await prisma.offerEvent.deleteMany({ where: { offerId: { in: offerIds } } })).count;
+  del.offerEvents = (
+    await prisma.offerEvent.deleteMany({ where: { offerId: { in: offerIds } } })
+  ).count;
   del.offerRevisions = (
     await prisma.offerRevision.deleteMany({ where: { offerId: { in: offerIds } } })
   ).count;

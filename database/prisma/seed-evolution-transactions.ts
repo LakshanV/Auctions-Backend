@@ -846,7 +846,12 @@ async function main(): Promise<void> {
   for (const c of capabilities) {
     await prisma.customerCapability.upsert({
       where: { customerId_capability: { customerId: sellerId, capability: c.capability } },
-      update: { status: c.status, evidenceRef: c.evidenceRef, verifiedAt: c.verifiedAt, expiresAt: c.expiresAt },
+      update: {
+        status: c.status,
+        evidenceRef: c.evidenceRef,
+        verifiedAt: c.verifiedAt,
+        expiresAt: c.expiresAt,
+      },
       create: {
         id: newId(),
         customerId: sellerId,
@@ -949,8 +954,20 @@ async function main(): Promise<void> {
       locationCode: string;
       atDays: number;
     }> = [
-      { type: 'BOOKED', status: 'BOOKED', note: 'DEMO — booking confirmed', locationCode: 'LKCMB', atDays: -5 },
-      { type: 'PICKED_UP', status: 'PICKED_UP', note: 'DEMO — cargo received at CFS', locationCode: 'LKCMB', atDays: -4 },
+      {
+        type: 'BOOKED',
+        status: 'BOOKED',
+        note: 'DEMO — booking confirmed',
+        locationCode: 'LKCMB',
+        atDays: -5,
+      },
+      {
+        type: 'PICKED_UP',
+        status: 'PICKED_UP',
+        note: 'DEMO — cargo received at CFS',
+        locationCode: 'LKCMB',
+        atDays: -4,
+      },
       {
         type: 'IN_TRANSIT',
         status: 'IN_TRANSIT',

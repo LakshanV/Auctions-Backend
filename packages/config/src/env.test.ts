@@ -38,6 +38,17 @@ describe('config', () => {
     expect(pendingBusinessApprovals(cfg)).toContain('buyerPremiumPct');
   });
 
+  it('AIC-2: assistantChannels defaults to web-only (whatsapp/voice OFF)', () => {
+    const cfg = loadConfig(base);
+    expect(cfg.features.assistantChannels).toEqual(['web']);
+    expect(cfg.assistant.whatsappLinkBase).toMatch(/^https:\/\//);
+  });
+
+  it('AIC-2: ASSISTANT_CHANNELS is a parsed, trimmed, comma-separated list', () => {
+    const cfg = loadConfig({ ...base, ASSISTANT_CHANNELS: ' web, whatsapp ,voice ' });
+    expect(cfg.features.assistantChannels).toEqual(['web', 'whatsapp', 'voice']);
+  });
+
   it('throws a readable error when DATABASE_URL is missing', () => {
     expect(() => loadConfig({})).toThrow(/DATABASE_URL/);
   });

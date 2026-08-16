@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AssistantService } from './assistant.service';
 import { type AppConfigService } from '../../config/config.service';
 import { type PrismaService } from '../../prisma/prisma.service';
 import { type UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-work';
 import { type AiProvider } from '../ai/ai.provider';
 import { type CatalogueV2Service } from '../catalogue/catalogue-v2.service';
+import { type MessageChannelProvider } from '../connect/channel.provider';
 import { type Principal } from '../../shared/auth/principal';
+import { parseContinuityToken } from '../../shared/auth/continuity-token';
 
 const buyer: Principal = { customerId: 'cust_1', roles: [], permissions: new Set(), aal: 'aal1' };
 const otherBuyer: Principal = {
@@ -72,15 +74,23 @@ function makeHarness(
     aiConversation?: boolean;
     conversations?: Record<string, ConversationRow>;
     assistReply?: { reply: string; confidence: number };
+    // AIC-2 additions — default permissive (all channels enabled) so existing/unrelated tests
+    // don't need to know about this surface; individual channel-request tests override.
+    assistantChannels?: string[];
+    whatsappLinkBase?: string;
+    latestCustomerMessage?: { text: string | null; payload?: unknown } | null;
   } = {},
 ) {
   const aiConversation = opts.aiConversation ?? true;
   const conversations = opts.conversations ?? {};
+  const assistantChannels = opts.assistantChannels ?? ['web', 'whatsapp', 'voice'];
+  const whatsappLinkBase = opts.whatsappLinkBase ?? 'https://assistant.singha.example/continue';
 
   const conversationFindUnique = vi.fn(
     async ({ where }: { where: { id: string } }) => conversations[where.id] ?? null,
   );
   const messageCreate = vi.fn().mockResolvedValue({});
+  const messageFindFirst = vi.fn().mockResolvedValue(opts.latestCustomerMessage ?? null);
   const conversationCreate = vi.fn().mockResolvedValue({});
   const aiRunCreate = vi.fn().mockResolvedValue({});
 
@@ -90,7 +100,7 @@ function makeHarness(
   // below would fail loudly instead of silently passing.
   const tx = {
     conversation: { create: conversationCreate },
-    message: { create: messageCreate },
+    message: { create: messageCreate, findFirst: messageFindFirst },
     aiRun: { create: aiRunCreate },
   };
 
@@ -109,7 +119,10 @@ function makeHarness(
   } as unknown as UnitOfWork;
 
   const config = {
-    get: () => ({ features: { aiConversation } }),
+    get: () => ({
+      features: { aiConversation, assistantChannels },
+      assistant: { whatsappLinkBase },
+    }),
   } as unknown as AppConfigService;
 
   const assist = vi
@@ -128,8 +141,23 @@ function makeHarness(
   const catalogueGet = vi.fn().mockResolvedValue(POISONED_LISTING);
   const catalogue = { get: catalogueGet } as unknown as CatalogueV2Service;
 
-  const service = new AssistantService(prisma, uow, config, catalogue, ai);
-  return { service, tx, conversationFindUnique, assist, catalogueGet, conversations };
+  // AIC-2: fake MockChannelProvider — proves any WhatsApp "send" goes through THIS binding
+  // only (never a real network call); its providerMessageId is recognisably fake ('mock-…').
+  const channelSend = vi.fn().mockResolvedValue({ providerMessageId: 'mock-wa-1', accepted: true });
+  const channelProvider = { name: 'mock', send: channelSend } as unknown as MessageChannelProvider;
+
+  const service = new AssistantService(prisma, uow, config, catalogue, ai, channelProvider);
+  return {
+    service,
+    tx,
+    conversationFindUnique,
+    assist,
+    catalogueGet,
+    conversations,
+    messageCreate,
+    messageFindFirst,
+    channelSend,
+  };
 }
 
 describe('AssistantService.ask (AIC-1)', () => {
@@ -325,5 +353,129 @@ describe('AssistantService.getConversation (AIC-1)', () => {
 
     await expect(service.getConversation(buyer, 'conv_a')).rejects.toThrow(NotFoundException);
     expect(conversationFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('AssistantService.channelRequest (AIC-2 — "Chat now / WhatsApp / Call me")', () => {
+  const ownedConversations = {
+    conv_a: { id: 'conv_a', customerId: 'cust_1', channel: 'web' },
+  };
+
+  it('constraint 4 — flag off rejects the request and records nothing', async () => {
+    const { service, tx, channelSend } = makeHarness({
+      aiConversation: false,
+      conversations: ownedConversations,
+    });
+
+    await expect(
+      service.channelRequest(buyer, { conversationId: 'conv_a', channel: 'whatsapp' }),
+    ).rejects.toThrow(NotFoundException);
+    expect(tx.message.create).not.toHaveBeenCalled();
+    expect(channelSend).not.toHaveBeenCalled();
+  });
+
+  it('constraint 4 — a channel not in config assistantChannels is rejected with a clear error; nothing recorded', async () => {
+    const { service, tx, channelSend } = makeHarness({
+      conversations: ownedConversations,
+      assistantChannels: ['web'], // whatsapp/voice OFF — the shipped default
+    });
+
+    await expect(
+      service.channelRequest(buyer, { conversationId: 'conv_a', channel: 'whatsapp' }),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.channelRequest(buyer, { conversationId: 'conv_a', channel: 'voice' }),
+    ).rejects.toThrow(BadRequestException);
+    expect(tx.message.create).not.toHaveBeenCalled();
+    expect(channelSend).not.toHaveBeenCalled();
+  });
+
+  it('ownership — customer B requesting a channel switch on customer A’s conversation is denied (404, not 403)', async () => {
+    const { service } = makeHarness({ conversations: ownedConversations });
+
+    await expect(
+      service.channelRequest(otherBuyer, { conversationId: 'conv_a', channel: 'whatsapp' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('whatsapp (enabled) — returns a deep-link + continuity token, records ONE system Message, and the ack is sent ONLY through MockChannelProvider (non-binding)', async () => {
+    const { service, tx, channelSend } = makeHarness({
+      conversations: ownedConversations,
+      latestCustomerMessage: { text: 'When does lot 5 close?', payload: undefined },
+    });
+
+    const result = await service.channelRequest(buyer, {
+      conversationId: 'conv_a',
+      channel: 'whatsapp',
+      phone: '94771234567',
+    });
+
+    expect(result.channel).toBe('whatsapp');
+    expect(result.deepLink).toContain(result.continuityToken);
+    expect(result.callbackRequested).toBeUndefined();
+    // The token is a real, parseable link back to THIS conversation/customer.
+    expect(parseContinuityToken(result.continuityToken)).toMatchObject({
+      conversationId: 'conv_a',
+      customerId: 'cust_1',
+    });
+
+    // Constraint 3 — sent ONLY through the mock adapter (never a real network call).
+    expect(channelSend).toHaveBeenCalledTimes(1);
+    expect(channelSend).toHaveBeenCalledWith(
+      'whatsapp',
+      '94771234567',
+      expect.stringContaining(result.deepLink!),
+    );
+
+    // Exactly one system Message recorded; the channel-request event lives in its payload.
+    expect(tx.message.create).toHaveBeenCalledTimes(1);
+    const [args] = tx.message.create.mock.calls[0]!;
+    expect(args.data).toMatchObject({ conversationId: 'conv_a', provenance: 'system' });
+    expect(args.data.payload.channelRequest).toMatchObject({
+      channel: 'whatsapp',
+      continuityToken: result.continuityToken,
+      deepLink: result.deepLink,
+      latestQuestion: 'When does lot 5 close?',
+    });
+  });
+
+  it('voice (enabled) — records a non-binding callback request; no provider send; nothing binding created', async () => {
+    const { service, tx, channelSend } = makeHarness({ conversations: ownedConversations });
+
+    const result = await service.channelRequest(buyer, {
+      conversationId: 'conv_a',
+      channel: 'voice',
+      phone: '94770000000',
+    });
+
+    expect(result.channel).toBe('voice');
+    expect(result.callbackRequested).toBe(true);
+    expect(result.deepLink).toBeUndefined();
+    expect(typeof result.continuityToken).toBe('string');
+
+    // Non-binding (constraint 3): no telephony call is ever placed via the channel provider.
+    expect(channelSend).not.toHaveBeenCalled();
+    // Resolving at all (no TypeError) proves this never touched tx.bidIntent/tx.bid — the fake
+    // transaction client above deliberately has no such model (same trick as the ask() specs).
+    expect(tx.message.create).toHaveBeenCalledTimes(1);
+    const [args] = tx.message.create.mock.calls[0]!;
+    expect(args.data.payload.channelRequest).toMatchObject({
+      channel: 'voice',
+      callbackRequested: true,
+      phone: '94770000000',
+    });
+  });
+
+  it('preserves the conversation’s latest item-context subject into the channel-request payload', async () => {
+    const subject = { listingId: 'listing_1', title: 'Vintage Rolex' };
+    const { service, tx } = makeHarness({
+      conversations: ownedConversations,
+      latestCustomerMessage: { text: 'Tell me about this lot', payload: { subject } },
+    });
+
+    await service.channelRequest(buyer, { conversationId: 'conv_a', channel: 'whatsapp' });
+
+    const [args] = tx.message.create.mock.calls[0]!;
+    expect(args.data.payload.channelRequest.subject).toEqual(subject);
   });
 });

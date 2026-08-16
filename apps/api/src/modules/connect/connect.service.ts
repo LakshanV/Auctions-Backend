@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  type Actor,
   type CreateBidIntentInput,
   DomainEventName,
   type InboundMessageInput,
@@ -17,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
+import { parseContinuityToken } from '../../shared/auth/continuity-token';
 import { AuctionService } from '../auction/auction.service';
 import { CHANNEL_PROVIDER, type MessageChannelProvider } from './channel.provider';
 
@@ -58,6 +60,15 @@ export class ConnectService {
         })
       : null;
     const customerId = identity?.verifiedAt ? identity.customerId : null;
+
+    // AIC-2 cross-channel continuity (constraint 2): a continuityToken means this inbound
+    // message claims to CONTINUE an existing conversation from another channel, not start a new
+    // one. Branch BEFORE the ordinary upsert-by-(channel,externalThreadId) below, which would
+    // otherwise mint a second Conversation row for the new channel — exactly the duplicate this
+    // flow must prevent.
+    if (input.continuityToken) {
+      return this.inboundContinuation(actor, input, customerId);
+    }
 
     return this.uow.execute(actor, async (ctx) => {
       const conversation = await ctx.tx.conversation.upsert({
@@ -108,6 +119,99 @@ export class ConnectService {
         messageId: message.id,
         customerResolved: Boolean(customerId),
         aiMode: conversation.aiMode,
+      };
+    });
+  }
+
+  /**
+   * AIC-2 continuation ingress (docs/09 "one conversation across channels", constraint 2). Never
+   * creates a Conversation row — it only ATTACHES to the one the continuityToken names, and only
+   * after re-deriving the customer the exact same way `inbound()` above does for every ordinary
+   * message (a `verifiedAt`-stamped `ExternalIdentity` for THIS channel/externalUserId — the
+   * token itself is never trusted for identity, see continuity-token.ts).
+   *
+   * Denies (404, matching D-0040's existing "never 403" stance so a guess can't confirm a
+   * conversation exists) unless ALL of:
+   *   1. the token parses to a well-formed {conversationId, customerId};
+   *   2. that conversation actually exists;
+   *   3. the token's OWN claimed customerId matches the origin conversation's stored
+   *      customerId (defence in depth — catches a stale/rewritten token even before identity
+   *      re-resolution runs);
+   *   4. the customerId just re-resolved from THIS request's verified external identity matches
+   *      the origin conversation's stored customerId (the actual authority — constraint 2's
+   *      "re-resolve, then compare").
+   * This covers unverified identities (`resolvedCustomerId` is null), cross-customer attempts
+   * (resolved customer != origin owner) and forged tokens (parsed customerId != origin owner)
+   * identically — all denied.
+   */
+  private async inboundContinuation(
+    actor: Actor,
+    input: InboundMessageInput,
+    resolvedCustomerId: string | null,
+  ) {
+    const parsed = parseContinuityToken(input.continuityToken!);
+    const origin = parsed
+      ? await this.prisma.conversation.findUnique({ where: { id: parsed.conversationId } })
+      : null;
+
+    if (
+      !parsed ||
+      !origin ||
+      !resolvedCustomerId ||
+      origin.customerId !== parsed.customerId ||
+      origin.customerId !== resolvedCustomerId
+    ) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    return this.uow.execute(actor, async (ctx) => {
+      // Preserve context (build-section requirement): carry forward the origin conversation's
+      // latest item-context `subject` snapshot, straight from its own history — never
+      // re-derived/guessed — so the continued channel keeps the same lot/topic in view.
+      const priorSubjectMessage = await ctx.tx.message.findFirst({
+        where: { conversationId: origin.id, provenance: 'customer' },
+        orderBy: { createdAt: 'desc' },
+      });
+      const priorSubject = (priorSubjectMessage?.payload as unknown as { subject?: unknown } | null)
+        ?.subject;
+
+      const message = await ctx.tx.message.create({
+        data: {
+          id: newId(),
+          conversationId: origin.id,
+          direction: 'inbound',
+          providerMessageId: input.providerMessageId,
+          sender: input.externalUserId,
+          text: input.text,
+          provenance: 'customer',
+          payload: {
+            continuity: { fromChannel: input.channel },
+            ...(priorSubject !== undefined ? { subject: priorSubject } : {}),
+          } as unknown as object,
+        },
+      });
+      ctx.emit({
+        name: DomainEventName.InboundMessageReceived,
+        aggregateType: 'Conversation',
+        aggregateId: origin.id,
+        payload: {
+          conversationId: origin.id,
+          channel: input.channel,
+          resolved: true,
+          continued: true,
+        },
+      });
+      ctx.audit({
+        action: 'CONVERSATION_CONTINUED',
+        targetType: 'Conversation',
+        targetId: origin.id,
+      });
+      return {
+        conversationId: origin.id,
+        messageId: message.id,
+        customerResolved: true,
+        aiMode: origin.aiMode,
+        continued: true,
       };
     });
   }
@@ -174,12 +278,35 @@ export class ConnectService {
     });
   }
 
+  /**
+   * Agent-facing conversation view. AIC-2 "human handoff context": `messages` now carries
+   * `payload` too (previously dropped) — the ONLY place item-context/channel-request/
+   * continuity metadata actually lives, so an agent who takes over via `setMode` could not
+   * otherwise see the lot the customer was asking about. `handoffSummary` is a DERIVED read
+   * (no new table — build-section note) computed from that same history: the customer's most
+   * recent message text + its item-context `subject`, if any. `setMode` itself never touches
+   * messages, so this view is already complete across an AI->human handoff by construction;
+   * see connect.service.spec.ts for the test proving it.
+   */
   async conversation(conversationId: string) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
+
+    const lastCustomerMessage = [...conversation.messages]
+      .reverse()
+      .find((m) => m.provenance === 'customer');
+    const handoffSummary = lastCustomerMessage
+      ? {
+          latestQuestion: lastCustomerMessage.text,
+          itemContext:
+            (lastCustomerMessage.payload as unknown as { subject?: unknown } | null)?.subject ??
+            null,
+        }
+      : null;
+
     return {
       id: conversation.id,
       channel: conversation.channel,
@@ -187,11 +314,13 @@ export class ConnectService {
       status: conversation.status,
       aiMode: conversation.aiMode,
       assignedAgentId: conversation.assignedAgentId,
+      handoffSummary,
       messages: conversation.messages.map((m) => ({
         id: m.id,
         direction: m.direction,
         text: m.text,
         provenance: m.provenance,
+        payload: m.payload,
         createdAt: m.createdAt,
       })),
     };

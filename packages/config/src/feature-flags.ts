@@ -18,6 +18,14 @@ export interface FeatureFlags {
   // GET /assistant/conversations/:id. Non-binding: the assistant answers/suggests only,
   // never places a bid/offer/EOI (rule 11).
   aiConversation: boolean;
+  // AIC-2 — cross-channel continuity + channel-request (docs/09/10 "one customer identity and
+  // conversation history across channels"). Capability list gating POST /assistant/channel-
+  // request's `channel` ('whatsapp'|'voice') — 'web' is always implicitly available since it's
+  // the assistant's own channel and is never itself "requested". Default `['web']` (both
+  // non-web channels OFF). ENFORCED server-side by AssistantService.channelRequest(): asking
+  // for a channel not in this list is a clear 400, never a silent no-op — same enforcement
+  // posture as `aiConversation` above (see docs/generated/DECISIONS.md).
+  assistantChannels: string[];
   socialAutoPublish: boolean;
   whatsappBidIntent: boolean;
 

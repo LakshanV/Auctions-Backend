@@ -294,6 +294,16 @@ export const inboundMessageSchema = z.object({
   externalUserId: z.string().min(1).max(200).optional(),
   text: z.string().max(4000).optional(),
   providerMessageId: z.string().max(200).optional(),
+  /**
+   * AIC-2 cross-channel continuity (docs/09 "one customer identity and conversation history
+   * across channels"). When present, this inbound message claims to CONTINUE an assistant
+   * conversation started on another channel (see `issueContinuityToken` in
+   * apps/api/src/shared/auth/continuity-token.ts). It is NEVER trusted for identity by itself:
+   * `ConnectService.inbound` re-resolves the customer from a `verifiedAt`-stamped
+   * `ExternalIdentity` exactly as it does for every other inbound message, and only attaches to
+   * the origin conversation if that resolved customer matches the origin's own `customerId`.
+   */
+  continuityToken: z.string().min(1).max(4000).optional(),
 });
 export type InboundMessageInput = z.infer<typeof inboundMessageSchema>;
 
@@ -392,6 +402,40 @@ export const assistantAskResponseSchema = z.object({
   suggestions: z.array(z.string()).optional(),
 });
 export type AssistantAskResponse = z.infer<typeof assistantAskResponseSchema>;
+
+/**
+ * AIC-2 — "Chat now / WhatsApp / Call me" channel-request (docs/09/10). The customer, mid-
+ * conversation, asks the assistant to continue on a DIFFERENT channel. `channel` is deliberately
+ * a 2-value enum, never the full `channelValues` set — 'web' is where the assistant already
+ * lives (never "requested"), and only whatsapp/voice are hand-off targets; whether either is
+ * actually offered is a config check (`assistantChannels`) done in `AssistantService`, not here.
+ * `phone` is the callback/WhatsApp number; optional for both (a WhatsApp link can be issued
+ * without one, and a voice request without one still records a non-binding callback intent —
+ * rule "unknown business value -> configurable, never blocking").
+ */
+export const assistantRequestableChannelValues = ['whatsapp', 'voice'] as const;
+
+export const assistantChannelRequestSchema = z.object({
+  conversationId: z.string().min(1),
+  channel: z.enum(assistantRequestableChannelValues),
+  phone: z.string().min(4).max(32).optional(),
+});
+export type AssistantChannelRequestInput = z.infer<typeof assistantChannelRequestSchema>;
+
+/**
+ * `deepLink` is only set for `channel:'whatsapp'` (a provider-neutral continuation URL carrying
+ * the continuity token); `callbackRequested` only for `channel:'voice'` (always `true` there — a
+ * non-binding fake, nothing calls anyone for real). `continuityToken` is always returned: it is
+ * the same link-not-credential either channel would present back to `POST /connect/inbound` (or
+ * a future voice-ingress path) to resume the SAME conversation — see continuity-token.ts.
+ */
+export const assistantChannelRequestResponseSchema = z.object({
+  channel: z.enum(assistantRequestableChannelValues),
+  deepLink: z.string().optional(),
+  callbackRequested: z.boolean().optional(),
+  continuityToken: z.string().min(1),
+});
+export type AssistantChannelRequestResponse = z.infer<typeof assistantChannelRequestResponseSchema>;
 
 // --- Singha Social Publisher (docs/11) -------------------------------------
 export const socialPlatformValues = ['facebook', 'instagram'] as const;

@@ -1,13 +1,26 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { type AskAssistantInput, newId } from '@singha/contracts';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  type AskAssistantInput,
+  type AssistantChannelRequestInput,
+  DomainEventName,
+  newId,
+} from '@singha/contracts';
 import { guardAiRequest } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
+import { issueContinuityToken } from '../../shared/auth/continuity-token';
 import { AI_PROVIDER, type AiProvider } from '../ai/ai.provider';
 import { CatalogueV2Service } from '../catalogue/catalogue-v2.service';
+import { CHANNEL_PROVIDER, type MessageChannelProvider } from '../connect/channel.provider';
 import {
   type ItemContext,
   suggestionsForSaleMethod,
@@ -33,6 +46,9 @@ export class AssistantService {
     private readonly config: AppConfigService,
     private readonly catalogue: CatalogueV2Service,
     @Inject(AI_PROVIDER) private readonly ai: AiProvider,
+    // AIC-2: the SAME MockChannelProvider binding ConnectService sends through (via
+    // ConnectModule's export) — never a second/parallel provider instance (constraint 3).
+    @Inject(CHANNEL_PROVIDER) private readonly channelProvider: MessageChannelProvider,
   ) {}
 
   private requireFeature(): void {
@@ -231,6 +247,109 @@ export class AssistantService {
       })),
     };
   }
+
+  /**
+   * AIC-2 — "Chat now / WhatsApp / Call me" channel-request (docs/09/10). The customer, mid-
+   * conversation, asks to continue on a different channel. Steps mirror the task pack exactly:
+   *   1. capability check — `channel` must be in config `assistantChannels` (constraint 4);
+   *   2. ownership — reuses `resolveConversationId`'s SAME 404-not-403 rule as `ask()` (D-0040);
+   *   3. record ONE system Message carrying the channel-request event in its payload.
+   * Non-binding + provider-neutral + fakes only (constraint 3): a WhatsApp request only ever
+   * builds a deep link + (optionally) sends a mock ack through the SAME `MockChannelProvider`
+   * binding `ConnectService` uses; a voice request only ever records a non-binding callback
+   * intent. Neither ever creates a BidIntent/Bid/EOI — "Bind nothing" (build-section note).
+   */
+  async channelRequest(principal: Principal, input: AssistantChannelRequestInput) {
+    this.requireFeature();
+    const customerId = this.requireCustomerId(principal);
+
+    // Constraint 4 — capability-driven channels, checked BEFORE touching the conversation: a
+    // disabled channel is a clear, typed error, never a silent no-op, and nothing is recorded.
+    const enabledChannels = this.config.get().features.assistantChannels;
+    if (!enabledChannels.includes(input.channel)) {
+      throw new BadRequestException(`The '${input.channel}' channel is not available`);
+    }
+
+    const { id: conversationId } = await this.resolveConversationId(
+      customerId,
+      input.conversationId,
+    );
+    const continuityToken = issueContinuityToken({ conversationId, customerId });
+    const whatsappLinkBase = this.config.get().assistant.whatsappLinkBase;
+    const actor = toActor(principal);
+
+    return this.uow.execute(actor, async (ctx) => {
+      // Customer-safe handoff snapshot: the conversation's own latest question + item-context
+      // subject — never re-derived/guessed, straight from its own history (same shape
+      // ConnectService's derived `handoffSummary` reads on the staff side).
+      const latestCustomerMessage = await ctx.tx.message.findFirst({
+        where: { conversationId, provenance: 'customer' },
+        orderBy: { createdAt: 'desc' },
+      });
+      const subject = (latestCustomerMessage?.payload as unknown as { subject?: unknown } | null)
+        ?.subject;
+
+      let deepLink: string | undefined;
+      let callbackRequested: boolean | undefined;
+      let providerMessageId: string | undefined;
+
+      if (input.channel === 'whatsapp') {
+        // Provider-neutral continuation deep-link: a configurable base + the continuity token.
+        deepLink = `${whatsappLinkBase}?token=${continuityToken}`;
+        // Constraint 3 — fakes only: the ack goes through the SAME MockChannelProvider
+        // ConnectService sends through (injected via ConnectModule's export); nothing real is
+        // ever messaged. `to` is the phone the customer gave, if any — never invented.
+        const sent = await this.channelProvider.send(
+          'whatsapp',
+          input.phone ?? `pending-${customerId}`,
+          `Continue your Singha conversation on WhatsApp: ${deepLink}`,
+        );
+        providerMessageId = sent.providerMessageId;
+      } else {
+        // 'voice' — a recorded NON-BINDING callback request (a fake): nobody is called for real.
+        callbackRequested = true;
+      }
+
+      await ctx.tx.message.create({
+        data: {
+          id: newId(),
+          conversationId,
+          direction: 'outbound',
+          provenance: 'system',
+          providerMessageId,
+          text:
+            input.channel === 'whatsapp'
+              ? 'Customer asked to continue this conversation on WhatsApp.'
+              : 'Customer requested a callback.',
+          payload: {
+            channelRequest: {
+              channel: input.channel,
+              continuityToken,
+              deepLink,
+              callbackRequested,
+              phone: input.phone,
+              latestQuestion: latestCustomerMessage?.text ?? undefined,
+              subject,
+            },
+          } as unknown as object,
+        },
+      });
+
+      ctx.emit({
+        name: DomainEventName.AssistantChannelRequested,
+        aggregateType: 'Conversation',
+        aggregateId: conversationId,
+        payload: { conversationId, customerId, channel: input.channel },
+      });
+      ctx.audit({
+        action: 'ASSISTANT_CHANNEL_REQUESTED',
+        targetType: 'Conversation',
+        targetId: conversationId,
+      });
+
+      return { channel: input.channel, deepLink, callbackRequested, continuityToken };
+    });
+  }
 }
 
 /** The only shapes AssistantService ever writes to Message.payload (self-assembled, safe). */
@@ -240,4 +359,14 @@ interface ItemContextPayload {
   suggestions?: string[];
   refused?: boolean;
   refusalReason?: string | null;
+  /** AIC-2 — recorded on the ONE system Message created by `channelRequest()`. */
+  channelRequest?: {
+    channel: 'whatsapp' | 'voice';
+    continuityToken: string;
+    deepLink?: string;
+    callbackRequested?: boolean;
+    phone?: string;
+    latestQuestion?: string;
+    subject?: unknown;
+  };
 }

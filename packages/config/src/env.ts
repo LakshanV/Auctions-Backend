@@ -68,6 +68,16 @@ export const envSchema = z.object({
   // flags above (defined but NOT enforced), this one IS enforced server-side —
   // AssistantService.requireFeature() throws when off (see docs/generated/DECISIONS.md).
   FEATURE_AI_CONVERSATION: boolFromEnv.default(false),
+  // AIC-2 — cross-channel continuity + channel-request (docs/09/10). Comma-separated capability
+  // list for POST /assistant/channel-request's `channel` ('whatsapp'|'voice'); 'web' is always
+  // implicitly available since it is the assistant's own channel. Default ships with BOTH
+  // non-web channels OFF — requesting one 404/400s until explicitly enabled here. Parsed to
+  // string[] in packages/config/src/index.ts (see FeatureFlags.assistantChannels).
+  ASSISTANT_CHANNELS: z.string().default('web'),
+  // Provider-neutral WhatsApp continuation deep-link base (AIC-2). A safe placeholder domain —
+  // no real WhatsApp Business integration exists yet; the continuity token travels as a query
+  // param and nothing is ever sent through this link for real (MockChannelProvider only).
+  ASSISTANT_WHATSAPP_LINK_BASE: z.string().default('https://assistant.singha.example/continue'),
   FEATURE_SOCIAL_AUTO_PUBLISH: boolFromEnv.default(false),
   FEATURE_WHATSAPP_BID_INTENT: boolFromEnv.default(false),
 

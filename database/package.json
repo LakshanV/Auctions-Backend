@@ -26,6 +26,8 @@
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
     "seed:evolution": "tsx prisma/seed-evolution.ts",
+    "seed:evolution:tx": "tsx prisma/seed-evolution-transactions.ts",
+    "seed:evolution:reset": "tsx prisma/seed-evolution-reset.ts",
     "clean": "rimraf dist"
   },
   "prisma": {

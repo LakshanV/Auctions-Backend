@@ -357,6 +357,42 @@ export const translateSchema = z.object({
 });
 export type TranslateInput = z.infer<typeof translateSchema>;
 
+/**
+ * Customer-facing AI conversation assistant (AIC-1, docs/10 "Customer AI"). Non-binding (rule
+ * 11): the assistant answers/suggests only — bid/offer/EOI creation stays with the existing
+ * engines behind explicit confirmation. `message` is free text, so it goes through
+ * `guardAiRequest('assistant', ...)` for injection detection before it ever reaches a provider;
+ * the 2000 ceiling mirrors `POLICIES.assistant.maxInputChars` in
+ * packages/domain/src/modules/ai/ai-safety.ts (kept in sync manually — see the `translateSchema`
+ * note above for why @singha/contracts cannot import that constant directly). `conversationId`
+ * continues an existing (own) conversation; omitted, a fresh one is started. `listingId` triggers
+ * assembly of a customer-safe item context (title/price-state/location/etc. — never reserve,
+ * proxy max, seller floor or any other internal field). `url` is the page the customer was on,
+ * purely informational context for the assistant, never authoritative.
+ */
+export const askAssistantSchema = z.object({
+  conversationId: z.string().min(1).optional(),
+  listingId: z.string().min(1).optional(),
+  url: z.string().max(2000).optional(),
+  message: z.string().min(1).max(2000),
+});
+export type AskAssistantInput = z.infer<typeof askAssistantSchema>;
+
+/**
+ * The assistant's reply. `refused` is true when the boundary guard blocked the request (prompt
+ * injection / instruction override / over-length) — `reply` is then a fixed safe message and no
+ * provider was ever called. `suggestions` are customer-safe LABELS only (e.g. "Make an offer",
+ * "Arrange inspection") derived from the listing's sale method — never actions/links; creating a
+ * bid/offer/EOI stays with the existing engines behind explicit confirmation (rule 11).
+ */
+export const assistantAskResponseSchema = z.object({
+  conversationId: z.string().min(1),
+  reply: z.string().min(1),
+  refused: z.boolean(),
+  suggestions: z.array(z.string()).optional(),
+});
+export type AssistantAskResponse = z.infer<typeof assistantAskResponseSchema>;
+
 // --- Singha Social Publisher (docs/11) -------------------------------------
 export const socialPlatformValues = ['facebook', 'instagram'] as const;
 

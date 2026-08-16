@@ -64,6 +64,10 @@ export const envSchema = z.object({
   FEATURE_CUBE_CATALOGUE: boolFromEnv.default(true),
   FEATURE_AI_LISTING: boolFromEnv.default(false),
   FEATURE_AI_MEDIA_ENHANCE: boolFromEnv.default(false),
+  // Customer-facing AI conversation assistant (AIC-1, docs/10 "Customer AI"). Unlike the two
+  // flags above (defined but NOT enforced), this one IS enforced server-side —
+  // AssistantService.requireFeature() throws when off (see docs/generated/DECISIONS.md).
+  FEATURE_AI_CONVERSATION: boolFromEnv.default(false),
   FEATURE_SOCIAL_AUTO_PUBLISH: boolFromEnv.default(false),
   FEATURE_WHATSAPP_BID_INTENT: boolFromEnv.default(false),
 

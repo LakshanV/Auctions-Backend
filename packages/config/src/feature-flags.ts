@@ -13,6 +13,11 @@ export interface FeatureFlags {
   cubeCatalogue: boolean;
   aiListing: boolean;
   aiMediaEnhance: boolean;
+  // Customer-facing AI conversation assistant (AIC-1). Default OFF; ENFORCED server-side
+  // (unlike aiListing/aiMediaEnhance above) — gates POST /assistant/message and
+  // GET /assistant/conversations/:id. Non-binding: the assistant answers/suggests only,
+  // never places a bid/offer/EOI (rule 11).
+  aiConversation: boolean;
   socialAutoPublish: boolean;
   whatsappBidIntent: boolean;
 

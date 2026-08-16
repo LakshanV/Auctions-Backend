@@ -23,8 +23,10 @@ describe('rbac', () => {
     expect(hasPermission([Role.Customer], Permission.ExchangeParticipate)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.CommercePay)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.WatchManage)).toBe(true);
+    // AIC-1: every customer can converse with the non-binding AI assistant.
+    expect(hasPermission([Role.Customer], Permission.AiConverse)).toBe(true);
     expect(hasPermission([Role.Customer], Permission.ListingCreate)).toBe(false);
-    expect(permissionsForRoles([Role.Customer]).size).toBe(5);
+    expect(permissionsForRoles([Role.Customer]).size).toBe(6);
   });
 
   it('unions permissions across multiple roles', () => {

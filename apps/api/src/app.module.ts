@@ -30,6 +30,7 @@ import { NodeModule } from './modules/node/node.module';
 import { CommerceModule } from './modules/commerce/commerce.module';
 import { ConnectModule } from './modules/connect/connect.module';
 import { AiModule } from './modules/ai/ai.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { SocialModule } from './modules/social/social.module';
 import { IntelligenceModule } from './modules/intelligence/intelligence.module';
 import { LiveModule } from './modules/live/live.module';
@@ -85,6 +86,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     CommerceModule,
     ConnectModule,
     AiModule,
+    AssistantModule,
     SocialModule,
     IntelligenceModule,
     LiveModule,

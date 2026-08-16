@@ -113,6 +113,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       cubeCatalogue: env.FEATURE_CUBE_CATALOGUE,
       aiListing: env.FEATURE_AI_LISTING,
       aiMediaEnhance: env.FEATURE_AI_MEDIA_ENHANCE,
+      aiConversation: env.FEATURE_AI_CONVERSATION,
       socialAutoPublish: env.FEATURE_SOCIAL_AUTO_PUBLISH,
       whatsappBidIntent: env.FEATURE_WHATSAPP_BID_INTENT,
       v3VisualArchitecture: env.FEATURE_V3_VISUAL_ARCHITECTURE,

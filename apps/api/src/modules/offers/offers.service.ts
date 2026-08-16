@@ -492,13 +492,40 @@ export class OffersService {
 
   // --- reads ----------------------------------------------------------------
 
-  /** The caller's own offers (buyer dashboard). */
+  /**
+   * The caller's own offers (buyer dashboard). Additive PUBLIC listing context is attached
+   * (title/reference/sale method/location/cover image) so the UI never has to show a raw
+   * listing CUID (CX pack doc 05) — never reserve, seller floor, proxy max, competitor or KYC
+   * data, which stay entirely absent from this read model.
+   */
   async myOffers(principal: Principal) {
     const rows = await this.prisma.offer.findMany({
       where: { customerId: this.customer(principal) },
       orderBy: { createdAt: 'desc' },
+      include: {
+        listing: {
+          select: {
+            title: true,
+            publicRef: true,
+            saleMethod: true,
+            locationCity: true,
+            locationRegion: true,
+            asset: {
+              select: {
+                media: {
+                  where: { visibility: 'public', status: 'ready', kind: 'image' },
+                  select: { storageKey: true, isCover: true, sortOrder: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
-    return rows.map((o) => this.offerView(o));
+    return rows.map((o) => ({
+      ...this.offerView(o),
+      listing: this.offerListingContext(o.listing),
+    }));
   }
 
   /**
@@ -703,6 +730,35 @@ export class OffersService {
       sealed: o.sealed ?? false,
       currentRevisionId: o.currentRevisionId ?? null,
       saleMethodCode: o.saleMethodCode ?? null,
+    };
+  }
+
+  /**
+   * PUBLIC listing context attached to `myOffers` (CX pack doc 05) — enough for the buyer offer
+   * console to show a real title/reference/location/cover instead of a raw listing CUID. Every
+   * field here is public catalogue data (mirrors `CatalogueV2Service`'s public projection); this
+   * must never grow reserve, seller floor, proxy max, competitor or KYC fields.
+   */
+  private offerListingContext(l: {
+    title: string | null;
+    publicRef: string;
+    saleMethod: string;
+    locationCity: string | null;
+    locationRegion: string | null;
+    asset: { media: { storageKey: string; isCover: boolean; sortOrder: number }[] };
+  }) {
+    const media = l.asset.media;
+    const cover =
+      media.find((m) => m.isCover) ?? [...media].sort((a, b) => a.sortOrder - b.sortOrder)[0];
+    return {
+      title: l.title,
+      publicRef: l.publicRef,
+      saleMethod: l.saleMethod,
+      location:
+        l.locationCity || l.locationRegion
+          ? { city: l.locationCity, region: l.locationRegion }
+          : null,
+      coverStorageKey: cover ? cover.storageKey : null,
     };
   }
 }

@@ -67,3 +67,16 @@ infra (Class D) decisions are NOT made here.
   visibility) are placeholders flagged `approvalRequired` — Class C (docs/20).
 - Provider credentials (storage, AI, messaging, live, payments) — Class D
   (docs/21); adapters report "not configured" until supplied.
+
+## Demo marketplace covers — owner-supplied interim (2026-08-17)
+
+- The demo catalogue (`SMKT-*`) is populated with **54 owner-supplied cover images** (one per
+  image-bearing listing, 9 × 6 categories), committed to the frontend at
+  `apps/web/public/demo/smkt/<cat>/smkt-<cat3>-NN-1.png` and served same-origin. Accepted as an
+  **interim** (stylised illustrations, owner-approved "go ahead for now") — reversible: the media
+  pipeline, listing domain and storageKey scheme are unchanged, so real photos or a full generated
+  multi-view set drop in at the same paths later.
+- Seeder made ext-aware: `demoKey()` now honours `DEMO_MEDIA_EXT` (was hardcoded `.svg`) and
+  `DEMO_IMAGES_PER_LISTING` (default 4) controls images/listing — set to `1` for this cover-only
+  set so no non-existent `-2/-3/-4` files are referenced. `.gitignore` commits raster covers
+  (png/jpg/webp) and keeps regenerable procedural SVGs out of git.

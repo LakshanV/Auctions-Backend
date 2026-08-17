@@ -38,7 +38,10 @@ const DEMO_MEDIA_MIME =
     : DEMO_MEDIA_EXT === 'webp'
       ? 'image/webp'
       : 'image/svg+xml';
-const IMAGES_PER_LISTING = 4;
+// How many images each (image-bearing) listing gets. Default 4 (coherent multi-view sets from
+// gen-demo-media.mjs). Set DEMO_IMAGES_PER_LISTING=1 for a cover-only run (e.g. an uploaded set
+// that only shipped `-1` covers), so the seeder never references non-existent `-2/-3/-4` files.
+const IMAGES_PER_LISTING = Math.max(0, Number(process.env.DEMO_IMAGES_PER_LISTING ?? 4));
 const VIEW_LABELS: Record<string, string[]> = {
   vehicles: ['Front 3/4', 'Rear 3/4', 'Interior', 'Detail'],
   machinery: ['Front / side', 'Opposite side', 'Controls', 'Attachment'],
@@ -48,7 +51,7 @@ const VIEW_LABELS: Record<string, string[]> = {
   general: ['Main', 'Detail', 'Markings', 'Condition'],
 };
 const demoKey = (category: string, ref: string, n: number): string =>
-  `${DEMO_MEDIA_BASE}/demo/smkt/${category}/${ref.toLowerCase()}-${n}.svg`;
+  `${DEMO_MEDIA_BASE}/demo/smkt/${category}/${ref.toLowerCase()}-${n}.${DEMO_MEDIA_EXT}`;
 
 // ---------------------------------------------------------------------------
 // Environment guard (directive §22) — never seed an unguarded production DB.

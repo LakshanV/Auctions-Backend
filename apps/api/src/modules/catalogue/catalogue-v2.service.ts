@@ -13,6 +13,14 @@ type CatalogueFilters = {
   featured?: boolean;
   endingSoon?: boolean;
   auctionEventId?: string;
+  // RW4 additive facets.
+  minPriceMinor?: number;
+  maxPriceMinor?: number;
+  minQuantity?: number;
+  maxQuantity?: number;
+  unit?: string;
+  pickup?: boolean;
+  delivery?: boolean;
 };
 
 type FullListing = Prisma.ListingGetPayload<{
@@ -184,6 +192,32 @@ export class CatalogueV2Service {
       });
     if (q.endingSoon)
       and.push({ auction: { endsAt: { lte: new Date(Date.now() + 48 * 3_600_000) } } });
+    // RW4 — price BAND: match whichever commercial figure a listing actually publishes (buy-now /
+    // unit / guide / live-or-opening bid). An OR keeps heterogeneous sale methods comparable
+    // without inventing a single cross-method price (mirrors the buildOrder price-sort caveat).
+    if (q.minPriceMinor != null || q.maxPriceMinor != null) {
+      const range: { gte?: bigint; lte?: bigint } = {};
+      if (q.minPriceMinor != null) range.gte = BigInt(q.minPriceMinor);
+      if (q.maxPriceMinor != null) range.lte = BigInt(q.maxPriceMinor);
+      and.push({
+        OR: [
+          { buyNowPriceMinor: range },
+          { unitPriceMinor: range },
+          { guidePriceMinor: range },
+          { auction: { is: { currentBidMinor: range } } },
+          { auction: { is: { openingBidMinor: range } } },
+        ],
+      });
+    }
+    if (q.minQuantity != null || q.maxQuantity != null) {
+      const qty: { gte?: number; lte?: number } = {};
+      if (q.minQuantity != null) qty.gte = q.minQuantity;
+      if (q.maxQuantity != null) qty.lte = q.maxQuantity;
+      and.push({ quantityAvailable: qty });
+    }
+    if (q.unit) and.push({ quantityUnitCode: q.unit });
+    if (q.pickup) and.push({ pickupLocationId: { not: null } });
+    if (q.delivery) and.push({ destinationLocationId: { not: null } });
     return { AND: and };
   }
 
@@ -255,6 +289,12 @@ export class CatalogueV2Service {
       status: l.status,
       featured: l.featured,
       watchers: l._count.watches,
+      // RW4 — customer-safe card hints (never internal/private fields). Quantity is a Decimal, so
+      // it is projected as a string (no precision loss) to match the frontend's declared shape.
+      quantity: l.quantityAvailable == null ? undefined : l.quantityAvailable.toString(),
+      quantityUnitCode: l.quantityUnitCode ?? undefined,
+      pickupAvailable: l.pickupLocationId != null,
+      deliveryAvailable: l.destinationLocationId != null,
       media: this.coverMedia(l),
       commercial: this.commercial(l),
       event: l.eventLots[0]

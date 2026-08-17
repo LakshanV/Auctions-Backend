@@ -549,6 +549,17 @@ export const catalogueQuerySchema = z.object({
   featured: z.coerce.boolean().optional(),
   endingSoon: z.coerce.boolean().optional(),
   auctionEventId: z.string().min(1).optional(),
+  // RW4 — additive customer-safe facets over columns the listing already carries. Price is a
+  // "band" filter matched against whichever commercial figure a listing actually publishes
+  // (buy-now / unit / guide / live-or-opening bid); quantity/unit/pickup/delivery mirror the
+  // qty + logistics columns. All optional — omitting them preserves the prior behaviour exactly.
+  minPriceMinor: z.coerce.number().int().nonnegative().optional(),
+  maxPriceMinor: z.coerce.number().int().nonnegative().optional(),
+  minQuantity: z.coerce.number().nonnegative().optional(),
+  maxQuantity: z.coerce.number().nonnegative().optional(),
+  unit: z.string().min(1).max(16).optional(),
+  pickup: z.coerce.boolean().optional(),
+  delivery: z.coerce.boolean().optional(),
   sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('ending'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(60).default(24),
@@ -569,6 +580,14 @@ export const catalogueRowQuerySchema = z.object({
   location: z.string().max(80).optional(),
   endingSoon: z.coerce.boolean().optional(),
   auctionEventId: z.string().min(1).optional(),
+  // RW4 — same additive facets as the list query (see catalogueQuerySchema).
+  minPriceMinor: z.coerce.number().int().nonnegative().optional(),
+  maxPriceMinor: z.coerce.number().int().nonnegative().optional(),
+  minQuantity: z.coerce.number().nonnegative().optional(),
+  maxQuantity: z.coerce.number().nonnegative().optional(),
+  unit: z.string().min(1).max(16).optional(),
+  pickup: z.coerce.boolean().optional(),
+  delivery: z.coerce.boolean().optional(),
   sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('ending'),
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(30).default(12),

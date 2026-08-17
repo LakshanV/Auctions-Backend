@@ -147,9 +147,11 @@ const ENDING_SOON_RE =
 // The v2 catalogue has NO server-side price filter (`catalogueQuerySchema` carries no min/max
 // price field) — a "under/over X" clause is stripped entirely rather than either invented as an
 // unsupported filter key or left to pollute the free-text `search` term below. Matched BEFORE
-// punctuation is stripped so a digit-grouping comma ("500,000") still counts as one number.
+// punctuation is stripped so a digit-grouping comma ("500,000") still counts as one number, and
+// an optional trailing magnitude word ("10 million", "500k", "2 crore") is consumed too so it
+// can't survive as a phantom search token ("million") that returns zero matches.
 const PRICE_PHRASE_RE =
-  /\b(under|below|less\s+than|over|above|more\s+than)\s+(rs\.?|lkr|\$|£|€)?\s*[\d,]+(\.\d+)?\b/g;
+  /\b(under|below|less\s+than|over|above|more\s+than)\s+(rs\.?|lkr|\$|£|€)?\s*[\d,]+(\.\d+)?\s*(k|m|mn|bn|thousand|thousands|million|millions|billion|billions|lakh|lakhs|crore|crores)?\b/g;
 
 const STOPWORDS = new Set([
   'a',

@@ -58,6 +58,25 @@ describe('interpretSearchQuery (AIC-3 — deterministic "LLM interprets" seam)',
     expect(over.filters.search).not.toMatch(/\d/);
   });
 
+  it('strips a trailing magnitude word so "under 10 million" cannot leak "million" into search', () => {
+    // Regression: "under 10" was stripped but the magnitude word survived as a phantom search
+    // token ("toyota million"), which matched nothing even though "toyota" matches many lots.
+    const a = interpretSearchQuery('toyota car under 10 million');
+    expect(a.filters.category).toBe('vehicles');
+    expect(a.filters.search).toBe('toyota');
+    expect(a.filters.search).not.toMatch(/million|\d/);
+
+    for (const q of [
+      'excavators under 500k',
+      'land below 2 crore',
+      'gems over rs 5 lakhs',
+      'vans less than 3.5m',
+    ]) {
+      const { filters } = interpretSearchQuery(q);
+      expect(filters.search ?? '').not.toMatch(/\b(k|m|mn|bn|thousand|million|billion|lakhs?|crores?)\b|\d/);
+    }
+  });
+
   it('recognizes "closing"/"ending" alone (not just "ending soon") as endingSoon', () => {
     expect(interpretSearchQuery('lots closing').filters.endingSoon).toBe(true);
     expect(interpretSearchQuery('auctions ending').filters.endingSoon).toBe(true);

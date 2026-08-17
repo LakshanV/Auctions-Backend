@@ -138,6 +138,13 @@ jobs:
       - name: E2E (vision — advisory photo-first seller intake, derived + guarded)
         run: pnpm run test:vision
 
+      # Auction stress matrix (A–J + privacy + scaled concurrency + soft-close) — the full
+      # scenario set against the authoritative engine, in ISOLATED run-scoped auctions so the
+      # append-only bid ledger is never entangled. Bid privacy (no proxy-max/reserve/internal-id
+      # leak) is a mandatory gate here.
+      - name: E2E (auction stress — A–J, privacy, 5/10/25 concurrency, soft-close)
+        run: pnpm run test:auction-stress
+
       # RW3 secure media pipeline (docs/06; FIX-03..07) — per-kind MIME allowlist + size caps at
       # upload-grant AND registration, a provider-neutral malware scanner gate for documents/video
       # (ClamAV isolated daemon in prod, PROVIDER_GATED), and an authorized time-limited download

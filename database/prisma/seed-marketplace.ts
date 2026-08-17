@@ -1,0 +1,1537 @@
+/**
+ * SINGHA — Realistic Synthetic Marketplace Dataset (permanent, repeatable).
+ *
+ * Builds a commercially believable [SIM] catalogue: for EVERY active customer-facing category
+ * (read dynamically from `CATEGORY_KEYS`, so it stays compatible as categories are added) it seeds
+ * 10 realistic listings — varied conditions, sale methods, currencies, locations, quantities and
+ * media — plus the market/operator/node they belong to. Every record is marked internally with a
+ * `[SIM]` simulation marker (in asset attributes), never weakens the append-only ledgers, and can
+ * be removed by `seed-marketplace-reset.ts` (stable `SMKT-` / `@mkt.singha.local` keys).
+ *
+ * Non-negotiables honoured: no Sale/Settlement/Payment rows; auctions are non-binding preview
+ * windows; AI/provider traffic stays off; no real owner data. Auction STRESS bids are NOT created
+ * here — they belong to isolated test auctions (scripts/e2e-auction-stress.mjs) so immutable bid
+ * history is never entangled with the browsable catalogue.
+ *
+ * Safe to re-run (idempotent: skips when SIM inventory already present). Guarded — refuses to run
+ * unless the target is clearly a non-production database (see assertSafeEnvironment).
+ */
+import { CATEGORY_KEYS, newId } from '@singha/contracts';
+import { disconnectPrisma, getPrisma } from '../src/client';
+
+const DATASET_VERSION = 'sim-v1';
+const SIM = '[SIM]';
+const PER_CATEGORY = 10;
+
+// ---------------------------------------------------------------------------
+// Environment guard (directive §22) — never seed an unguarded production DB.
+// ---------------------------------------------------------------------------
+function assertSafeEnvironment(): void {
+  const url = process.env.DATABASE_URL ?? '';
+  const confirmed = process.env.SINGHA_SIM_CONFIRM === 'I_UNDERSTAND';
+  const looksLocal =
+    /(@|\/\/)(localhost|127\.0\.0\.1|postgres|db)(:|\/)/.test(url) ||
+    /singha_preview|_test|_dev|staging|preview/i.test(url);
+  const prod = process.env.NODE_ENV === 'production' || /prod/i.test(url);
+  if (prod && !confirmed) {
+    throw new Error(
+      'Refusing to seed: target looks like production. Set SINGHA_SIM_CONFIRM=I_UNDERSTAND to override on a safe DB.',
+    );
+  }
+  if (!looksLocal && !confirmed) {
+    throw new Error(
+      'Refusing to seed: DATABASE_URL is not recognisably a local/preview/staging DB. ' +
+        'Set SINGHA_SIM_CONFIRM=I_UNDERSTAND if this target is safe.',
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Money — authoritative transaction currency per listing (display currency is separate).
+// ---------------------------------------------------------------------------
+const minor = (major: number): bigint => BigInt(Math.round(major * 100));
+
+type Cur = 'LKR' | 'AUD' | 'USD' | 'INR';
+type Country = 'LK' | 'AU' | 'IN';
+
+interface SimLoc {
+  key: string;
+  countryCode: Country;
+  region: string;
+  city: string;
+}
+const LOCATIONS: SimLoc[] = [
+  { key: 'colombo', countryCode: 'LK', region: 'Western', city: 'Colombo' },
+  { key: 'galle', countryCode: 'LK', region: 'Southern', city: 'Galle' },
+  { key: 'kandy', countryCode: 'LK', region: 'Central', city: 'Kandy' },
+  { key: 'ratnapura', countryCode: 'LK', region: 'Sabaragamuwa', city: 'Ratnapura' },
+  { key: 'hambantota', countryCode: 'LK', region: 'Southern', city: 'Hambantota' },
+  { key: 'negombo', countryCode: 'LK', region: 'Western', city: 'Negombo' },
+  { key: 'kurunegala', countryCode: 'LK', region: 'North Western', city: 'Kurunegala' },
+  { key: 'melbourne', countryCode: 'AU', region: 'Victoria', city: 'Melbourne' },
+  { key: 'sydney', countryCode: 'AU', region: 'New South Wales', city: 'Sydney' },
+  { key: 'chennai', countryCode: 'IN', region: 'Tamil Nadu', city: 'Chennai' },
+  { key: 'hosur', countryCode: 'IN', region: 'Tamil Nadu', city: 'Hosur' },
+];
+
+// ---------------------------------------------------------------------------
+// Realistic per-category item banks (directive §2). Prices are in each item's own
+// transaction currency's MAJOR units; `minor()` converts. Conditions vary (§4).
+// ---------------------------------------------------------------------------
+interface SimItem {
+  title: string;
+  attrs: Record<string, unknown>;
+  condition: string;
+  price: number;
+  currency: Cur;
+  loc: string; // LOCATIONS key
+  short: string;
+  full: string;
+  qty?: { available: number; unit: string; min?: number };
+  perishable?: boolean;
+}
+
+const VEHICLES: SimItem[] = [
+  {
+    title: '2019 Toyota Hilux 2.8 GD-6 Double Cab',
+    condition: 'very good',
+    price: 16_900_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      make: 'Toyota',
+      model: 'Hilux GD-6',
+      year: 2019,
+      fuel: 'diesel',
+      mileageKm: 78_000,
+      transmission: 'manual',
+    },
+    short: 'One-owner GD-6 double cab, full service history.',
+    full: 'Well-maintained 2.8 GD-6 double cab, single owner from new, complete Toyota Lanka service history. Recent tyres and battery. Minor stone chips on the bonnet. Registered, inspection available at our Colombo yard on weekdays.',
+  },
+  {
+    title: '2018 Mitsubishi Canter FE71 Tipper',
+    condition: 'good',
+    price: 9_450_000,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      make: 'Mitsubishi',
+      model: 'Canter FE71',
+      year: 2018,
+      fuel: 'diesel',
+      mileageKm: 132_000,
+      bodyType: 'tipper',
+    },
+    short: 'Working tipper, hydraulics recently serviced.',
+    full: 'FE71 tipper in daily working condition. Hydraulic ram and PTO serviced last month. Body has expected dents from site use; chassis sound, no visible rust-through. Sold with current revenue licence.',
+  },
+  {
+    title: '2021 Suzuki Wagon R FZ Hybrid',
+    condition: 'excellent',
+    price: 5_650_000,
+    currency: 'LKR',
+    loc: 'negombo',
+    attrs: {
+      make: 'Suzuki',
+      model: 'Wagon R FZ',
+      year: 2021,
+      fuel: 'hybrid',
+      mileageKm: 24_500,
+      transmission: 'automatic',
+    },
+    short: 'Low-mileage hybrid, showroom condition.',
+    full: 'Genuine 24,500 km Wagon R FZ Safety Package. Push start, retained beam, alloys. Never had a claim; paint original all round. Second key and books present.',
+  },
+  {
+    title: '2017 Toyota Land Cruiser 79 Series Pickup',
+    condition: 'good',
+    price: 28_500_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      make: 'Toyota',
+      model: 'Land Cruiser 79',
+      year: 2017,
+      fuel: 'diesel',
+      mileageKm: 96_000,
+      driveline: '4x4',
+    },
+    short: 'Rugged 79 Series single cab, workhorse.',
+    full: 'V8 diesel 79 Series single cab. Snorkel and tow bar fitted. Interior worn on the driver bolster; mechanically strong with recent injectors. Ideal estate or site vehicle.',
+  },
+  {
+    title: '2016 Isuzu NPR 400 Box Truck',
+    condition: 'fair',
+    price: 8_200_000,
+    currency: 'LKR',
+    loc: 'galle',
+    attrs: {
+      make: 'Isuzu',
+      model: 'NPR 400',
+      year: 2016,
+      fuel: 'diesel',
+      mileageKm: 210_000,
+      bodyType: 'box',
+    },
+    short: 'High-mileage box truck, priced to sell.',
+    full: 'NPR 400 with insulated box body. High mileage and cosmetically tired — roller shutter needs attention and there is surface rust on the box frame. Runs and drives; clutch replaced at 195k.',
+  },
+  {
+    title: '2020 Toyota Prius S Touring',
+    condition: 'very good',
+    price: 11_300_000,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: {
+      make: 'Toyota',
+      model: 'Prius',
+      year: 2020,
+      fuel: 'hybrid',
+      mileageKm: 41_000,
+      transmission: 'automatic',
+    },
+    short: 'Economical hybrid sedan, hybrid battery healthy.',
+    full: 'Prius S Touring Selection. Hybrid battery health checked at 92%. LED headlamps, safety sense. Small parking scuff on the rear bumper corner, otherwise tidy inside and out.',
+  },
+  {
+    title: '2015 Nissan Leaf (salvage / repairable)',
+    condition: 'salvage',
+    price: 1_950_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      make: 'Nissan',
+      model: 'Leaf',
+      year: 2015,
+      fuel: 'electric',
+      mileageKm: 88_000,
+      damage: 'front collision',
+    },
+    short: 'Repairable EV — front-end damage, rolls & powers on.',
+    full: 'Category-repairable Leaf with front collision damage — bonnet, bumper, one headlamp and the radiator support. Powers up and moves under its own drive. Sold as a project; no warranty. Documents in order for re-registration after repair and inspection.',
+  },
+  {
+    title: '2022 Mahindra Bolero Maxx Pik-Up',
+    condition: 'excellent',
+    price: 6_800_000,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: {
+      make: 'Mahindra',
+      model: 'Bolero Maxx',
+      year: 2022,
+      fuel: 'diesel',
+      mileageKm: 18_000,
+      driveline: '2wd',
+    },
+    short: 'Near-new light commercial pickup.',
+    full: 'Bolero Maxx Pik-Up, first owner, still under balance of manufacturer warranty. Load tray liner fitted. No commercial branding. Perfect for last-mile distribution.',
+  },
+  {
+    title: '2014 BMW 320i (Australian delivered)',
+    condition: 'good',
+    price: 14_500,
+    currency: 'AUD',
+    loc: 'melbourne',
+    attrs: {
+      make: 'BMW',
+      model: '320i F30',
+      year: 2014,
+      fuel: 'petrol',
+      mileageKm: 143_000,
+      transmission: 'automatic',
+    },
+    short: 'F30 320i, logbooks, roadworthy available.',
+    full: 'Australian-delivered F30 320i with service logbooks. Leather, sunroof, sat-nav. Front tyres near new. A couple of car-park dings on the doors. RWC can be provided at buyer request.',
+  },
+  {
+    title: '2019 Ford Ranger XLT Dual Cab',
+    condition: 'very good',
+    price: 34_990,
+    currency: 'AUD',
+    loc: 'sydney',
+    attrs: {
+      make: 'Ford',
+      model: 'Ranger XLT',
+      year: 2019,
+      fuel: 'diesel',
+      mileageKm: 98_000,
+      driveline: '4x4',
+    },
+    short: 'Popular XLT dual cab, tow pack + canopy.',
+    full: 'Ranger XLT 3.2 with tow pack, alloy tray canopy and dual battery. Full service history, one repaired stone-chip on the windscreen. Drives faultlessly; ideal trade or family 4x4.',
+  },
+];
+
+const MACHINERY: SimItem[] = [
+  {
+    title: 'Caterpillar 320D Hydraulic Excavator (2013)',
+    condition: 'good',
+    price: 18_500_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      make: 'Caterpillar',
+      model: '320D',
+      year: 2013,
+      hoursUsed: 11_200,
+      attachment: 'GP bucket',
+      condition: 'used',
+    },
+    short: '20-tonne class excavator, quick-hitch, GP bucket.',
+    full: '320D on undercarriage at roughly 60% remaining. Recent hydraulic pump overhaul with paperwork. Quick-hitch, one GP bucket included. Some boom paint wear and a weeping cylinder seal noted honestly. Available for inspection and test-dig near Colombo.',
+  },
+  {
+    title: 'Komatsu PC200-8 Excavator (2015)',
+    condition: 'very good',
+    price: 22_000_000,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      make: 'Komatsu',
+      model: 'PC200-8',
+      year: 2015,
+      hoursUsed: 8_600,
+      attachment: 'GP + rock breaker lines',
+      condition: 'used',
+    },
+    short: 'PC200-8 with breaker piping, tidy machine.',
+    full: 'PC200-8 with breaker hydraulic lines already plumbed. Tracks and sprockets in good order. AC works. Genuine 8,600 hours with ECM report. No breaker included. Well maintained by a single plant-hire owner.',
+  },
+  {
+    title: 'JCB 3CX Backhoe Loader (2017)',
+    condition: 'good',
+    price: 13_750_000,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: {
+      make: 'JCB',
+      model: '3CX',
+      year: 2017,
+      hoursUsed: 6_400,
+      attachment: '4-in-1 front bucket',
+      condition: 'used',
+    },
+    short: 'Versatile 3CX, 4-in-1 bucket, extradig.',
+    full: '3CX Sitemaster with 4-in-1 front bucket and extradig rear. Tyres 70%. Small oil seep from the loader ram; otherwise strong. Includes 600mm and 300mm rear buckets.',
+  },
+  {
+    title: 'Toyota 8FG25 2.5T Forklift (2018)',
+    condition: 'very good',
+    price: 3_950_000,
+    currency: 'LKR',
+    loc: 'negombo',
+    attrs: {
+      make: 'Toyota',
+      model: '8FG25',
+      year: 2018,
+      hoursUsed: 5_100,
+      capacityKg: 2500,
+      mast: 'triplex 4.5m',
+    },
+    short: '2.5-tonne LPG forklift, triplex mast, side-shift.',
+    full: '8FG25 LPG forklift, triplex 4.5m mast with side-shift. Solid tyres 60%. Serviced quarterly under contract. Ready to work; forks and carriage in good condition.',
+  },
+  {
+    title: 'Kubota L4508 Agricultural Tractor (2020)',
+    condition: 'excellent',
+    price: 4_600_000,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: {
+      make: 'Kubota',
+      model: 'L4508',
+      year: 2020,
+      hoursUsed: 1_250,
+      capacityKg: null,
+      driveline: '4wd',
+    },
+    short: 'Low-hour 45hp 4WD tractor with rotavator.',
+    full: 'L4508 4WD with only 1,250 hours, supplied with a matched rotavator. One farmer owner. Paint and decals excellent. Ideal paddy and dry-land cultivation.',
+  },
+  {
+    title: '250 kVA Cummins Diesel Generator (2016)',
+    condition: 'good',
+    price: 6_200_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      make: 'Cummins',
+      model: 'C250 D5',
+      year: 2016,
+      hoursUsed: 3_800,
+      capacityKva: 250,
+      enclosure: 'soundproof',
+    },
+    short: 'Soundproof 250 kVA standby set, ATS ready.',
+    full: 'Cummins-powered 250 kVA soundproof generator, standby duty only, 3,800 hours. Controller upgraded; ATS panel available separately. Coolant and oil recently changed. Some canopy corrosion at the base.',
+  },
+  {
+    title: 'Atlas Copco XAS 137 Screw Compressor (2015)',
+    condition: 'fair',
+    price: 1_450_000,
+    currency: 'LKR',
+    loc: 'galle',
+    attrs: {
+      make: 'Atlas Copco',
+      model: 'XAS 137',
+      year: 2015,
+      hoursUsed: 7_900,
+      capacityCfm: 275,
+    },
+    short: 'Portable diesel screw compressor, needs hoses.',
+    full: 'Towable XAS 137 diesel screw compressor. Builds pressure and runs, but delivery hoses are perished and should be replaced. Trailer tyres cracked. Priced accordingly for a working-order-with-attention machine.',
+  },
+  {
+    title: 'CAT 950H Wheel Loader (2012)',
+    condition: 'used',
+    price: 21_500_000,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      make: 'Caterpillar',
+      model: '950H',
+      year: 2012,
+      hoursUsed: 15_600,
+      attachment: 'GP bucket + forks',
+      condition: 'used',
+    },
+    short: 'Yard loader with bucket and pallet forks.',
+    full: '950H wheel loader used in an aggregate yard. Bucket edge and cutting teeth recently replaced; pallet forks included. Transmission serviced. Expect cosmetic wear consistent with hours. Test operation welcome.',
+  },
+  {
+    title: 'Komatsu D65 Bulldozer (2011, requires repair)',
+    condition: 'requires repair',
+    price: 12_000_000,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: {
+      make: 'Komatsu',
+      model: 'D65',
+      year: 2011,
+      hoursUsed: 19_800,
+      fault: 'final drive noise',
+    },
+    short: 'Dozer with reported final-drive noise — project.',
+    full: 'D65 dozer running but with a known noise from one final drive that should be investigated before heavy work. Blade and rippers present. Undercarriage worn. Sold on that basis; ideal for a buyer able to rebuild the final drive.',
+  },
+  {
+    title: 'Bomag BW211 Single-Drum Roller (2016)',
+    condition: 'good',
+    price: 45_000,
+    currency: 'AUD',
+    loc: 'melbourne',
+    attrs: { make: 'Bomag', model: 'BW211D', year: 2016, hoursUsed: 4_300, drum: 'smooth' },
+    short: 'Smooth-drum vibrating roller, ex-council.',
+    full: 'Ex-council BW211D single smooth-drum roller, well maintained with service records. Drum in good condition, no flat spots. ROPS canopy. Ready to work on subgrade and asphalt prep.',
+  },
+];
+
+const GEMS: SimItem[] = [
+  {
+    title: 'Ceylon Blue Sapphire · 5.42 ct (unheated)',
+    condition: 'excellent',
+    price: 9_800,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Blue Sapphire',
+      caratWeight: 5.42,
+      colour: 'royal blue',
+      shape: 'oval mixed',
+      origin: 'Sri Lanka',
+      treatment: 'none (unheated)',
+      certified: true,
+    },
+    short: 'Unheated royal-blue Ceylon sapphire, lab report available.',
+    full: 'A 5.42 ct oval mixed-cut Ceylon blue sapphire, vivid royal blue, eye-clean. Reputable lab report available on request (buyer may re-certify). Measurements 11.2 x 9.1 x 6.4 mm. Certification: reputable lab report available.',
+  },
+  {
+    title: 'Yellow Sapphire · 8.10 ct',
+    condition: 'excellent',
+    price: 4_200,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Yellow Sapphire',
+      caratWeight: 8.1,
+      colour: 'canary yellow',
+      shape: 'cushion',
+      origin: 'Sri Lanka',
+      treatment: 'heated',
+      certified: true,
+    },
+    short: 'Bright canary cushion, heated, certified.',
+    full: '8.10 ct cushion yellow sapphire, bright canary colour, well cut with good return. Standard heat treatment. Report available. A strong astrological and jewellery stone.',
+  },
+  {
+    title: 'Star Sapphire (grey-blue) · 12.5 ct',
+    condition: 'very good',
+    price: 1_500,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Star Sapphire',
+      caratWeight: 12.5,
+      colour: 'grey-blue',
+      shape: 'cabochon',
+      origin: 'Sri Lanka',
+      treatment: 'none',
+      certified: false,
+    },
+    short: 'Six-ray star cabochon, sharp star.',
+    full: '12.5 ct grey-blue star sapphire cabochon with a sharp, centred six-ray star under a single light. Natural, untreated. Certification: Not provided / Test dataset — buyer to verify.',
+  },
+  {
+    title: 'Purple Spinel · 3.35 ct',
+    condition: 'excellent',
+    price: 950,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Spinel',
+      caratWeight: 3.35,
+      colour: 'purple',
+      shape: 'oval',
+      origin: 'Sri Lanka',
+      treatment: 'none',
+      certified: false,
+    },
+    short: 'Natural untreated purple spinel, lively.',
+    full: '3.35 ct natural purple spinel, untreated, lively with good brilliance. Eye-clean. Certification: Not provided / Test dataset. A collector-friendly natural stone.',
+  },
+  {
+    title: 'Green Tourmaline · 6.7 ct',
+    condition: 'very good',
+    price: 620,
+    currency: 'USD',
+    loc: 'kandy',
+    attrs: {
+      type: 'Tourmaline',
+      caratWeight: 6.7,
+      colour: 'green',
+      shape: 'emerald cut',
+      origin: 'unspecified',
+      treatment: 'none',
+      certified: false,
+    },
+    short: 'Emerald-cut green tourmaline, minor inclusions.',
+    full: '6.7 ct emerald-cut green tourmaline with a pleasant forest-green tone. Minor natural inclusions visible under magnification. Certification: Not provided / Test dataset.',
+  },
+  {
+    title: 'Padparadscha-type Sapphire · 2.9 ct',
+    condition: 'excellent',
+    price: 5_400,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Padparadscha',
+      caratWeight: 2.9,
+      colour: 'pink-orange',
+      shape: 'oval',
+      origin: 'Sri Lanka',
+      treatment: 'heated',
+      certified: true,
+    },
+    short: 'Delicate pink-orange padparadscha-type, certified.',
+    full: '2.9 ct oval padparadscha-type sapphire showing the characteristic blend of pink and orange. Heated. Report available; colour grading is subjective and buyers should view in person or re-certify.',
+  },
+  {
+    title: 'White Zircon parcel · 20 stones (~15 ct total)',
+    condition: 'good',
+    price: 300,
+    currency: 'USD',
+    loc: 'colombo',
+    attrs: {
+      type: 'Zircon',
+      caratWeight: 15.0,
+      colour: 'white',
+      shape: 'round mixed',
+      origin: 'Sri Lanka',
+      treatment: 'heated',
+      parcel: true,
+      certified: false,
+    },
+    short: 'Calibrated white zircon melee parcel.',
+    full: 'Parcel of 20 white zircons, roughly 15 ct total, calibrated 3.5–4.0 mm rounds with strong brilliance. Ideal for accent setting. Certification: Not provided / Test dataset.',
+  },
+  {
+    title: 'Alexandrite-effect Synthetic (lab) · 4.1 ct',
+    condition: 'excellent',
+    price: 120,
+    currency: 'USD',
+    loc: 'colombo',
+    attrs: {
+      type: 'Synthetic (alexandrite-effect)',
+      caratWeight: 4.1,
+      colour: 'colour-change',
+      shape: 'oval',
+      origin: 'lab-created',
+      treatment: 'lab-created',
+      synthetic: true,
+      certified: false,
+    },
+    short: 'Lab-created colour-change stone — clearly synthetic.',
+    full: 'Clearly disclosed LAB-CREATED colour-change (alexandrite-effect) corundum, 4.1 ct, strong colour shift daylight-to-incandescent. Not a natural alexandrite. Sold as a synthetic reference/teaching stone. Certification: Not provided / Test dataset.',
+  },
+  {
+    title: 'Rough Sapphire geuda lot · 250 g',
+    condition: 'unknown operational condition',
+    price: 800,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Rough Sapphire (geuda)',
+      weightGrams: 250,
+      colour: 'milky',
+      origin: 'Sri Lanka',
+      treatment: 'untreated rough',
+      certified: false,
+    },
+    short: 'Unheated geuda rough lot for heat-treaters.',
+    full: '250 g mixed geuda rough for buyers who heat-treat. Yield and colour outcome are not guaranteed — this is a rough gamble lot. Certification: Not provided / Test dataset.',
+  },
+  {
+    title: 'Red Spinel · 1.8 ct',
+    condition: 'excellent',
+    price: 1_100,
+    currency: 'USD',
+    loc: 'ratnapura',
+    attrs: {
+      type: 'Spinel',
+      caratWeight: 1.8,
+      colour: 'red',
+      shape: 'cushion',
+      origin: 'Sri Lanka',
+      treatment: 'none',
+      certified: false,
+    },
+    short: 'Vivid natural red spinel, untreated.',
+    full: '1.8 ct natural red spinel, untreated, vivid slightly-pinkish red. Eye-clean and lively. Certification: Not provided / Test dataset.',
+  },
+];
+
+const PROPERTY: SimItem[] = [
+  {
+    title: '40 Perch Residential Land · Galle (near town)',
+    condition: 'good',
+    price: 32_000_000,
+    currency: 'LKR',
+    loc: 'galle',
+    attrs: {
+      propertyType: 'land',
+      extentPerches: 40,
+      district: 'Galle',
+      frontageFt: 60,
+      access: 'motorable road',
+    },
+    short: 'Flat 40P residential block, clear title.',
+    full: 'Flat, rectangular 40-perch residential block within 3 km of Galle town, 60 ft road frontage on a motorable road. Electricity and water at the boundary. Clear deed, survey plan available. Ideal to build or subdivide.',
+  },
+  {
+    title: 'Commercial Building · Colombo 04 (3 floors)',
+    condition: 'very good',
+    price: 185_000_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      propertyType: 'commercial',
+      extentPerches: 12,
+      district: 'Colombo',
+      floors: 3,
+      parking: 6,
+    },
+    short: 'Three-storey commercial building, prime road.',
+    full: 'Three-storey commercial building on 12 perches in Colombo 04, ground-floor retail plus two office floors, six parking bays. Currently part-tenanted. Lift provisioned but not installed. Strong rental potential.',
+  },
+  {
+    title: 'Agricultural Land · 3 acres, Kurunegala',
+    condition: 'good',
+    price: 9_500_000,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      propertyType: 'agricultural',
+      extentAcres: 3,
+      district: 'Kurunegala',
+      water: 'agro well + tank',
+    },
+    short: 'Three acres mixed cultivation, water available.',
+    full: 'Three acres of gently sloping agricultural land with an agro well and access to a minor tank. Established coconut and mixed fruit. Motorable lane to the boundary. Suited to plantation or agri-tourism.',
+  },
+  {
+    title: 'Warehouse · 15,000 sq ft, Colombo–Katunayake',
+    condition: 'very good',
+    price: 240_000_000,
+    currency: 'LKR',
+    loc: 'negombo',
+    attrs: {
+      propertyType: 'industrial',
+      extentPerches: 80,
+      builtSqft: 15000,
+      clearanceFt: 24,
+      docks: 3,
+    },
+    short: 'High-clearance warehouse, 3 loading docks.',
+    full: '15,000 sq ft clear-span warehouse with 24 ft clearance and three docks on the Colombo–Katunayake corridor. Three-phase power, office block and staff facilities. Suits distribution or light manufacturing.',
+  },
+  {
+    title: 'Development Land · 1.5 acres, Kandy hills',
+    condition: 'good',
+    price: 42_000_000,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: {
+      propertyType: 'land',
+      extentAcres: 1.5,
+      district: 'Kandy',
+      view: 'valley',
+      slope: 'terraced',
+    },
+    short: 'Terraced hillside plot with valley views.',
+    full: 'Elevated 1.5-acre terraced plot with panoramic valley views above Kandy. Suited to a boutique villa or small hospitality project subject to approvals. Access road formed; utilities nearby.',
+  },
+  {
+    title: 'House for disposal · 4BR, Nugegoda',
+    condition: 'fair',
+    price: 68_000_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      propertyType: 'residential',
+      extentPerches: 15,
+      district: 'Colombo',
+      bedrooms: 4,
+      floors: 2,
+    },
+    short: 'Two-storey 4BR house, needs modernisation.',
+    full: 'Two-storey four-bedroom house on 15 perches in Nugegoda. Structurally sound but dated — kitchen and bathrooms need modernisation. Mature garden, space for parking three vehicles. Deceased-estate disposal; clear title.',
+  },
+  {
+    title: 'Beachfront Land · 25 perch, Hambantota',
+    condition: 'good',
+    price: 21_000_000,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: { propertyType: 'land', extentPerches: 25, district: 'Hambantota', frontage: 'beach' },
+    short: 'Rare beachfront block, tourism potential.',
+    full: 'A 25-perch block with direct beach frontage near Hambantota. Coconut palms on site. Tourism and residential potential subject to coastal-zone approvals. Survey plan and deed available.',
+  },
+  {
+    title: 'Retail Unit (strata) · Melbourne CBD fringe',
+    condition: 'very good',
+    price: 640_000,
+    currency: 'AUD',
+    loc: 'melbourne',
+    attrs: { propertyType: 'commercial', builtSqm: 85, district: 'Melbourne', tenancy: 'leased' },
+    short: 'Leased 85 sqm strata retail unit, CBD fringe.',
+    full: 'An 85 sqm strata retail unit on a CBD-fringe high street, currently leased to an established café on a fresh three-year term. Good passing yield. Strata report and lease available to qualified buyers.',
+  },
+  {
+    title: 'Warehouse/Industrial Shed · Hosur',
+    condition: 'good',
+    price: 24_000_000,
+    currency: 'INR',
+    loc: 'hosur',
+    attrs: {
+      propertyType: 'industrial',
+      builtSqft: 9000,
+      district: 'Hosur',
+      power: '3-phase 75kVA',
+    },
+    short: '9,000 sq ft industrial shed near Hosur belt.',
+    full: 'A 9,000 sq ft RCC-column industrial shed in the Hosur manufacturing belt with 75 kVA three-phase supply and truck access. Suited to light engineering. Documents in order.',
+  },
+  {
+    title: 'Paddy Land · 5 acres, Polonnaruwa (lease/EOI)',
+    condition: 'good',
+    price: 6_500_000,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: {
+      propertyType: 'agricultural',
+      extentAcres: 5,
+      district: 'Polonnaruwa',
+      water: 'irrigation scheme',
+    },
+    short: 'Five acres irrigated paddy — expressions invited.',
+    full: 'Five acres of productive irrigated paddy under a major scheme. Two-season cultivation. Offered to gauge market interest; expressions of interest invited from cultivators and investors.',
+  },
+];
+
+const BULK: SimItem[] = [
+  {
+    title: 'Red Onions · 20 MT, Grade A',
+    condition: 'good',
+    price: 285,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: { itemType: 'Red Onions', grade: 'A', origin: 'Local', packing: '25 kg mesh bags' },
+    qty: { available: 20_000, unit: 'kg', min: 1_000 },
+    perishable: true,
+    short: '20 MT Grade-A red onions, 25 kg mesh bags.',
+    full: 'Twenty metric tonnes of Grade-A red onions, cured and sized, in 25 kg mesh bags. Harvested this season. Available ex-store Kurunegala; delivery to Colombo negotiable. Perishable — buyers should arrange prompt collection.',
+  },
+  {
+    title: 'Potatoes · 15 MT, table grade',
+    condition: 'good',
+    price: 240,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: { itemType: 'Potatoes', grade: 'table', origin: 'Nuwara Eliya', packing: '50 kg bags' },
+    qty: { available: 15_000, unit: 'kg', min: 500 },
+    perishable: true,
+    short: '15 MT table potatoes, upcountry.',
+    full: 'Fifteen metric tonnes of upcountry table-grade potatoes in 50 kg bags. Washed and graded. Cold storage available for a limited period. Delivery within the Central Province included on full loads.',
+  },
+  {
+    title: 'Green Chillies · 8 MT',
+    condition: 'fair',
+    price: 520,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: { itemType: 'Green Chillies', grade: 'mixed', origin: 'Local', packing: '10 kg crates' },
+    qty: { available: 8_000, unit: 'kg', min: 250 },
+    perishable: true,
+    short: '8 MT green chillies, highly perishable.',
+    full: 'Eight metric tonnes of freshly picked green chillies in ventilated 10 kg crates. Mixed size grade. Highly perishable — same-day or next-day collection essential. Priced to move.',
+  },
+  {
+    title: 'Red Lentils (Dhal) · 25 MT, imported',
+    condition: 'excellent',
+    price: 360,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: { itemType: 'Red Lentils', grade: 'No.1', origin: 'Imported', packing: '25 kg PP bags' },
+    qty: { available: 25_000, unit: 'kg', min: 1_000 },
+    short: '25 MT No.1 red lentils, bonded store.',
+    full: 'Twenty-five metric tonnes of No.1 red lentils (masoor dhal) in 25 kg PP bags, held in a bonded store in Colombo. Consistent colour and low splits. Suitable for wholesale and repacking. Incoterm negotiable.',
+  },
+  {
+    title: 'Coconut lot · 30,000 nuts',
+    condition: 'good',
+    price: 78,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      itemType: 'Coconuts',
+      grade: 'medium-large',
+      origin: 'Coconut triangle',
+      packing: 'loose/bulk',
+    },
+    qty: { available: 30_000, unit: 'each', min: 2_000 },
+    perishable: true,
+    short: '30,000 husked coconuts, medium-large.',
+    full: 'Thirty thousand husked coconuts, medium-large grade, from the coconut triangle. Available in staggered weekly lifts if preferred. Loading assistance provided. Price per nut, ex-estate.',
+  },
+  {
+    title: 'Ceylon Cinnamon (Alba) · 2 MT',
+    condition: 'excellent',
+    price: 4_800,
+    currency: 'LKR',
+    loc: 'galle',
+    attrs: { itemType: 'Cinnamon', grade: 'Alba', origin: 'Southern SL', packing: '25 kg cartons' },
+    qty: { available: 2_000, unit: 'kg', min: 100 },
+    short: '2 MT premium Alba cinnamon quills.',
+    full: 'Two metric tonnes of premium Alba-grade Ceylon cinnamon quills in 25 kg cartons. Low-coumarin true cinnamon. Export documentation and phytosanitary support available. FOB Colombo or CIF by negotiation.',
+  },
+  {
+    title: 'Black Tea (BOPF) · 10 MT',
+    condition: 'very good',
+    price: 1_050,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: { itemType: 'Black Tea', grade: 'BOPF', origin: 'Dimbula', packing: 'paper sacks' },
+    qty: { available: 10_000, unit: 'kg', min: 500 },
+    short: '10 MT Dimbula BOPF tea.',
+    full: 'Ten metric tonnes of Dimbula BOPF black tea in multi-wall paper sacks. Bright, brisk cup. Broker tasting notes available. Suited to blenders and exporters. Ex-warehouse Kandy.',
+  },
+  {
+    title: 'Nadu Rice · 40 MT',
+    condition: 'good',
+    price: 210,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: {
+      itemType: 'Rice (Nadu)',
+      grade: 'standard',
+      origin: 'Local',
+      packing: '25/50 kg bags',
+    },
+    qty: { available: 40_000, unit: 'kg', min: 2_000 },
+    short: '40 MT Nadu rice, mill-fresh.',
+    full: 'Forty metric tonnes of mill-fresh Nadu rice in 25 and 50 kg bags. Moisture within spec. Available in part loads. Delivery within the Southern Province negotiable on full-truck quantities.',
+  },
+  {
+    title: 'Green Gram (Mung Beans) · 6 MT',
+    condition: 'good',
+    price: 640,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: { itemType: 'Green Gram', grade: 'A', origin: 'Local', packing: '50 kg bags' },
+    qty: { available: 6_000, unit: 'kg', min: 250 },
+    short: '6 MT Grade-A green gram.',
+    full: 'Six metric tonnes of Grade-A green gram (mung beans), cleaned and graded, in 50 kg bags. Good germination. Sample available on request. Ex-store Kurunegala.',
+  },
+  {
+    title: 'Chickpeas (Kabuli) · 18 MT, imported',
+    condition: 'excellent',
+    price: 45_000,
+    currency: 'INR',
+    loc: 'chennai',
+    attrs: {
+      itemType: 'Chickpeas',
+      grade: 'Kabuli 42-44',
+      origin: 'Imported',
+      packing: '30 kg bags',
+    },
+    qty: { available: 18_000, unit: 'kg', min: 1_000 },
+    short: '18 MT Kabuli chickpeas, 42-44 count.',
+    full: 'Eighteen metric tonnes of Kabuli chickpeas, 42–44 count, uniform and bold, in 30 kg bags at Chennai. Clean, low admixture. Suited to repackers and food service. Price per MT; Incoterm by negotiation.',
+  },
+];
+
+const SCRAP: SimItem[] = [
+  {
+    title: 'HMS 1&2 Steel Scrap · 60 MT (80:20)',
+    condition: 'used',
+    price: 92_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      material: 'HMS 1&2',
+      ratio: '80:20',
+      origin: 'demolition',
+      contamination: 'low',
+      loading: 'buyer arranges',
+    },
+    qty: { available: 60_000, unit: 'kg', min: 5_000 },
+    short: '60 MT HMS 1&2 (80:20), yard-ready.',
+    full: 'Sixty metric tonnes of HMS 1&2 heavy melting scrap in 80:20 ratio from building demolition. Low contamination, already sized to melt spec. Weighbridge on site; buyer arranges cutting/loading. Price per MT ex-yard Colombo.',
+  },
+  {
+    title: 'Aluminium Extrusion Scrap · 8 MT (6063)',
+    condition: 'used',
+    price: 480,
+    currency: 'LKR',
+    loc: 'negombo',
+    attrs: {
+      material: 'Aluminium 6063',
+      form: 'extrusion offcuts',
+      contamination: 'clean, no thermal break',
+      loading: 'seller loads',
+    },
+    qty: { available: 8_000, unit: 'kg', min: 500 },
+    short: '8 MT clean 6063 extrusion offcuts.',
+    full: 'Eight metric tonnes of clean 6063 aluminium extrusion offcuts, no thermal break or hardware. Baled and loose mixed. Consistent alloy from a single fabricator. Seller can load onto buyer transport.',
+  },
+  {
+    title: 'Copper Cable Scrap · 3 MT (bright/berry mix)',
+    condition: 'used',
+    price: 1_950,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      material: 'Copper cable',
+      grade: 'bright/berry mix',
+      recovery: '~55%',
+      contamination: 'PVC insulated',
+      loading: 'buyer arranges',
+    },
+    qty: { available: 3_000, unit: 'kg', min: 200 },
+    short: '3 MT insulated copper cable, ~55% recovery.',
+    full: 'Three metric tonnes of mixed PVC-insulated copper cable, estimated ~55% metal recovery. Not stripped. Sample burn/strip test available at the yard. Sold on gross weight; buyer to arrange collection.',
+  },
+  {
+    title: 'Stainless Steel Scrap · 5 MT (304 mixed)',
+    condition: 'used',
+    price: 720,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      material: 'Stainless 304',
+      form: 'sheet/pipe mixed',
+      contamination: 'low, some brackets',
+      loading: 'shared',
+    },
+    qty: { available: 5_000, unit: 'kg', min: 300 },
+    short: '5 MT 304 stainless, sheet & pipe.',
+    full: 'Five metric tonnes of 304 stainless steel scrap, mixed sheet and pipe offcuts with some mild-steel brackets to be removed. Magnet-tested and sorted. Loading shared between parties. Price per kg ex-store.',
+  },
+  {
+    title: 'Mixed Automotive Scrap · 25 units (ELV)',
+    condition: 'salvage',
+    price: 1_650_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      material: 'End-of-life vehicles',
+      units: 25,
+      depollution: 'partial',
+      contamination: 'tyres/glass present',
+      loading: 'buyer arranges',
+    },
+    qty: { available: 25, unit: 'each', min: 5 },
+    short: '25 end-of-life vehicles, whole-unit lot.',
+    full: 'Twenty-five end-of-life vehicles sold as a whole-unit salvage lot. Partially depolluted; tyres and glass still present on some. No registration transfer — for dismantling and scrap only. Buyer arranges transport and permits.',
+  },
+  {
+    title: 'Reusable Structural Steel Beams · 40 MT',
+    condition: 'good',
+    price: 135_000,
+    currency: 'LKR',
+    loc: 'negombo',
+    attrs: {
+      material: 'Structural steel (reusable)',
+      form: 'I-beams/UB',
+      condition: 'reusable',
+      contamination: 'painted, boltholes',
+      loading: 'seller loads',
+    },
+    qty: { available: 40_000, unit: 'kg', min: 2_000 },
+    short: '40 MT reusable I-beams, various lengths.',
+    full: 'Forty metric tonnes of dismantled structural steel — I-beams and universal beams in reusable condition, various lengths, some with existing boltholes and paint. Suited to reuse or re-rolling. Loading by seller onto buyer transport.',
+  },
+  {
+    title: 'Brass Scrap · 1.2 MT (honey/mixed)',
+    condition: 'used',
+    price: 2_100,
+    currency: 'LKR',
+    loc: 'galle',
+    attrs: {
+      material: 'Brass',
+      grade: 'honey/mixed',
+      contamination: 'some plated',
+      loading: 'buyer arranges',
+    },
+    qty: { available: 1_200, unit: 'kg', min: 100 },
+    short: '1.2 MT mixed brass, some plated.',
+    full: 'One point two metric tonnes of mixed brass — taps, fittings and turnings, with a small proportion of plated items to be discounted. Sorted from a plumbing wholesaler clearance. Price per kg; buyer collects.',
+  },
+  {
+    title: 'Industrial Surplus · Pipe & Fittings Clearance',
+    condition: 'incomplete',
+    price: 850_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      material: 'GI/PVC pipe & fittings',
+      form: 'surplus stock',
+      condition: 'new-old-stock, incomplete ranges',
+      loading: 'buyer arranges',
+    },
+    short: 'Warehouse pipe & fittings clearance, job lot.',
+    full: 'A single job-lot clearance of surplus GI and PVC pipe and fittings — new-old-stock but incomplete ranges and mixed sizes. Sold as one lot, not itemised. Buyer inspects and clears the bay within one week of award.',
+  },
+  {
+    title: 'Lead-Acid Battery Scrap · 4 MT',
+    condition: 'used',
+    price: 340,
+    currency: 'LKR',
+    loc: 'kurunegala',
+    attrs: {
+      material: 'Lead-acid batteries',
+      form: 'whole units',
+      hazard: 'contains acid',
+      licence: 'buyer must hold permit',
+      loading: 'seller loads',
+    },
+    qty: { available: 4_000, unit: 'kg', min: 500 },
+    short: '4 MT used batteries — permit holders only.',
+    full: 'Four metric tonnes of used lead-acid batteries as whole units. HAZARDOUS — contains sulphuric acid. Sold ONLY to buyers holding the appropriate recycling/transport permit; documentation checked before release. Seller loads under supervision.',
+  },
+  {
+    title: 'Aluminium Scrap · 12 MT (Australia)',
+    condition: 'used',
+    price: 1_650,
+    currency: 'AUD',
+    loc: 'melbourne',
+    attrs: {
+      material: 'Aluminium mixed',
+      form: 'cast/wrought mixed',
+      contamination: 'low',
+      loading: 'seller loads',
+    },
+    qty: { available: 12_000, unit: 'kg', min: 1_000 },
+    short: '12 MT mixed aluminium, Melbourne yard.',
+    full: 'Twelve metric tonnes of mixed cast and wrought aluminium scrap at a Melbourne yard, low contamination, sorted from manufacturing. Weighbridge docket provided. Price per tonne; export enquiries welcome.',
+  },
+];
+
+const GENERAL: SimItem[] = [
+  {
+    title: 'Office Furniture Clearance · 120 workstations',
+    condition: 'good',
+    price: 2_400_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: { itemType: 'Office furniture', units: 120, brand: 'mixed', condition: 'used-good' },
+    short: 'Full floor of workstations, chairs & storage.',
+    full: 'Clearance of a full office floor: 120 workstations with screens, task chairs, pedestals and meeting tables. Mostly good condition with normal wear; a handful of chairs need gas struts. Sold as one lot; buyer clears within two weeks.',
+  },
+  {
+    title: 'Restaurant Equipment Lot · commercial kitchen',
+    condition: 'very good',
+    price: 3_800_000,
+    currency: 'LKR',
+    loc: 'negombo',
+    attrs: { itemType: 'Commercial kitchen', brand: 'mixed', condition: 'used-vg' },
+    short: 'Complete commercial kitchen, ready to install.',
+    full: 'A complete commercial kitchen from a closed restaurant: six-burner range, salamander, twin fryers, cold rooms, prep benches and extraction. All in working order and recently descaled. Available for inspection under power.',
+  },
+  {
+    title: 'Gym Equipment · 30 machines (commercial)',
+    condition: 'good',
+    price: 4_200_000,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: {
+      itemType: 'Gym equipment',
+      units: 30,
+      brand: 'mixed commercial',
+      condition: 'used-good',
+    },
+    short: 'Commercial gym fit-out, cardio & strength.',
+    full: 'Thirty-piece commercial gym: treadmills, cross-trainers, spin bikes and a plate-loaded strength range. Cardio serviced; two treadmills need belts (noted). Free weights and racks included. Ideal to start or expand a facility.',
+  },
+  {
+    title: 'Solar Panels (used) · 200 x 330W',
+    condition: 'used',
+    price: 1_800_000,
+    currency: 'LKR',
+    loc: 'hambantota',
+    attrs: { itemType: 'Solar panels', units: 200, wattage: 330, condition: 'used-tested' },
+    short: '200 tested used 330W panels, ex-farm.',
+    full: 'Two hundred used 330W polycrystalline panels removed from a re-powered solar farm. Flash-tested with results sheet; expect output within normal degradation for age. A few with minor frame marks. Ideal for off-grid or agrivoltaics.',
+  },
+  {
+    title: 'IT Asset Disposal · 150 laptops (mixed)',
+    condition: 'fair',
+    price: 3_000_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      itemType: 'Laptops',
+      units: 150,
+      condition: 'mixed, data-wiped',
+      dataWipe: 'certified',
+    },
+    short: '150 corporate laptops, certified data-wiped.',
+    full: 'A corporate IT refresh lot of 150 laptops (mixed i5/i7, 8–16 GB). Certified data-wiped with certificates provided. Grade B/C cosmetics; a portion need batteries or keyboards. Sold as a single lot for refurbishment or parts.',
+  },
+  {
+    title: 'Event & Marquee Equipment · full inventory',
+    condition: 'good',
+    price: 2_100_000,
+    currency: 'LKR',
+    loc: 'galle',
+    attrs: { itemType: 'Event equipment', condition: 'used-good' },
+    short: 'Marquees, staging, chairs & lighting.',
+    full: 'Complete events-hire inventory: three marquees (6x12, 9x18, 12x24), modular staging, 500 banquet chairs, round tables and PAR lighting. Some canvas patched but serviceable. A turnkey start for an events business.',
+  },
+  {
+    title: 'Shipping Containers · 10 x 20ft (used)',
+    condition: 'used',
+    price: 4_500_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: {
+      itemType: 'Shipping containers',
+      units: 10,
+      size: '20ft',
+      condition: 'wind-water-tight',
+    },
+    short: '10 used 20ft containers, WWT grade.',
+    full: 'Ten used 20ft shipping containers, wind-and-water-tight grade, doors and floors sound. Surface rust and previous-owner paint. Ideal for storage or conversion. Sideloader delivery arranged at cost.',
+  },
+  {
+    title: 'Retail POS & Shelving · shop fit-out',
+    condition: 'very good',
+    price: 1_250_000,
+    currency: 'LKR',
+    loc: 'kandy',
+    attrs: { itemType: 'Retail fit-out', condition: 'used-vg' },
+    short: 'Complete shop fit-out: shelving, POS, counters.',
+    full: 'Complete supermarket shop fit-out: gondola shelving, three POS lanes with scanners, chiller cabinets and a service counter. Removed carefully on closure. Chillers gas-checked. Sold as one lot; loading assistance provided.',
+  },
+  {
+    title: 'Printing Press · A2 offset (project)',
+    condition: 'requires repair',
+    price: 2_800_000,
+    currency: 'LKR',
+    loc: 'colombo',
+    attrs: { itemType: 'Offset press', condition: 'requires-repair', fault: 'dampening system' },
+    short: 'A2 four-colour offset — dampening needs work.',
+    full: 'A2 four-colour offset press offered as a project — the dampening system needs rebuild and one unit has a bearing noise. Turns over and inks up. Suited to a printer with in-house engineering. Full manuals included.',
+  },
+  {
+    title: 'Ex-fleet Bicycles · 60 units',
+    condition: 'fair',
+    price: 6_500,
+    currency: 'AUD',
+    loc: 'sydney',
+    attrs: { itemType: 'Bicycles', units: 60, condition: 'used-fair, service needed' },
+    short: '60 ex-share-scheme bikes, bulk lot.',
+    full: 'Sixty ex-share-scheme city bikes sold as a bulk lot. Robust step-through frames; most need a basic service (brakes, tyres) and some are missing baskets. Ideal for a hire fleet or refurb-and-resell. Sold unregistered, as-is.',
+  },
+];
+
+const TEMPLATES: Record<string, SimItem[]> = {
+  vehicles: VEHICLES,
+  machinery: MACHINERY,
+  gems: GEMS,
+  property: PROPERTY,
+  // `bulk` is Singha's commodities/produce/scrap class — mix produce + scrap for variety.
+  bulk: [...BULK.slice(0, 6), ...SCRAP.slice(0, 4)],
+  general: GENERAL,
+};
+
+/** Generic realistic fallback so a NEWLY-added category still seeds believable inventory. */
+function genericBank(category: string): SimItem[] {
+  const label = category.charAt(0).toUpperCase() + category.slice(1);
+  const conditions = [
+    'excellent',
+    'very good',
+    'good',
+    'fair',
+    'used',
+    'good',
+    'very good',
+    'fair',
+    'good',
+    'used',
+  ];
+  const cities = [
+    'colombo',
+    'galle',
+    'kandy',
+    'kurunegala',
+    'negombo',
+    'hambantota',
+    'ratnapura',
+    'colombo',
+    'kandy',
+    'galle',
+  ];
+  return Array.from({ length: PER_CATEGORY }, (_, i) => ({
+    title: `${label} lot ${i + 1} — graded consignment`,
+    attrs: { itemType: label, batch: i + 1 },
+    condition: conditions[i]!,
+    price: 500_000 + i * 125_000,
+    currency: 'LKR' as Cur,
+    loc: cities[i]!,
+    short: `A graded ${label.toLowerCase()} consignment offered through Singha.`,
+    full: `A representative ${label.toLowerCase()} consignment in ${conditions[i]} condition, inspected and graded. Inspection and collection details provided on enquiry. Synthetic dataset entry for platform testing.`,
+  }));
+}
+
+// Sale-method distribution across the 10 per category (directive §6): auctions,
+// buy-now, make-offer, sealed tender, EOI — so Singha reads as more than an auction site.
+const SALE_PLAN: { method: string; reserve?: boolean }[] = [
+  { method: 'TIMED_AUCTION', reserve: false },
+  { method: 'TIMED_AUCTION', reserve: true },
+  { method: 'TIMED_AUCTION', reserve: true },
+  { method: 'LIVE_HYBRID', reserve: false },
+  { method: 'BUY_NOW' },
+  { method: 'BUY_NOW' },
+  { method: 'MAKE_OFFER' },
+  { method: 'MAKE_OFFER' },
+  { method: 'SEALED_TENDER' },
+  { method: 'EXPRESSION_OF_INTEREST' },
+];
+
+const catCode = (c: string) => c.slice(0, 3).toUpperCase();
+
+async function main(): Promise<void> {
+  assertSafeEnvironment();
+  const prisma = getPrisma();
+
+  // Idempotency: skip if SIM inventory already present.
+  const existing = await prisma.listing.count({ where: { publicRef: { startsWith: 'SMKT-' } } });
+  if (existing > 0) {
+    console.log(
+      `Marketplace SIM dataset already present (${existing} listings) — skipping. Run seed:marketplace-demo:reset first to rebuild.`,
+    );
+    return;
+  }
+
+  // Market + operator + node (reuse the LK set if seed-evolution created it) ----
+  let market = await prisma.market.findFirst({ where: { code: 'LK' } });
+  if (!market) {
+    market = await prisma.market.create({
+      data: {
+        id: newId(),
+        code: 'LK',
+        name: 'Sri Lanka',
+        countryCode: 'LK',
+        defaultCurrency: 'LKR',
+        defaultLanguage: 'en',
+        defaultTimezone: 'Asia/Colombo',
+        sortOrder: 1,
+      },
+    });
+  }
+  let operator = await prisma.operator.findFirst({ where: { code: 'SINGHA-LK' } });
+  if (!operator) {
+    operator = await prisma.operator.create({
+      data: {
+        id: newId(),
+        code: 'SINGHA-LK',
+        publicName: 'Singha Auctions (Sri Lanka)',
+        legalName: 'Singha Auctions Lanka (Pvt) Ltd',
+        verification: 'verified',
+        disclosure: 'Marketplace operator for the Sri Lanka market.',
+      },
+    });
+  }
+  let node = await prisma.marketNode.findFirst({ where: { code: 'lk-colombo' } });
+  if (!node) {
+    node = await prisma.marketNode.create({
+      data: {
+        id: newId(),
+        code: 'lk-colombo',
+        name: 'Singha Colombo',
+        mode: 'LOCAL_COMMERCE',
+        primaryMarketId: market.id,
+        defaultCurrency: 'LKR',
+        defaultLanguage: 'en',
+        defaultLocationCountry: 'LK',
+        canOriginateListings: true,
+        canTakeOffers: true,
+        canRunAuctions: true,
+        canAcceptPayments: false,
+        verification: 'verified',
+      },
+    });
+  }
+
+  // Shared Location rows (for pickup/delivery flags). Idempotent: reuse a matching city
+  // reference if one already exists (generic reference data — never SIM-specific, so reset
+  // leaves it alone and re-seeding never duplicates it).
+  const locIds = new Map<string, string>();
+  for (const l of LOCATIONS) {
+    const found = await prisma.location.findFirst({
+      where: { countryCode: l.countryCode, city: l.city, region: l.region },
+      select: { id: true },
+    });
+    const id = found?.id ?? newId();
+    if (!found) {
+      await prisma.location.create({
+        data: {
+          id,
+          countryCode: l.countryCode,
+          region: l.region,
+          city: l.city,
+          visibility: 'public',
+        },
+      });
+    }
+    locIds.set(l.key, id);
+  }
+
+  // A handful of SIM sellers so the marketplace is multi-seller ------------------
+  const sellerIds: string[] = [];
+  for (let s = 1; s <= 4; s += 1) {
+    const id = newId();
+    await prisma.customer.create({
+      data: {
+        id,
+        email: `mkt-seller-${s}@mkt.singha.local`,
+        legalName: `${SIM} Singha Consignor ${s}`,
+        status: 'active',
+        kycStatus: 'verified',
+      },
+    });
+    sellerIds.push(id);
+  }
+
+  const now = Date.now();
+  const counts: Record<string, number> = {};
+  let totalListings = 0;
+  let totalMedia = 0;
+  const currencyCount: Record<string, number> = {};
+  const methodCount: Record<string, number> = {};
+
+  // Iterate the CANONICAL active categories dynamically (directive §1) ----------
+  for (const category of CATEGORY_KEYS) {
+    const bank = TEMPLATES[category] ?? genericBank(category);
+    const items = Array.from({ length: PER_CATEGORY }, (_, i) => bank[i % bank.length]!);
+
+    for (let i = 0; i < PER_CATEGORY; i += 1) {
+      const item = items[i]!;
+      const plan = SALE_PLAN[i]!;
+      const ref = `SMKT-${catCode(category)}-${String(i + 1).padStart(2, '0')}`;
+      const sellerId = sellerIds[totalListings % sellerIds.length]!;
+      const onNode = i % 3 === 0;
+      const locId = locIds.get(item.loc) ?? locIds.get('colombo')!;
+      const delivers = i % 2 === 0; // ~half offer delivery
+      const priceMinor = minor(item.price);
+
+      // Asset — attributes carry the [SIM] provenance marker (never shown prominently).
+      const assetId = newId();
+      await prisma.asset.create({
+        data: {
+          id: assetId,
+          category,
+          schemaVersion: 1,
+          attributes: {
+            ...item.attrs,
+            condition: item.condition,
+            simulation: { marker: SIM, dataset: DATASET_VERSION, ref },
+          },
+          ownerCustomerId: sellerId,
+          lifecycle: 'available',
+        },
+      });
+
+      const isBulk = category === 'bulk' || Boolean(item.qty);
+      const listingId = newId();
+      await prisma.listing.create({
+        data: {
+          id: listingId,
+          assetId,
+          saleMethod: plan.method as never,
+          status: 'live',
+          publicRef: ref,
+          title: item.title,
+          currency: item.currency,
+          shortDescription: item.short,
+          fullDescription: item.full,
+          locationCity: LOCATIONS.find((l) => l.key === item.loc)?.city ?? 'Colombo',
+          locationRegion: LOCATIONS.find((l) => l.key === item.loc)?.region ?? 'Western',
+          inspectionSummary: 'Inspection by appointment at the storing location on weekdays.',
+          collectionSummary: delivers
+            ? 'Delivery available at cost; pickup also welcome.'
+            : 'Pickup / collection by the buyer.',
+          featured: i === 0,
+          operatorId: operator.id,
+          originNodeId: onNode ? node.id : undefined,
+          pickupLocationId: locId,
+          destinationLocationId: delivers ? locId : undefined,
+          // Pricing per sale method:
+          buyNowPriceMinor: plan.method === 'BUY_NOW' ? priceMinor : undefined,
+          guidePriceMinor: ['MAKE_OFFER', 'SEALED_TENDER', 'EXPRESSION_OF_INTEREST'].includes(
+            plan.method,
+          )
+            ? priceMinor
+            : undefined,
+          showGuidePrice: ['MAKE_OFFER', 'SEALED_TENDER', 'EXPRESSION_OF_INTEREST'].includes(
+            plan.method,
+          ),
+          // Quantity/unit engine for commodities:
+          quantityAvailable: item.qty ? item.qty.available : undefined,
+          minOrderQuantity: item.qty?.min ?? undefined,
+          quantityUnitCode: item.qty?.unit ?? undefined,
+          unitPriceMinor: isBulk && item.qty ? priceMinor : undefined,
+          pricingBasis: isBulk && item.qty ? 'per_unit' : undefined,
+        },
+      });
+
+      // Auctions get a non-binding open window (never a Sale row) ---------------
+      if (plan.method === 'TIMED_AUCTION' || plan.method === 'LIVE_HYBRID') {
+        const opening = priceMinor;
+        const increment = minor(Math.max(1, Math.round(item.price * 0.01)));
+        await prisma.auction.create({
+          data: {
+            id: newId(),
+            listingId,
+            status: 'open',
+            currency: item.currency,
+            startsAt: new Date(now - 3_600_000),
+            endsAt: new Date(now + (2 + (i % 6)) * 86_400_000),
+            openingBidMinor: opening,
+            incrementMinor: increment,
+            reserveMinor: plan.reserve ? minor(Math.round(item.price * 1.15)) : undefined,
+            reserveVisible: false,
+            softCloseTriggerSec: 60,
+            softCloseExtendSec: 120,
+          },
+        });
+      }
+
+      // Media (directive §5): vary 0..5 images; one cover; one video; one document.
+      const imageCount = i === PER_CATEGORY - 1 ? 0 : 2 + (i % 4); // last item: NO image (fallback test)
+      for (let m = 0; m < imageCount; m += 1) {
+        await prisma.mediaObject.create({
+          data: {
+            id: newId(),
+            assetId,
+            kind: 'image',
+            storageKey: `smkt/${category}/${ref.toLowerCase()}-${m + 1}.jpg`,
+            status: 'ready',
+            isOriginal: true,
+            visibility: 'public',
+            isCover: m === 0,
+            sortOrder: m,
+            caption: m === 0 ? `${item.title} — main view` : `${item.title} — view ${m + 1}`,
+            mimeType: 'image/jpeg',
+            width: 1600,
+            height: 1200,
+          },
+        });
+        totalMedia += 1;
+      }
+      if (i === 1) {
+        // one listing per category also carries a walkaround video + its thumbnail
+        await prisma.mediaObject.create({
+          data: {
+            id: newId(),
+            assetId,
+            kind: 'video',
+            storageKey: `smkt/${category}/${ref.toLowerCase()}-walkaround.mp4`,
+            status: 'ready',
+            isOriginal: true,
+            visibility: 'public',
+            isCover: false,
+            sortOrder: 90,
+            caption: 'Walkaround video',
+            mimeType: 'video/mp4',
+          },
+        });
+        totalMedia += 1;
+      }
+      if (i === 2) {
+        // one listing carries a PRIVATE document (condition report) — RW3 access path
+        await prisma.mediaObject.create({
+          data: {
+            id: newId(),
+            assetId,
+            kind: 'document',
+            storageKey: `smkt/${category}/${ref.toLowerCase()}-condition-report.pdf`,
+            status: 'ready',
+            isOriginal: true,
+            visibility: 'private',
+            isCover: false,
+            sortOrder: 91,
+            caption: 'Condition report (private)',
+            mimeType: 'application/pdf',
+          },
+        });
+        totalMedia += 1;
+      }
+
+      counts[category] = (counts[category] ?? 0) + 1;
+      currencyCount[item.currency] = (currencyCount[item.currency] ?? 0) + 1;
+      methodCount[plan.method] = (methodCount[plan.method] ?? 0) + 1;
+      totalListings += 1;
+    }
+  }
+
+  console.log(`Seeded realistic marketplace ${DATASET_VERSION}:`);
+  console.log(`  categories: ${CATEGORY_KEYS.join(', ')}`);
+  console.log(`  listings per category: ${JSON.stringify(counts)}`);
+  console.log(`  total listings: ${totalListings}, media rows: ${totalMedia}`);
+  console.log(`  sale methods: ${JSON.stringify(methodCount)}`);
+  console.log(`  currencies: ${JSON.stringify(currencyCount)}`);
+  console.log(`  sellers: ${sellerIds.length}, locations: ${LOCATIONS.length}`);
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await disconnectPrisma();
+  });

@@ -62,7 +62,9 @@
     "contract:emit": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/emit-contract.mjs\"",
     "contract:check": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/emit-contract.mjs --check\"",
     "test:seller-org": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-seller-org.mjs\"",
-    "test:member": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-member.mjs\""
+    "test:member": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-member.mjs\"",
+    "seed:marketplace-demo": "dotenv -e .env -- pnpm --filter @singha/database run seed:marketplace",
+    "seed:marketplace-demo:reset": "dotenv -e .env -- pnpm --filter @singha/database run seed:marketplace:reset"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -25,6 +25,12 @@ export const DomainEventName = {
   TenderSubmitted: 'TENDER_SUBMITTED',
   TenderOpened: 'TENDER_OPENED',
   InboundMessageReceived: 'INBOUND_MESSAGE_RECEIVED',
+  // AIC-2 — cross-channel continuity (docs/09/10). Emitted when a customer asks the assistant to
+  // continue on WhatsApp/voice (`POST /assistant/channel-request`). A CONTINUED inbound message
+  // (one carrying a valid continuity token) reuses `InboundMessageReceived` above with
+  // `payload.continued: true` — it IS an inbound message, just attached to an existing
+  // conversation instead of a new one; it does not need its own event name.
+  AssistantChannelRequested: 'ASSISTANT_CHANNEL_REQUESTED',
   BidIntentCreated: 'BID_INTENT_CREATED',
   BidIntentConfirmed: 'BID_INTENT_CONFIRMED',
   AiRunRecorded: 'AI_RUN_RECORDED',

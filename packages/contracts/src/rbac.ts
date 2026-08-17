@@ -42,6 +42,11 @@ export const Permission = {
   CommerceOperate: 'commerce:operate',
   ConnectOperate: 'connect:operate',
   AiUse: 'ai:use',
+  // Customer-facing AI conversation assistant (AIC-1) — distinct from AiUse (staff copilot /
+  // listing draft) and ConnectOperate (staff channel operation). Non-binding: lets a customer
+  // (or seller/seller_staff) converse with the assistant about their OWN conversation/listing
+  // context; it never grants bid/offer placement, which stays gated by BidPlace/EoiSubmit/etc.
+  AiConverse: 'ai:converse',
   SocialOperate: 'social:operate',
   // Approving a publication is a distinct human gate from drafting/operating it
   // (docs/11 "human approval" before every public post) — deliberately NOT
@@ -84,12 +89,20 @@ const SELLER_PERMISSIONS: Permission[] = [
   P.EoiSubmit,
   P.ExchangeParticipate,
   P.AiUse,
+  P.AiConverse,
   P.IntelligenceRead,
   P.ListingContent,
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [Role.Customer]: [P.BidPlace, P.EoiSubmit, P.ExchangeParticipate, P.CommercePay, P.WatchManage],
+  [Role.Customer]: [
+    P.BidPlace,
+    P.EoiSubmit,
+    P.ExchangeParticipate,
+    P.CommercePay,
+    P.WatchManage,
+    P.AiConverse,
+  ],
   [Role.Seller]: SELLER_PERMISSIONS,
   [Role.SellerStaff]: SELLER_PERMISSIONS,
   [Role.AuctionStaff]: [

@@ -294,6 +294,16 @@ export const inboundMessageSchema = z.object({
   externalUserId: z.string().min(1).max(200).optional(),
   text: z.string().max(4000).optional(),
   providerMessageId: z.string().max(200).optional(),
+  /**
+   * AIC-2 cross-channel continuity (docs/09 "one customer identity and conversation history
+   * across channels"). When present, this inbound message claims to CONTINUE an assistant
+   * conversation started on another channel (see `issueContinuityToken` in
+   * apps/api/src/shared/auth/continuity-token.ts). It is NEVER trusted for identity by itself:
+   * `ConnectService.inbound` re-resolves the customer from a `verifiedAt`-stamped
+   * `ExternalIdentity` exactly as it does for every other inbound message, and only attaches to
+   * the origin conversation if that resolved customer matches the origin's own `customerId`.
+   */
+  continuityToken: z.string().min(1).max(4000).optional(),
 });
 export type InboundMessageInput = z.infer<typeof inboundMessageSchema>;
 
@@ -356,6 +366,93 @@ export const translateSchema = z.object({
   sourceLang: z.string().min(2).max(10).optional(),
 });
 export type TranslateInput = z.infer<typeof translateSchema>;
+
+/**
+ * Customer-facing AI conversation assistant (AIC-1, docs/10 "Customer AI"). Non-binding (rule
+ * 11): the assistant answers/suggests only — bid/offer/EOI creation stays with the existing
+ * engines behind explicit confirmation. `message` is free text, so it goes through
+ * `guardAiRequest('assistant', ...)` for injection detection before it ever reaches a provider;
+ * the 2000 ceiling mirrors `POLICIES.assistant.maxInputChars` in
+ * packages/domain/src/modules/ai/ai-safety.ts (kept in sync manually — see the `translateSchema`
+ * note above for why @singha/contracts cannot import that constant directly). `conversationId`
+ * continues an existing (own) conversation; omitted, a fresh one is started. `listingId` triggers
+ * assembly of a customer-safe item context (title/price-state/location/etc. — never reserve,
+ * proxy max, seller floor or any other internal field). `url` is the page the customer was on,
+ * purely informational context for the assistant, never authoritative.
+ */
+export const askAssistantSchema = z.object({
+  conversationId: z.string().min(1).optional(),
+  listingId: z.string().min(1).optional(),
+  url: z.string().max(2000).optional(),
+  message: z.string().min(1).max(2000),
+});
+export type AskAssistantInput = z.infer<typeof askAssistantSchema>;
+
+/**
+ * The assistant's reply. `refused` is true when the boundary guard blocked the request (prompt
+ * injection / instruction override / over-length) — `reply` is then a fixed safe message and no
+ * provider was ever called. `suggestions` are customer-safe LABELS only (e.g. "Make an offer",
+ * "Arrange inspection") derived from the listing's sale method — never actions/links; creating a
+ * bid/offer/EOI stays with the existing engines behind explicit confirmation (rule 11).
+ */
+export const assistantAskResponseSchema = z.object({
+  conversationId: z.string().min(1),
+  reply: z.string().min(1),
+  refused: z.boolean(),
+  suggestions: z.array(z.string()).optional(),
+});
+export type AssistantAskResponse = z.infer<typeof assistantAskResponseSchema>;
+
+/**
+ * AIC-2 — "Chat now / WhatsApp / Call me" channel-request (docs/09/10). The customer, mid-
+ * conversation, asks the assistant to continue on a DIFFERENT channel. `channel` is deliberately
+ * a 2-value enum, never the full `channelValues` set — 'web' is where the assistant already
+ * lives (never "requested"), and only whatsapp/voice are hand-off targets; whether either is
+ * actually offered is a config check (`assistantChannels`) done in `AssistantService`, not here.
+ * `phone` is the callback/WhatsApp number; optional for both (a WhatsApp link can be issued
+ * without one, and a voice request without one still records a non-binding callback intent —
+ * rule "unknown business value -> configurable, never blocking").
+ */
+export const assistantRequestableChannelValues = ['whatsapp', 'voice'] as const;
+
+export const assistantChannelRequestSchema = z.object({
+  conversationId: z.string().min(1),
+  channel: z.enum(assistantRequestableChannelValues),
+  phone: z.string().min(4).max(32).optional(),
+});
+export type AssistantChannelRequestInput = z.infer<typeof assistantChannelRequestSchema>;
+
+/**
+ * `deepLink` is only set for `channel:'whatsapp'` (a provider-neutral continuation URL carrying
+ * the continuity token); `callbackRequested` only for `channel:'voice'` (always `true` there — a
+ * non-binding fake, nothing calls anyone for real). `continuityToken` is always returned: it is
+ * the same link-not-credential either channel would present back to `POST /connect/inbound` (or
+ * a future voice-ingress path) to resume the SAME conversation — see continuity-token.ts.
+ */
+export const assistantChannelRequestResponseSchema = z.object({
+  channel: z.enum(assistantRequestableChannelValues),
+  deepLink: z.string().optional(),
+  callbackRequested: z.boolean().optional(),
+  continuityToken: z.string().min(1),
+});
+export type AssistantChannelRequestResponse = z.infer<typeof assistantChannelRequestResponseSchema>;
+
+/**
+ * AIC-3 — AI-assisted search (docs/10 "Customer AI" search/discovery). `query` is free text, so
+ * it goes through `guardAiRequest('assistant', ...)` exactly like `askAssistantSchema.message`
+ * before anything ever reaches a provider — the 2000 ceiling mirrors that schema's (and
+ * `POLICIES.assistant.maxInputChars`). `conversationId` is OPTIONAL and, unlike `ask()`, is
+ * NEVER minted fresh here: when supplied it must be an existing conversation the caller already
+ * owns (`AssistantService.search` reuses `resolveConversationId`'s ownership check, never its
+ * mint-a-new-id branch) so the search's summary can be appended to it; when omitted, the search
+ * simply has no conversation to attach a summary Message to. The model never receives/returns
+ * this DTO directly — it only ever sees `query` (see `AiProvider.interpretSearch`).
+ */
+export const assistantSearchSchema = z.object({
+  conversationId: z.string().min(1).optional(),
+  query: z.string().min(1).max(2000),
+});
+export type AssistantSearchInput = z.infer<typeof assistantSearchSchema>;
 
 // --- Singha Social Publisher (docs/11) -------------------------------------
 export const socialPlatformValues = ['facebook', 'instagram'] as const;

@@ -66,9 +66,21 @@ export interface AppConfig {
   supabase: SupabaseConfig;
   fx: FxProviderConfig;
   payments: { webhookSecret: string };
+  // AIC-2 — non-flag assistant config (docs/09/10). `assistantChannels` (the capability list)
+  // lives on `features` per the flag pattern; this is the sibling NON-boolean config value the
+  // whatsapp channel-request deep-link is built from — same "small dedicated section" shape as
+  // `payments`/`fx` above, not a boolean so it does not belong on `FeatureFlags`.
+  assistant: { whatsappLinkBase: string };
 }
 
 const configured = (value: string): ProviderStatus => ({ configured: value.trim().length > 0 });
+
+/** Parse a comma-separated env list (same shape as CORS_ORIGINS above). Blank -> []. */
+const parseList = (value: string): string[] =>
+  value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
 
 /** Build a typed AppConfig from an environment record (pure; no side effects). */
 export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>): AppConfig {
@@ -113,6 +125,8 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       cubeCatalogue: env.FEATURE_CUBE_CATALOGUE,
       aiListing: env.FEATURE_AI_LISTING,
       aiMediaEnhance: env.FEATURE_AI_MEDIA_ENHANCE,
+      aiConversation: env.FEATURE_AI_CONVERSATION,
+      assistantChannels: parseList(env.ASSISTANT_CHANNELS),
       socialAutoPublish: env.FEATURE_SOCIAL_AUTO_PUBLISH,
       whatsappBidIntent: env.FEATURE_WHATSAPP_BID_INTENT,
       v3VisualArchitecture: env.FEATURE_V3_VISUAL_ARCHITECTURE,
@@ -175,6 +189,7 @@ export function loadConfig(source?: NodeJS.ProcessEnv | Record<string, unknown>)
       configured: env.FX_API_URL.trim().length > 0,
     },
     payments: { webhookSecret: env.PAYMENT_WEBHOOK_SECRET },
+    assistant: { whatsappLinkBase: env.ASSISTANT_WHATSAPP_LINK_BASE },
   };
 }
 

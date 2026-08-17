@@ -10,5 +10,8 @@ import { AI_PROVIDER, MockAiProvider } from './ai.provider';
 @Module({
   controllers: [AiController],
   providers: [AiService, { provide: AI_PROVIDER, useClass: MockAiProvider }],
+  // The AIC-1 assistant module reuses this SAME provider binding (never a second/parallel
+  // binding) so swapping the mock for a real model only ever happens in one place.
+  exports: [AI_PROVIDER],
 })
 export class AiModule {}

@@ -19,3 +19,4 @@ export * from './insight-domains';
 export * from './node-domains';
 export * from './discovery';
 export * from './engagement';
+export * from './vision-domains';

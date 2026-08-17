@@ -19,8 +19,16 @@ Ground truth at audit time:
 - **RW4** — additive catalogue facets (price/quantity/unit/pickup/delivery) + customer-safe card
   hints; contract facet tests (8) + live-verified; FE types synced. Backend `48a6ba6`, FE `84e96c2`.
   **RW4 → COMPLETE** (except a per-listing `verified` filter, deferred — needs a verification source).
+- **RW2** — photo-first AI seller intake (`POST /ai/vision/intake`): provider-neutral
+  `VisionIntelligenceProvider` port + deterministic `MockVisionProvider` (PROVIDER_GATED for a real
+  OSS/managed engine — see `SINGHA_OSS_DECISIONS.md`); pure domain kernel (category capture coach,
+  honest per-field states, seller-claim reconciliation, evidence-based valuation from comparables);
+  advisory-only result with full per-field provenance (value/confidence/source/state) recorded as a
+  derived `AiRun` (`media_caption`) that mutates NO asset/listing fact; same AI boundary guard on the
+  free-text notes; `ai:use` gated. 13 domain unit tests + a 20-assertion live-verified e2e
+  (`test:vision`, wired into CI). **RW2 → COMPLETE (engine mock; real model PROVIDER_GATED PRV-1).**
 
-The rows below are the RW0 snapshot; RW4/RW5 are now COMPLETE per the above.
+The rows below are the RW0 snapshot; RW2/RW4/RW5 are now COMPLETE per the above.
 
 ## Phase-level matrix
 

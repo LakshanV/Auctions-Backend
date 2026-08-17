@@ -5,5 +5,7 @@ import { IntelligenceService } from './intelligence.service';
 @Module({
   controllers: [IntelligenceController],
   providers: [IntelligenceService],
+  // Exported so the RW2 VisionModule can reuse comparables for evidence-based valuation.
+  exports: [IntelligenceService],
 })
 export class IntelligenceModule {}

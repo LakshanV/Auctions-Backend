@@ -131,6 +131,13 @@ jobs:
       - name: E2E (insight — deterministic matching / pricing / offer / risk intelligence)
         run: pnpm run test:insight
 
+      # RW2 photo-first AI seller intake (docs/10) — the advisory vision draft is a DERIVED AiRun
+      # (per-field provenance + honest capture coach + evidence-based valuation) that mutates NO
+      # asset/listing fact, applies the SAME AI boundary guard to free-text notes, and is ai:use
+      # gated on the server. Provider-neutral (mock until PROVIDER_GATED activation).
+      - name: E2E (vision — advisory photo-first seller intake, derived + guarded)
+        run: pnpm run test:vision
+
       # Satellite Market Node + SEO (Evolution E13, pack Addendum A + doc 11) — the two node modes,
       # the non-negotiable central-ledger invariant (a node-originated listing is the SAME central
       # canonical record; origination is attribution, gated by mode/capability/verification), and the

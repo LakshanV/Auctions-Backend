@@ -33,6 +33,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { SocialModule } from './modules/social/social.module';
 import { IntelligenceModule } from './modules/intelligence/intelligence.module';
+import { VisionModule } from './modules/vision/vision.module';
 import { LiveModule } from './modules/live/live.module';
 import { WatchModule } from './modules/watch/watch.module';
 import { MeModule } from './modules/me/me.module';
@@ -89,6 +90,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     AssistantModule,
     SocialModule,
     IntelligenceModule,
+    VisionModule,
     LiveModule,
     WatchModule,
     MeModule,

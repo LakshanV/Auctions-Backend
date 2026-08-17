@@ -22,3 +22,4 @@ export * from './modules/member';
 export * from './modules/discovery';
 export * from './modules/engagement';
 export * from './modules/ai';
+export * from './modules/vision';

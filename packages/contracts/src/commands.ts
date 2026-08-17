@@ -18,6 +18,7 @@ export const saleMethodValues = [
 export const channelValues = ['web', 'whatsapp', 'facebook', 'instagram', 'email', 'sms'] as const;
 export const kycStatusValues = ['none', 'pending', 'verified', 'rejected'] as const;
 export const mediaKindValues = ['image', 'video', 'document', 'video_thumbnail'] as const;
+export type MediaKind = (typeof mediaKindValues)[number];
 export const orgRoleValues = ['owner', 'admin', 'staff'] as const;
 
 const publicRef = z
@@ -122,6 +123,14 @@ export const createUploadUrlSchema = z.object({
   sizeBytes: z.number().int().min(0).optional(),
 });
 export type CreateUploadUrlInput = z.infer<typeof createUploadUrlSchema>;
+
+// RW3 — authorized retrieval of PRIVATE/INTERNAL media (documents, video). A time-limited signed
+// read URL; the server object-level authorizes the caller before issuing it. `expiresInSec` is
+// bounded so a caller can never mint a long-lived link.
+export const mediaDownloadQuerySchema = z.object({
+  expiresInSec: z.coerce.number().int().min(60).max(3600).optional(),
+});
+export type MediaDownloadQuery = z.infer<typeof mediaDownloadQuerySchema>;
 
 // Passwordless demo login (email → bidder token). Not for real production auth.
 export const demoLoginSchema = z.object({

@@ -138,6 +138,13 @@ jobs:
       - name: E2E (vision — advisory photo-first seller intake, derived + guarded)
         run: pnpm run test:vision
 
+      # RW3 secure media pipeline (docs/06; FIX-03..07) — per-kind MIME allowlist + size caps at
+      # upload-grant AND registration, a provider-neutral malware scanner gate for documents/video
+      # (ClamAV isolated daemon in prod, PROVIDER_GATED), and an authorized time-limited download
+      # URL that object-level authorizes the caller (private-media IDOR guard).
+      - name: E2E (media — upload policy, authorized download, IDOR guard)
+        run: pnpm run test:media
+
       # Satellite Market Node + SEO (Evolution E13, pack Addendum A + doc 11) — the two node modes,
       # the non-negotiable central-ledger invariant (a node-originated listing is the SAME central
       # canonical record; origination is attribution, gated by mode/capability/verification), and the

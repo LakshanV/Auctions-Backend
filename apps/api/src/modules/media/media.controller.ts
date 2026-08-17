@@ -1,18 +1,20 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   type AddDerivativeInput,
   type CreateUploadUrlInput,
+  type MediaDownloadQuery,
   Permission,
   type RegisterMediaInput,
   addDerivativeSchema,
   createUploadUrlSchema,
+  mediaDownloadQuerySchema,
   registerMediaSchema,
 } from '@singha/contracts';
 import { MediaService } from './media.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
 import { type Principal } from '../../shared/auth/principal';
-import { ZodBody } from '../../shared/validation/zod.pipe';
+import { ZodBody, ZodQuery } from '../../shared/validation/zod.pipe';
 
 @Controller()
 export class MediaController {
@@ -37,6 +39,17 @@ export class MediaController {
     @Body(new ZodBody(registerMediaSchema)) input: RegisterMediaInput,
   ) {
     return this.media.registerMedia(principal, assetId, input);
+  }
+
+  /** RW3 — authorized, time-limited download URL for a media object (private docs/video). */
+  @Get('media/:mediaId/download-url')
+  @RequirePermissions(Permission.MediaManage)
+  downloadUrl(
+    @CurrentActor() principal: Principal,
+    @Param('mediaId') mediaId: string,
+    @Query(new ZodQuery(mediaDownloadQuerySchema)) query: MediaDownloadQuery,
+  ) {
+    return this.media.getDownloadUrl(principal, mediaId, query.expiresInSec);
   }
 
   @Post('media/:mediaId/derivatives')

@@ -28,7 +28,16 @@ Ground truth at audit time:
   free-text notes; `ai:use` gated. 13 domain unit tests + a 20-assertion live-verified e2e
   (`test:vision`, wired into CI). **RW2 → COMPLETE (engine mock; real model PROVIDER_GATED PRV-1).**
 
-The rows below are the RW0 snapshot; RW2/RW4/RW5 are now COMPLETE per the above.
+- **RW3** — secure media pipeline: per-kind **MIME allowlist + size caps** enforced at both the
+  upload-grant and registration steps (before any storage call), a provider-neutral **MalwareScanner**
+  port + deterministic mock screening documents/video before they are marked ready (infected → 422 +
+  audited `MEDIA_SCAN_REJECTED`; ClamAV isolated-daemon in prod, PROVIDER_GATED), and an **authorized,
+  time-limited download URL** (`GET /media/:id/download-url`) that object-level authorizes the caller —
+  private-media IDOR closed (owner passes, other seller 403, anon 401). 8 domain unit tests + an
+  11-assertion live-verified e2e (`test:media`, wired into CI). **RW3 → COMPLETE (scanner mock; real
+  engine PROVIDER_GATED PRV-1).**
+
+The rows below are the RW0 snapshot; RW2/RW3/RW4/RW5 are now COMPLETE per the above.
 
 ## Phase-level matrix
 

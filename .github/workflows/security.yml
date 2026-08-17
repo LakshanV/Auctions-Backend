@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0 # full history so leaked secrets in old commits are found
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           # gitleaks-action@v2 refuses to scan pull_request events without a token
           # (breaking change); the default GITHUB_TOKEN + contents:read above is

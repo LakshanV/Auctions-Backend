@@ -34,6 +34,30 @@ model activation is **PROVIDER_GATED**.
 | `ValuationModelProvider`                     | evidence-based price bands                                | **scikit-learn / statsmodels** (interpretable)                                           | BSD-3 / BSD                             | n/a                                                               | Prefer interpretable regression over a black-box before enough data exists; primary signal stays Singha comparables (prior sales / current listings).                    |
 | `VisionIntelligenceProvider` (VLM reasoning) | ambiguous recognition, cross-image damage synthesis       | pluggable — self-host **Qw2-VL / Llama-3.2-Vision** OR managed (Anthropic/OpenAI/Google) | Apache-2.0 (Qwen code)                  | ⚠️ **verify per model** (Llama = Meta community licence, not OSI) | Use a strong VLM ONLY where semantic reasoning adds value; deterministic/local subtasks above handle the rest. Provider-neutral so the owner picks self-host vs managed. |
 
+## Demo/synthetic image generation (marketplace visual population)
+
+Populating the demo catalogue with believable imagery is a **generation** problem distinct from the
+product vision pipeline. Kept provider-neutral and replaceable behind one script
+(`apps/web/scripts/gen-demo-media.mjs`, manifest-driven):
+
+| Option                                      | Engine                                                                         | Licence posture                                                                                                                                                 | Fit / when                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Procedural SVG** (default)                | self-written vector generator                                                  | CC0 / owned — no model, no weights                                                                                                                              | credential-free fallback; always works offline; not photographic   |
+| **Managed — OpenAI Images** (`gpt-image-1`) | OpenAI API                                                                     | commercial terms; outputs usable per OpenAI terms                                                                                                               | selected default for real images (owner key) — needs network + key |
+| **Managed — Stability / Replicate**         | hosted SDXL/Flux                                                               | verify per-model output terms                                                                                                                                   | alternative managed path                                           |
+| **Self-host OSS**                           | **SDXL / SD-3.5 / Flux.1-\[dev\]** via ComfyUI/Automatic1111 (Apache/MIT code) | ⚠️ **weights licence varies** — SDXL (OpenRAIL/CreativeML) and Flux-dev (non-commercial) vs Flux-schnell (Apache-2.0); **verify commercial use per checkpoint** | best cost/control at scale on a GPU box; anti-clone (on-prem)      |
+
+Guardrails (directive §4/§23): **no scraping, no hotlinking, no unclear-copyright assets**; verify
+**code licence AND model-weight/commercial-use terms** before a checkpoint goes to production;
+generation stays **replaceable** (swap the `--provider` adapter; the media pipeline + listing domain
+never change). True multi-view same-item identity (four coherent photos of ONE item) needs
+img2img / IP-Adapter / a reference image, or a real owner photo set — a documented upgrade beyond
+independent text-to-image calls.
+
+**Environment note:** real generation is PROVIDER_GATED here — the controlled sandbox has no
+image-gen key, egress to image APIs is blocked, and there is no GPU; the generator therefore ships
+built + dry-run-verified, to be run where a key/GPU + network exist.
+
 ## Model / cost routing (product AI)
 
 1. **Deterministic / local first** — OCR, blur/quality, hashing, EXIF, dedup embeddings, basic

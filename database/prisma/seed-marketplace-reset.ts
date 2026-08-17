@@ -22,8 +22,10 @@ async function main(): Promise<void> {
   const prisma = getPrisma();
   const del: Record<string, number> = {};
 
+  // Only the seeder's own sellers (`mkt-seller-*`) — never the isolated stress-harness customers
+  // that also live under @mkt.singha.local and are pinned by immutable bids.
   const simCustomers = await prisma.customer.findMany({
-    where: { email: { endsWith: '@mkt.singha.local' } },
+    where: { email: { startsWith: 'mkt-seller-', mode: 'insensitive' } },
     select: { id: true },
   });
   const simCustomerIds = simCustomers.map((c) => c.id);

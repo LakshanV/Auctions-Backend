@@ -10,6 +10,18 @@ Ground truth at audit time:
 - Frontend `Auctions-New` `origin/main` = `bb02a06`; working branch = `ee0d44f` (+2 unmerged: synthetic pilot harness + Control-Centre KYC enum fix).
 - Prior programme fully merged: E0–E15, V3-1…10, CX Overhaul, AI Conversation (AIC-1…7).
 
+## Delivered this continuation (additive, on `claude/new-session-at0qp4`)
+
+- **RW0** — this audit + the four state docs. Backend `6ab628c`.
+- **RW5** — sealed-offer seller RBAC (`exchange:operate-own` + server-side ownership; owning seller
+  manages their own offers, cross-seller IDOR refused). Unit-tested (10) + live-verified via the
+  pilot commerce journey. Backend `1e0947b`, FE pilot `32000ed`. **RW5 → COMPLETE.**
+- **RW4** — additive catalogue facets (price/quantity/unit/pickup/delivery) + customer-safe card
+  hints; contract facet tests (8) + live-verified; FE types synced. Backend `48a6ba6`, FE `84e96c2`.
+  **RW4 → COMPLETE** (except a per-listing `verified` filter, deferred — needs a verification source).
+
+The rows below are the RW0 snapshot; RW4/RW5 are now COMPLETE per the above.
+
 ## Phase-level matrix
 
 | Phase | Item                                                | Class                            | Remaining engineering (smallest additive)                                                                                                                                                         |

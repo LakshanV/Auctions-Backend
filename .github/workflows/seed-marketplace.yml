@@ -1,0 +1,81 @@
+name: Seed demo marketplace (covers)
+
+# Manual "button" to (re)seed the demo marketplace (SMKT-*) so MediaObject cover keys point at the
+# committed PNG covers in the frontend. Runs on a GitHub-hosted runner, which HAS network egress to
+# Railway, using the DB URL from a repo secret — so no credential is ever pasted into a chat or a
+# sandbox. Destructive only to the SMKT-* SIM rows (bid-bearing auctions are preserved by the reset).
+#
+# One-time setup: add a repo secret PROD_DATABASE_URL (Settings → Secrets and variables → Actions)
+# holding the target Postgres URL. Optionally PROD_DIRECT_URL (only if your DB needs a separate
+# non-pooled URL; otherwise the DATABASE_URL is reused). Then: Actions → this workflow → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type I_UNDERSTAND to confirm — reseeds the target DB (destructive to SMKT-* SIM rows)"
+        required: true
+        default: ""
+      images_per_listing:
+        description: "Images per image-bearing listing (1 = cover-only, matches the uploaded set)"
+        required: false
+        default: "1"
+      media_ext:
+        description: "Demo media file extension (png for the committed covers)"
+        required: false
+        default: "png"
+
+# Least-privilege token (anti-clone doc 03): no repo write needed to seed a DB.
+permissions:
+  contents: read
+
+# Never run two seeds against the same DB at once.
+concurrency:
+  group: seed-marketplace
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        if: ${{ inputs.confirm != 'I_UNDERSTAND' }}
+        run: |
+          echo "::error::Refusing to run — set the 'confirm' input to exactly I_UNDERSTAND." >&2
+          exit 1
+
+      - name: Fail fast if the DB secret is missing
+        env:
+          DB: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          if [ -z "$DB" ]; then
+            echo "::error::PROD_DATABASE_URL secret is not set. Add it in Settings → Secrets and variables → Actions." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @singha/database run generate
+
+      - name: Reseed demo marketplace covers
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+          SINGHA_SIM_CONFIRM: ${{ inputs.confirm }}
+          DEMO_MEDIA_EXT: ${{ inputs.media_ext }}
+          DEMO_IMAGES_PER_LISTING: ${{ inputs.images_per_listing }}
+        run: bash database/prisma/reseed-demo-covers.sh
+
+      - name: Next step
+        run: echo "Open the deployed catalogue — cover images should now render on each SMKT listing."

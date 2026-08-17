@@ -38,6 +38,12 @@ export const Permission = {
   EoiReview: 'eoi:review',
   ExchangeParticipate: 'exchange:participate',
   ExchangeOperate: 'exchange:operate',
+  // RW5 — an owning seller may manage the offers on THEIR OWN listing (counter/reject/accept,
+  // and — for sealed tenders — reveal/compare/award) without holding the full `exchange:operate`
+  // operator grant. This permission only lets the request REACH the route; the service still
+  // enforces a server-side listing-ownership check (never a global grant — see rbac.ts header).
+  // Held by Seller/SellerStaff (their own listings) and by AuctionStaff/Admin (any, as operators).
+  ExchangeOperateOwn: 'exchange:operate-own',
   CommercePay: 'commerce:pay',
   CommerceOperate: 'commerce:operate',
   ConnectOperate: 'connect:operate',
@@ -88,6 +94,9 @@ const SELLER_PERMISSIONS: Permission[] = [
   P.BidPlace,
   P.EoiSubmit,
   P.ExchangeParticipate,
+  // RW5 — manage offers on their OWN listings (ownership enforced server-side); never the broad
+  // `exchange:operate` operator grant.
+  P.ExchangeOperateOwn,
   P.AiUse,
   P.AiConverse,
   P.IntelligenceRead,
@@ -119,6 +128,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.BidPlace,
     P.EoiReview,
     P.ExchangeOperate,
+    // Operators reach the owner-scoped offer routes too (they manage any listing's offers); the
+    // service short-circuits them to the operator viewer, so no ownership check is applied.
+    P.ExchangeOperateOwn,
     P.CommerceOperate,
     P.ConnectOperate,
     P.AiUse,

@@ -13,6 +13,20 @@ describe('rbac', () => {
     expect(hasPermission([Role.AuctionStaff], Permission.ListingPublish)).toBe(true);
   });
 
+  it('RW5 — sellers may manage their OWN offers (exchange:operate-own) but never the broad operator grant', () => {
+    // A seller can reach the owner-scoped offer routes...
+    expect(hasPermission([Role.Seller], Permission.ExchangeOperateOwn)).toBe(true);
+    expect(hasPermission([Role.SellerStaff], Permission.ExchangeOperateOwn)).toBe(true);
+    // ...but is NOT a general exchange operator (the service still checks listing ownership).
+    expect(hasPermission([Role.Seller], Permission.ExchangeOperate)).toBe(false);
+    // Operators hold both (they manage any listing's offers).
+    expect(hasPermission([Role.AuctionStaff], Permission.ExchangeOperate)).toBe(true);
+    expect(hasPermission([Role.AuctionStaff], Permission.ExchangeOperateOwn)).toBe(true);
+    // A plain customer/buyer holds neither.
+    expect(hasPermission([Role.Customer], Permission.ExchangeOperateOwn)).toBe(false);
+    expect(hasPermission([Role.Customer], Permission.ExchangeOperate)).toBe(false);
+  });
+
   it('gives admins every permission and customers only bidding', () => {
     expect(hasPermission([Role.Admin], Permission.KycManage)).toBe(true);
     expect(hasPermission([Role.Admin], Permission.AuditRead)).toBe(true);

@@ -17,8 +17,10 @@ import { ZodBody } from '../../shared/validation/zod.pipe';
 /**
  * Commercial Offer Engine V2 API (Evolution E4, pack doc 08). Feature-gated in the service
  * (`commercialOffersV2`; sealed paths additionally `sealedOffers`) and authorised on the SERVER:
- * `exchange:participate` = buyers submit/withdraw; `exchange:operate` = seller/operator counter,
- * reject, reveal, accept and award. Sealed selection defaults to MANUAL_SELECTION — the highest
+ * `exchange:participate` = buyers submit/withdraw; `exchange:operate-own` (RW5) = the owning
+ * seller (a server-side listing-ownership check in the service, never a global grant) OR a
+ * platform operator (`exchange:operate`) counter, reject, reveal, accept and award — a seller can
+ * only ever touch their own listing's offers. Sealed selection defaults to MANUAL_SELECTION — the highest
  * proposal is never auto-awarded (DECISIONS D4).
  */
 @Controller('commercial-offers')
@@ -50,7 +52,7 @@ export class OffersController {
   // --- seller / operator ----------------------------------------------------
 
   @Post(':id/counter')
-  @RequirePermissions(Permission.ExchangeOperate)
+  @RequirePermissions(Permission.ExchangeOperateOwn)
   counter(
     @CurrentActor() principal: Principal,
     @Param('id') id: string,
@@ -60,31 +62,31 @@ export class OffersController {
   }
 
   @Post(':id/reject')
-  @RequirePermissions(Permission.ExchangeOperate)
+  @RequirePermissions(Permission.ExchangeOperateOwn)
   reject(@CurrentActor() principal: Principal, @Param('id') id: string) {
     return this.offers.rejectOffer(principal, id);
   }
 
   @Post(':id/accept')
-  @RequirePermissions(Permission.ExchangeOperate)
+  @RequirePermissions(Permission.ExchangeOperateOwn)
   accept(@CurrentActor() principal: Principal, @Param('id') id: string) {
     return this.offers.acceptOffer(principal, id);
   }
 
   @Get('listings/:listingId')
-  @RequirePermissions(Permission.ExchangeOperate)
-  forListing(@Param('listingId') listingId: string) {
-    return this.offers.offersForListing(listingId);
+  @RequirePermissions(Permission.ExchangeOperateOwn)
+  forListing(@CurrentActor() principal: Principal, @Param('listingId') listingId: string) {
+    return this.offers.offersForListing(principal, listingId);
   }
 
   @Post('listings/:listingId/reveal')
-  @RequirePermissions(Permission.ExchangeOperate)
+  @RequirePermissions(Permission.ExchangeOperateOwn)
   reveal(@CurrentActor() principal: Principal, @Param('listingId') listingId: string) {
     return this.offers.revealSealed(principal, listingId);
   }
 
   @Post('listings/:listingId/award')
-  @RequirePermissions(Permission.ExchangeOperate)
+  @RequirePermissions(Permission.ExchangeOperateOwn)
   award(
     @CurrentActor() principal: Principal,
     @Param('listingId') listingId: string,

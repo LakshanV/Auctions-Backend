@@ -28,6 +28,7 @@ import {
   sealedParticipationView,
   selectSealedWinner,
 } from '@singha/domain';
+import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
 import { UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-work';
@@ -84,9 +85,44 @@ export class OffersService {
     return principal.customerId;
   }
 
-  /** Server-side sealed authorisation (defence in depth on top of the route guard). */
-  private viewerRole(principal: Principal): SealedViewerRole {
-    return principal.permissions.has(Permission.ExchangeOperate) ? 'operator' : 'buyer';
+  /**
+   * RW5 — server-side authorization for managing a listing's offers (defence in depth on top of
+   * the `exchange:operate-own` route guard). A platform operator (`exchange:operate`) may manage
+   * ANY listing's offers. Otherwise the caller must be an owner/admin member of the listing's OWN
+   * seller organization (ownership check — prevents IDOR across sellers) and is granted the
+   * domain's `'seller'` viewer; anyone else is refused. Confidentiality is unchanged: sealed values
+   * stay counts-only until the reveal regardless of who calls.
+   */
+  private async resolveManageRole(
+    principal: Principal,
+    listingId: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<SealedViewerRole> {
+    if (principal.permissions.has(Permission.ExchangeOperate)) return 'operator';
+    const customerId = principal.customerId;
+    if (customerId) {
+      const listing = await tx.listing.findUnique({
+        where: { id: listingId },
+        select: { asset: { select: { ownerCustomerId: true, sellerOrganizationId: true } } },
+      });
+      const asset = listing?.asset;
+      if (asset) {
+        // (a) the individual owner/consignor of the asset, OR
+        if (asset.ownerCustomerId && asset.ownerCustomerId === customerId) return 'seller';
+        // (b) an owner/admin member of the asset's selling organization.
+        if (asset.sellerOrganizationId) {
+          const member = await tx.organizationMember.findFirst({
+            where: {
+              organizationId: asset.sellerOrganizationId,
+              customerId,
+              role: { in: ['owner', 'admin'] },
+            },
+          });
+          if (member) return 'seller';
+        }
+      }
+    }
+    throw new ForbiddenException('Not permitted to manage offers for this listing');
   }
 
   private priceShape(rev: {
@@ -265,6 +301,8 @@ export class OffersService {
       include: { revisions: { select: { revisionNumber: true } } },
     });
     if (!offer) throw new NotFoundException('Offer not found');
+    // RW5 — operator OR owning seller only (a seller can only counter their own listing's offers).
+    await this.resolveManageRole(principal, offer.listingId);
     if (offer.sealed) {
       throw new ConflictException('Sealed offers cannot be countered — reveal and award instead');
     }
@@ -321,6 +359,8 @@ export class OffersService {
     this.requireFeature('commercialOffersV2');
     const offer = await this.prisma.offer.findUnique({ where: { id: offerId } });
     if (!offer) throw new NotFoundException('Offer not found');
+    // RW5 — operator OR owning seller only (a seller can only reject their own listing's offers).
+    await this.resolveManageRole(principal, offer.listingId);
     assertOfferTransition(offer.status as OfferStatus, 'rejected');
     const actor = toActor(principal);
     return this.uow.execute(actor, async (ctx) => {
@@ -376,6 +416,8 @@ export class OffersService {
     return this.uow.execute(actor, async (ctx) => {
       const pre = await ctx.tx.offer.findUnique({ where: { id: offerId } });
       if (!pre) throw new NotFoundException('Offer not found');
+      // RW5 — operator OR owning seller only (a seller can only accept their own listing's offers).
+      await this.resolveManageRole(principal, pre.listingId, ctx.tx);
       if (pre.sealed) {
         throw new ConflictException(
           'Sealed offers are awarded via reveal + award, not direct accept',
@@ -421,7 +463,9 @@ export class OffersService {
   async revealSealed(principal: Principal, listingId: string) {
     this.requireFeature('commercialOffersV2');
     this.requireFeature('sealedOffers');
-    if (!canRevealSealedOffers(this.viewerRole(principal))) {
+    // RW5 — operator OR owning seller only (ownership enforced server-side; throws otherwise).
+    const role = await this.resolveManageRole(principal, listingId);
+    if (!canRevealSealedOffers(role)) {
       throw new ForbiddenException('Not authorised to reveal sealed offers');
     }
     const existing = await this.prisma.offer.findMany({ where: { listingId, sealed: true } });
@@ -456,7 +500,9 @@ export class OffersService {
   async awardSealed(principal: Principal, listingId: string, input: AwardSealedOfferInput) {
     this.requireFeature('commercialOffersV2');
     this.requireFeature('sealedOffers');
-    if (!canRevealSealedOffers(this.viewerRole(principal))) {
+    // RW5 — operator OR owning seller only (ownership enforced server-side; throws otherwise).
+    const role = await this.resolveManageRole(principal, listingId);
+    if (!canRevealSealedOffers(role)) {
       throw new ForbiddenException('Not authorised to award sealed offers');
     }
     const actor = toActor(principal);
@@ -532,7 +578,10 @@ export class OffersService {
    * Operator roster for a listing. Open offers list fully; sealed offers are counts-only until
    * the reveal, then ranked — competitor prices never appear before the window closes.
    */
-  async offersForListing(listingId: string) {
+  async offersForListing(principal: Principal, listingId: string) {
+    this.requireFeature('commercialOffersV2');
+    // RW5 — operator OR owning seller only; a competitor/buyer cannot read this roster.
+    await this.resolveManageRole(principal, listingId);
     const sealed = await this.loadSealedWithHeadline(listingId);
     if (sealed.length > 0) {
       const revealed = sealed.some((o) => o.offer.revealedAt != null);

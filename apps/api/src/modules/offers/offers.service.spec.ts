@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Permission } from '@singha/contracts';
 import { OffersService } from './offers.service';
 import { type AppConfigService } from '../../config/config.service';
@@ -15,8 +15,32 @@ type Features = Record<string, boolean>;
  * covered by the real-Postgres integration test; here we prove the flag gates and the
  * server-side sealed authorisation reject BEFORE any datastore access.
  */
-function makeService(features: Features): OffersService {
-  const prisma = {} as unknown as PrismaService;
+function makeService(
+  features: Features,
+  ownership?: {
+    ownerCustomerId?: string | null;
+    sellerOrgId?: string | null;
+    memberRole?: 'owner' | 'admin' | null;
+  },
+): OffersService {
+  // RW5: resolveManageRole reads the listing's asset (direct owner + selling org) and, for an org,
+  // the caller's membership. Default (no ownership arg) → listing not found → a non-operator,
+  // non-owner is refused (the buyer / competitor case).
+  const asset = ownership
+    ? {
+        ownerCustomerId: ownership.ownerCustomerId ?? null,
+        sellerOrganizationId: ownership.sellerOrgId ?? null,
+      }
+    : null;
+  const prisma = {
+    listing: { findUnique: vi.fn().mockResolvedValue(asset ? { asset } : null) },
+    organizationMember: {
+      findFirst: vi
+        .fn()
+        .mockResolvedValue(ownership?.memberRole ? { id: 'm1', role: ownership.memberRole } : null),
+    },
+    offer: { findMany: vi.fn().mockResolvedValue([]) },
+  } as unknown as PrismaService;
   const uow = {} as unknown as UnitOfWork;
   const config = { get: () => ({ features }) } as unknown as AppConfigService;
   const exposure = {} as unknown as CreditExposureService;
@@ -33,6 +57,14 @@ const operator: Principal = {
   customerId: 'staff_1',
   roles: [],
   permissions: new Set([Permission.ExchangeOperate]),
+  aal: 'aal1',
+};
+// RW5 — a verified seller reaches the owner-scoped routes via `exchange:operate-own`, but the
+// service still verifies they own the listing (never the broad operator grant).
+const seller: Principal = {
+  customerId: 'seller_owner',
+  roles: [],
+  permissions: new Set([Permission.ExchangeOperateOwn]),
   aal: 'aal1',
 };
 
@@ -57,12 +89,53 @@ describe('OffersService (E4 flag gating + sealed authorisation)', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('forbids a buyer from revealing or awarding sealed offers (server-side, before any DB read)', async () => {
+  it('forbids a buyer from revealing or awarding sealed offers (server-side ownership check)', async () => {
+    // Default makeService → no seller-org / no membership → a non-operator, non-owner is refused.
     const s = makeService({ commercialOffersV2: true, sealedOffers: true });
     await expect(s.revealSealed(buyer, 'l1')).rejects.toThrow(ForbiddenException);
     await expect(s.awardSealed(buyer, 'l1', { policy: 'AUTO_HIGHEST' })).rejects.toThrow(
       ForbiddenException,
     );
+    await expect(s.offersForListing(buyer, 'l1')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('RW5 — an org owning seller PASSES sealed authorisation for their own listing', async () => {
+    // seller_owner is an owner of the listing's seller org → resolveManageRole returns 'seller'
+    // (canRevealSealedOffers true), so it proceeds past authz and only then hits "no sealed offers".
+    const s = makeService(
+      { commercialOffersV2: true, sealedOffers: true },
+      { sellerOrgId: 'org_1', memberRole: 'owner' },
+    );
+    await expect(s.revealSealed(seller, 'l1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('RW5 — an individual consignor (asset owner, no org) PASSES for their own listing', async () => {
+    // The asset is owned directly by seller_owner (ownerCustomerId), no selling org → still 'seller'.
+    const s = makeService(
+      { commercialOffersV2: true, sealedOffers: true },
+      { ownerCustomerId: 'seller_owner' },
+    );
+    await expect(s.revealSealed(seller, 'l1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('RW5 — a seller who does NOT own the listing is refused (no IDOR across sellers)', async () => {
+    // The listing belongs to org_2; seller_owner has no membership there → 403.
+    const s = makeService(
+      { commercialOffersV2: true, sealedOffers: true },
+      { sellerOrgId: 'org_2', memberRole: null },
+    );
+    await expect(s.revealSealed(seller, 'l1')).rejects.toThrow(ForbiddenException);
+    await expect(s.awardSealed(seller, 'l1', { policy: 'AUTO_HIGHEST' })).rejects.toThrow(
+      ForbiddenException,
+    );
+    await expect(s.offersForListing(seller, 'l1')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('RW5 — a platform operator manages any listing without an ownership check', async () => {
+    // operator has exchange:operate → short-circuits to 'operator' (no org lookup); proceeds to
+    // "no sealed offers" rather than a 403.
+    const s = makeService({ commercialOffersV2: true, sealedOffers: true });
+    await expect(s.revealSealed(operator, 'l1')).rejects.toThrow(BadRequestException);
   });
 });
 

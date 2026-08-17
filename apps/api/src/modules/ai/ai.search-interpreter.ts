@@ -80,6 +80,21 @@ const CATEGORY_KEYWORDS: Record<string, CategoryKey> = {
 };
 
 /**
+ * Ambiguous product-name phrases whose HEAD word collides with a DIFFERENT single-word category
+ * keyword below — e.g. "land cruiser" / "land rover" both contain "land" (a `property` keyword),
+ * so a naive single-word scan misfiles these (iconic, high-volume) vehicles under `property` and
+ * a customer searching "Toyota Land Cruiser" gets zero results. These multi-word phrases are
+ * recognized FIRST (specific-before-generic, exactly like the sale-method phrases below) and pin
+ * the category; unlike the single-word scan they are deliberately NOT stripped from the text, so
+ * the model name still narrows the free-text `search` term (the catalogue matches it by substring).
+ */
+const CATEGORY_PHRASES: readonly { re: RegExp; value: CategoryKey }[] = [
+  { re: /\bland\s+cruiser\b/, value: 'vehicles' },
+  { re: /\bland\s+rover\b/, value: 'vehicles' },
+  { re: /\brange\s+rover\b/, value: 'vehicles' },
+];
+
+/**
  * A sale-method WORD/phrase -> `saleMethodValues` (docs/07). Checked in order — more specific
  * multi-word phrases are listed BEFORE the generic single word they contain (e.g. "live auction"
  * before bare "auction") so the first match is always the most specific one.
@@ -230,12 +245,23 @@ export function interpretSearchQuery(query: string): SearchInterpretation {
     }
   }
 
-  for (const [word, category] of Object.entries(CATEGORY_KEYWORDS)) {
-    const re = new RegExp(`\\b${word}\\b`);
+  // Specific multi-word product phrases first: they PIN the category (e.g. "land cruiser" ->
+  // vehicles) without being consumed, so an ambiguous head word ("land") can never fall through
+  // to the single-word scan below and misfile the query under another category ("property").
+  for (const { re, value } of CATEGORY_PHRASES) {
     if (re.test(working)) {
-      filters.category = category;
-      working = working.replace(re, ' ');
+      filters.category = value;
       break;
+    }
+  }
+  if (!filters.category) {
+    for (const [word, category] of Object.entries(CATEGORY_KEYWORDS)) {
+      const re = new RegExp(`\\b${word}\\b`);
+      if (re.test(working)) {
+        filters.category = category;
+        working = working.replace(re, ' ');
+        break;
+      }
     }
   }
 

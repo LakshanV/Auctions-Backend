@@ -1,6 +1,12 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { catalogueQuerySchema, catalogueRowQuerySchema } from '@singha/contracts';
+import {
+  type CatalogueQuery,
+  type CatalogueRowQuery,
+  catalogueQuerySchema,
+  catalogueRowQuerySchema,
+} from '@singha/contracts';
 import { CatalogueV2Service } from './catalogue-v2.service';
+import { ZodQuery } from '../../shared/validation/zod.pipe';
 
 /**
  * Enriched public catalogue (consolidated pack doc 07). Mounted at the absolute
@@ -12,8 +18,8 @@ export class CatalogueV2Controller {
   constructor(private readonly catalogue: CatalogueV2Service) {}
 
   @Get()
-  list(@Query() query: Record<string, unknown>) {
-    return this.catalogue.list(catalogueQuerySchema.parse(query));
+  list(@Query(new ZodQuery(catalogueQuerySchema)) query: CatalogueQuery) {
+    return this.catalogue.list(query);
   }
 
   /**
@@ -21,8 +27,8 @@ export class CatalogueV2Controller {
    * Declared before `:id` so the static `row` segment is never parsed as a lot id.
    */
   @Get('row')
-  row(@Query() query: Record<string, unknown>) {
-    return this.catalogue.row(catalogueRowQuerySchema.parse(query));
+  row(@Query(new ZodQuery(catalogueRowQuerySchema)) query: CatalogueRowQuery) {
+    return this.catalogue.row(query);
   }
 
   @Get(':id')

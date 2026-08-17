@@ -28,6 +28,23 @@ describe('interpretSearchQuery (AIC-3 — deterministic "LLM interprets" seam)',
     expect(interpretSearchQuery('wholesale pallets').filters.category).toBe('bulk');
   });
 
+  it('does not misfile "Land Cruiser" / "Land Rover" vehicles under property (the "land" collision)', () => {
+    // Regression: the bare word "land" is a `property` keyword, so "toyota land cruiser prado"
+    // was read as {category:'property', search:'toyota cruiser prado'} and returned ZERO results
+    // for one of the market's most-searched vehicles. The compound name must pin `vehicles` and,
+    // crucially, "land cruiser" must survive in `search` so the catalogue substring-matches it.
+    const lc = interpretSearchQuery('toyota land cruiser prado');
+    expect(lc.filters.category).toBe('vehicles');
+    expect(lc.filters.search).toContain('land cruiser');
+
+    expect(interpretSearchQuery('land rover defender').filters.category).toBe('vehicles');
+    expect(interpretSearchQuery('range rover sport').filters.category).toBe('vehicles');
+
+    // A genuine land/property search (no vehicle compound) is unaffected — still `property`.
+    expect(interpretSearchQuery('beachfront land in galle').filters.category).toBe('property');
+    expect(interpretSearchQuery('agricultural land').filters.category).toBe('property');
+  });
+
   it('maps sale-method words/phrases to saleMethodValues, preferring the more specific phrase', () => {
     expect(interpretSearchQuery('any timed auction').filters.saleMethod).toBe('TIMED_AUCTION');
     expect(interpretSearchQuery('buy now items').filters.saleMethod).toBe('BUY_NOW');

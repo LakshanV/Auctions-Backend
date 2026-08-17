@@ -26,4 +26,8 @@ jobs:
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
+          # gitleaks-action@v2 refuses to scan pull_request events without a token
+          # (breaking change); the default GITHUB_TOKEN + contents:read above is
+          # sufficient for the scan. No org licence key is needed for an individual user.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'

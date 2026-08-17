@@ -73,7 +73,9 @@ describe('interpretSearchQuery (AIC-3 — deterministic "LLM interprets" seam)',
       'vans less than 3.5m',
     ]) {
       const { filters } = interpretSearchQuery(q);
-      expect(filters.search ?? '').not.toMatch(/\b(k|m|mn|bn|thousand|million|billion|lakhs?|crores?)\b|\d/);
+      expect(filters.search ?? '').not.toMatch(
+        /\b(k|m|mn|bn|thousand|million|billion|lakhs?|crores?)\b|\d/,
+      );
     }
   });
 

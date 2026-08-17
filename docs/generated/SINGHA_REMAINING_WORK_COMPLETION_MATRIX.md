@@ -37,7 +37,15 @@ Ground truth at audit time:
   11-assertion live-verified e2e (`test:media`, wired into CI). **RW3 → COMPLETE (scanner mock; real
   engine PROVIDER_GATED PRV-1).**
 
-The rows below are the RW0 snapshot; RW2/RW3/RW4/RW5 are now COMPLETE per the above.
+- **RW9** — provider adapter readiness: the three missing ports are now present and
+  provider-neutral — **AI vision** (RW2 `VisionIntelligenceProvider`), **voice/telephony**
+  (`VoiceProvider` in Connect, future-voice seam), and **inspection/certification**
+  (`InspectionProvider`, GSI/lab seam). Each has a deterministic credential-free mock, is bound
+  behind a symbol token (swap the binding, nothing else changes), and is unit-tested; real
+  activation is PROVIDER_GATED (PRV-2/PRV-3). FX/logistics/messaging/AI-text/video/storage/social
+  were already COMPLETE. **RW9 → COMPLETE (mocks; real providers PROVIDER_GATED).**
+
+The rows below are the RW0 snapshot; RW2/RW3/RW4/RW5/RW9 are now COMPLETE per the above.
 
 ## Phase-level matrix
 

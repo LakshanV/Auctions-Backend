@@ -49,6 +49,9 @@ const SEARCH_FILTER_KEYS = [
   'featured',
   'endingSoon',
   'auctionEventId',
+  // RW4 fulfilment facets — the interpreter may map "delivery"/"pickup" intent onto these.
+  'pickup',
+  'delivery',
 ] as const satisfies readonly (keyof CatalogueQuery)[];
 
 /**

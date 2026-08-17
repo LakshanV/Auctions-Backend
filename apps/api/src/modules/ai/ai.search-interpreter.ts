@@ -220,6 +220,79 @@ const STOPWORDS = new Set([
   'get',
 ]);
 
+// Fulfilment intent -> the RW4 pickup/delivery facets (matched by pickupLocationId /
+// destinationLocationId presence in the catalogue). Consumed so the word can't survive as a
+// phantom free-text token ("delivered") that returns zero substring matches.
+const DELIVERY_RE = /\b(delivery|delivered|deliverable|shipping|shipped|ship(?:ped|ping)?)\b/g;
+const PICKUP_RE = /\b(pickup|pick\s?up|collection|collect|self[-\s]?collect)\b/g;
+
+// Measurement/unit tokens and vague qualifiers are ATTRIBUTES or fluff, not free-text signal:
+// leaving them in the single `search` substring over-constrains it to zero matches (the catalogue
+// matches the whole term with one `contains`). Stripped from the leftover search only.
+const MEASURE_NOISE = new Set([
+  'carat',
+  'carats',
+  'ct',
+  'kg',
+  'kgs',
+  'mt',
+  'ton',
+  'tons',
+  'tonne',
+  'tonnes',
+  'g',
+  'gram',
+  'grams',
+  'perch',
+  'perches',
+  'acre',
+  'acres',
+  'hour',
+  'hours',
+  'hrs',
+  'km',
+  'kms',
+  'litre',
+  'litres',
+  'ltr',
+  'cc',
+  'sqft',
+  'sqm',
+  'units',
+  'unit',
+  'piece',
+  'pieces',
+]);
+const VAGUE_NOISE = new Set([
+  'available',
+  'cheapest',
+  'cheap',
+  'cheaper',
+  'lowest',
+  'affordable',
+  'budget',
+  'quality',
+  'under',
+  'over',
+  'above',
+  'below',
+  'than',
+  'less',
+  'more',
+]);
+
+// Light condition-synonym normalisation to the vocabulary the corpus actually uses (title /
+// short-description) so intent words survive as a matching token — e.g. "damaged" -> "damage"
+// (listings say "front-end damage" / "salvage"). A real model does this natively; the mock keeps
+// a small, deterministic map.
+const SEARCH_SYNONYMS: Record<string, string> = {
+  damaged: 'damage',
+  wrecked: 'damage',
+  accident: 'damage',
+  salvaged: 'salvage',
+  broken: 'repair',
+};
+
 function titleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -265,6 +338,18 @@ export function interpretSearchQuery(query: string): SearchInterpretation {
     }
   }
 
+  // "delivered/shipping TO <place>" is a DESTINATION, not the item's location. The catalogue has
+  // no destination-city filter (only the RW4 `delivery` presence facet), so consume the phrase as
+  // delivery-intent and DROP the place — never misapply it as an item-location filter that would
+  // exclude stock stored elsewhere (e.g. onions in Kurunegala "delivered to Colombo").
+  const DELIVER_TO_RE =
+    /\b(deliver(?:y|ed)?|shipping|shipped|ship)\s+to\s+([a-z]+(?:\s+[a-z]+)?)\b/;
+  const destMatch = working.match(DELIVER_TO_RE);
+  if (destMatch) {
+    filters.delivery = true;
+    working = working.replace(DELIVER_TO_RE, ' ');
+  }
+
   for (const place of LOCATION_KEYWORDS) {
     const re = new RegExp(`\\b${place}\\b`);
     if (re.test(working)) {
@@ -279,13 +364,33 @@ export function interpretSearchQuery(query: string): SearchInterpretation {
     working = working.replace(ENDING_SOON_RE, ' ');
   }
 
-  // Whatever salient words are left (after recognized category/saleMethod/location/endingSoon
-  // keywords and stopwords are removed) become the free-text `search` term — e.g. "toyota" out
-  // of "toyota in melbourne ending soon".
+  // Fulfilment intent -> RW4 facets (never left in the free-text term).
+  if (DELIVERY_RE.test(working)) {
+    filters.delivery = true;
+    working = working.replace(DELIVERY_RE, ' ');
+  }
+  if (PICKUP_RE.test(working)) {
+    filters.pickup = true;
+    working = working.replace(PICKUP_RE, ' ');
+  }
+
+  // Whatever salient words are left (after recognized category/saleMethod/location/endingSoon/
+  // fulfilment keywords, stopwords, measurement/vague noise and standalone numbers are removed)
+  // become the free-text `search` term — e.g. "toyota" out of "toyota in melbourne ending soon",
+  // "blue" out of "blue sapphires over 5 carats". Condition synonyms are normalised to the
+  // corpus vocabulary so the intent word still matches.
   const leftover = working
     .split(/\s+/)
     .map((w) => w.trim())
-    .filter((w) => w.length > 1 && !STOPWORDS.has(w));
+    .filter(
+      (w) =>
+        w.length > 1 &&
+        !STOPWORDS.has(w) &&
+        !MEASURE_NOISE.has(w) &&
+        !VAGUE_NOISE.has(w) &&
+        !/^\d+$/.test(w),
+    )
+    .map((w) => SEARCH_SYNONYMS[w] ?? w);
   if (leftover.length > 0) {
     filters.search = leftover.join(' ').slice(0, 120);
   }
@@ -295,6 +400,8 @@ export function interpretSearchQuery(query: string): SearchInterpretation {
     filters.saleMethod,
     filters.location,
     filters.endingSoon,
+    filters.delivery,
+    filters.pickup,
     filters.search,
   ].filter((v) => v !== undefined).length;
   const confidence = Math.min(0.9, 0.3 + recognized * 0.15);

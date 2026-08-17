@@ -123,4 +123,42 @@ describe('interpretSearchQuery (AIC-3 — deterministic "LLM interprets" seam)',
     const sparse = interpretSearchQuery('melbourne');
     expect(rich.confidence).toBeGreaterThan(sparse.confidence);
   });
+
+  // --- Marketplace stress: noise-word stripping + fulfilment facets + synonyms ---------------
+  it('strips measurement/unit noise so intent words survive the free-text term', () => {
+    // "carats" is an attribute, not a full-text token; leaving it in over-constrains to zero.
+    const { filters } = interpretSearchQuery('blue sapphires over 5 carats');
+    expect(filters.category).toBe('gems');
+    expect(filters.search).toBe('blue');
+  });
+
+  it('maps "delivery/delivered" and "pickup/collection" intent onto the RW4 facets', () => {
+    expect(interpretSearchQuery('machinery with delivery available').filters.delivery).toBe(true);
+    expect(interpretSearchQuery('items for pickup only').filters.pickup).toBe(true);
+    // the fulfilment word never survives as a phantom search token
+    const f = interpretSearchQuery('toyota delivery').filters;
+    expect(f.delivery).toBe(true);
+    expect(f.search ?? '').not.toMatch(/deliver/);
+  });
+
+  it('normalises condition synonyms to the corpus vocabulary (damaged -> damage)', () => {
+    const { filters } = interpretSearchQuery('damaged vehicles in Colombo');
+    expect(filters.category).toBe('vehicles');
+    expect(filters.location).toBe('Colombo');
+    expect(filters.search).toBe('damage');
+  });
+
+  it('treats "delivered to <place>" as a destination (delivery facet), never an item-location filter', () => {
+    const { filters } = interpretSearchQuery('20 tonnes of onions delivered to Colombo');
+    expect(filters.delivery).toBe(true);
+    expect(filters.location).toBeUndefined(); // Colombo is the destination, not where the onions are
+    expect(filters.search).toBe('onions');
+  });
+
+  it('drops vague qualifiers and standalone numbers from the search term', () => {
+    const { filters } = interpretSearchQuery('cheapest machine with delivery available');
+    expect(filters.category).toBe('machinery');
+    expect(filters.delivery).toBe(true);
+    expect(filters.search).toBeUndefined();
+  });
 });

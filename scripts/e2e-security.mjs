@@ -97,6 +97,109 @@ async function main() {
       'error response leaks no stack / path / SQL / Prisma',
     );
 
+    // --- Object-level authorization / BOLA (IDOR) regressions ----------------
+    // Owner-or-staff object authz on id-addressable resources. These fields were reachable
+    // cross-tenant / anonymously before the fix: raw asset rows, a rival org's sold performance,
+    // and a forged asset owner attribution.
+    {
+      const j = async (res) => {
+        try {
+          return await res.json();
+        } catch {
+          return null;
+        }
+      };
+      const P = (p, body, token) =>
+        fetch(`${API}${p}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      const G = (p, token) =>
+        fetch(`${API}${p}`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const mint = async (roles, customerId) =>
+        (await j(await P('/dev/token', { roles, ...(customerId ? { customerId } : {}) }))).token;
+      const newCustomer = async (label) =>
+        (
+          await j(
+            await P('/customers', {
+              legalName: `[SIM] ${label}`,
+              email: `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@sec.local`,
+            }),
+          )
+        ).id;
+
+      const s1 = await newCustomer('idor-seller-1');
+      const s1t = await mint(['seller'], s1);
+      const s2 = await newCustomer('idor-seller-2');
+      const s2t = await mint(['seller'], s2);
+      const staffT = await mint(['auction_staff']);
+
+      // D12 — createAsset must ignore a client-forged ownerCustomerId for a non-staff caller.
+      const forged = await j(
+        await P(
+          '/assets',
+          {
+            category: 'vehicles',
+            attributes: { make: 'T', model: 'Z', year: 2020 },
+            ownerCustomerId: s2,
+          },
+          s1t,
+        ),
+      );
+      check(
+        forged?.ownerCustomerId === s1,
+        `createAsset ignores a forged ownerCustomerId for a non-staff caller (owner=${forged?.ownerCustomerId === s1 ? 'self' : 'FORGED'})`,
+      );
+      const assetId = forged?.id;
+
+      // D04 — GET /assets/:id is owner-or-staff only (raw row carries owner id + draft attributes).
+      check(
+        [401, 403].includes((await G(`/assets/${assetId}`)).status),
+        'GET /assets/:id refuses anonymous',
+      );
+      check(
+        (await G(`/assets/${assetId}`, s2t)).status === 403,
+        'GET /assets/:id refuses a non-owner seller',
+      );
+      check(
+        (await G(`/assets/${assetId}`, s1t)).status === 200,
+        'GET /assets/:id allows the owner',
+      );
+      check((await G(`/assets/${assetId}`, staffT)).status === 200, 'GET /assets/:id allows staff');
+
+      // D03 — seller intelligence is owner/admin-member-or-staff only (competitive data).
+      const org = await j(
+        await P(
+          '/organizations',
+          { legalName: '[SIM] IDOR Org', publicRef: `idor-org-${Date.now().toString(36)}` },
+          s1t,
+        ),
+      );
+      const orgId = org?.id;
+      check(
+        (await G(`/intelligence/sellers/${orgId}`, s2t)).status === 403,
+        'seller intelligence refuses a non-member seller (BOLA)',
+      );
+      check(
+        (await G(`/intelligence/sellers/${orgId}`, s1t)).status === 200,
+        'seller intelligence allows the owning member',
+      );
+      check(
+        (await G(`/intelligence/sellers/${orgId}`, staffT)).status === 200,
+        'seller intelligence allows staff',
+      );
+
+      // D08 — public Market Pulse must clamp a hostile negative `days` (no unhandled 500).
+      check(
+        (await G('/intelligence/market-pulse?days=-9999999999')).status === 200,
+        'market-pulse clamps negative days (no 500)',
+      );
+    }
+
     // --- Route-aware rate limiting -------------------------------------------
     const staff = (
       await (

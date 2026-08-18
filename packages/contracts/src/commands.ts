@@ -223,10 +223,12 @@ export const createAuctionSchema = z.object({
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
   currency: z.string().length(3).default('LKR'),
-  openingBidMinor: z.number().int().positive(),
-  reserveMinor: z.number().int().positive().nullable().default(null),
+  // Bound money to a safe integer: a value above MAX_SAFE_INTEGER passes `.int()` (all large
+  // doubles are integer-valued) but overflows the Postgres BIGINT column → an unhandled 500.
+  openingBidMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  reserveMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().default(null),
   reserveVisible: z.boolean().default(false),
-  incrementMinor: z.number().int().positive(),
+  incrementMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   softCloseTriggerSec: z.number().int().positive().default(10),
   softCloseExtendSec: z.number().int().positive().default(20),
   buyerPremiumPct: z.number().min(0).default(0),
@@ -235,7 +237,7 @@ export type CreateAuctionInput = z.infer<typeof createAuctionSchema>;
 
 export const placeBidSchema = z.object({
   /** The bidder's PRIVATE maximum (proxy). Never exposed to other bidders. */
-  maxAmountMinor: z.number().int().positive(),
+  maxAmountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   source: z.enum(bidSourceValues).default('online'),
   idempotencyKey: z.string().min(1).max(200).optional(),
 });
@@ -247,7 +249,7 @@ export type PlaceBidInput = z.infer<typeof placeBidSchema>;
 export const submitEoiSchema = z.object({
   listingId: z.string().min(1),
   /** Optional indicative amount (minor units). Some listings require it. */
-  amountMinor: z.number().int().positive().nullable().default(null),
+  amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().default(null),
   currency: z.string().length(3).default('LKR'),
   message: z.string().max(2000).optional(),
   conditions: z.string().max(2000).optional(),
@@ -270,7 +272,7 @@ export const reviewEoiSchema = z.object({
 export type ReviewEoiInput = z.infer<typeof reviewEoiSchema>;
 
 // --- Exchange scaffolds (docs/07: Buy Now / Make Offer / Sealed Tender) -----
-const money = z.number().int().positive();
+const money = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
 /** Staff sets the Buy Now price on a BUY_NOW listing. */
 export const setBuyNowPriceSchema = z.object({
@@ -312,8 +314,8 @@ export type SubmitTenderInput = z.infer<typeof submitTenderSchema>;
 /** Staff issues an invoice for a confirmed sale. */
 export const issueInvoiceSchema = z.object({
   listingId: z.string().min(1),
-  otherFeesMinor: z.number().int().nonnegative().default(0),
-  depositAppliedMinor: z.number().int().nonnegative().default(0),
+  otherFeesMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0),
+  depositAppliedMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0),
 });
 export type IssueInvoiceInput = z.infer<typeof issueInvoiceSchema>;
 
@@ -349,7 +351,7 @@ export type AdvanceFulfilmentInput = z.infer<typeof advanceFulfilmentSchema>;
 
 /** Accounts disburses the seller settlement (append-only ledger event). */
 export const settleSchema = z.object({
-  deductionsMinor: z.number().int().nonnegative().default(0),
+  deductionsMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0),
   reference: z.string().max(200).optional(),
   reason: z.string().max(1000).optional(),
 });
@@ -393,7 +395,7 @@ export type SetAiModeInput = z.infer<typeof setAiModeSchema>;
  */
 export const createBidIntentSchema = z.object({
   auctionId: z.string().min(1),
-  maxAmountMinor: z.number().int().positive(),
+  maxAmountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   channel: z.enum(channelValues).default('web'),
 });
 export type CreateBidIntentInput = z.infer<typeof createBidIntentSchema>;
@@ -460,8 +462,20 @@ export const qualityCheckInputSchema = z.object({
   photoCount: z.number().int().nonnegative().default(0),
   hasCover: z.boolean().default(false),
   videoAvailable: z.boolean().optional(),
-  guidePriceMinor: z.number().int().nonnegative().nullable().optional(),
-  buyNowPriceMinor: z.number().int().nonnegative().nullable().optional(),
+  guidePriceMinor: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(Number.MAX_SAFE_INTEGER)
+    .nullable()
+    .optional(),
+  buyNowPriceMinor: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(Number.MAX_SAFE_INTEGER)
+    .nullable()
+    .optional(),
   quantityAvailable: z.number().nonnegative().nullable().optional(),
   quantityUnitCode: z.string().max(16).nullable().optional(),
   hasLocation: z.boolean().optional(),
@@ -607,7 +621,7 @@ export type CreateLiveEventInput = z.infer<typeof createLiveEventSchema>;
 export const floorBidSchema = z.object({
   auctionId: z.string().min(1),
   bidderCustomerId: z.string().min(1),
-  maxAmountMinor: z.number().int().positive(),
+  maxAmountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   source: z.enum(['floor', 'phone', 'absentee', 'auctioneer']).default('floor'),
 });
 export type FloorBidInput = z.infer<typeof floorBidSchema>;
@@ -640,7 +654,7 @@ export const updateListingContentSchema = z.object({
   seoDescription: z.string().max(400).optional(),
   publicTermsRef: z.string().max(200).optional(),
   featured: z.boolean().optional(),
-  guidePriceMinor: z.number().int().positive().nullable().optional(),
+  guidePriceMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().optional(),
   showGuidePrice: z.boolean().optional(),
   opensAt: z.string().datetime().nullable().optional(),
   closesAt: z.string().datetime().nullable().optional(),
@@ -650,7 +664,7 @@ export const updateListingContentSchema = z.object({
   quantityAvailable: z.number().nonnegative().nullable().optional(),
   minOrderQuantity: z.number().nonnegative().nullable().optional(),
   quantityUnitCode: z.string().max(16).nullable().optional(),
-  unitPriceMinor: z.number().int().nonnegative().nullable().optional(),
+  unitPriceMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional(),
   pricingBasis: z.string().max(24).nullable().optional(),
   // §11 — seller-declared logistics terms: a default trade term (Incoterm) + pickup/delivery
   // availability. The Incoterm is validated against the configurable INCOTERMS list.
@@ -699,8 +713,8 @@ export const catalogueQuerySchema = z.object({
   // "band" filter matched against whichever commercial figure a listing actually publishes
   // (buy-now / unit / guide / live-or-opening bid); quantity/unit/pickup/delivery mirror the
   // qty + logistics columns. All optional — omitting them preserves the prior behaviour exactly.
-  minPriceMinor: z.coerce.number().int().nonnegative().optional(),
-  maxPriceMinor: z.coerce.number().int().nonnegative().optional(),
+  minPriceMinor: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  maxPriceMinor: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   minQuantity: z.coerce.number().nonnegative().optional(),
   maxQuantity: z.coerce.number().nonnegative().optional(),
   unit: z.string().min(1).max(16).optional(),
@@ -732,8 +746,8 @@ export const catalogueRowQuerySchema = z.object({
   endingSoon: z.coerce.boolean().optional(),
   auctionEventId: z.string().min(1).optional(),
   // RW4 — same additive facets as the list query (see catalogueQuerySchema).
-  minPriceMinor: z.coerce.number().int().nonnegative().optional(),
-  maxPriceMinor: z.coerce.number().int().nonnegative().optional(),
+  minPriceMinor: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  maxPriceMinor: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   minQuantity: z.coerce.number().nonnegative().optional(),
   maxQuantity: z.coerce.number().nonnegative().optional(),
   unit: z.string().min(1).max(16).optional(),
@@ -753,7 +767,7 @@ export type CatalogueRowQuery = z.infer<typeof catalogueRowQuerySchema>;
 // security or membership state (§12). Money is an integer count of minor units.
 // ---------------------------------------------------------------------------
 
-const moneyMinor = z.number().int().nonnegative();
+const moneyMinor = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const bps = z.number().int().min(1).max(100000);
 
 export const securityInstrumentTypeValues = [

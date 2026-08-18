@@ -33,7 +33,12 @@ export class InventoryService {
 
     const actor = toActor(principal);
     const id = newId();
-    const ownerCustomerId = input.ownerCustomerId ?? principal.customerId ?? undefined;
+    // A non-staff caller may only create assets they OWN — a client-supplied ownerCustomerId is
+    // ignored unless the caller holds asset:manage (staff consigning on a seller's behalf). This
+    // stops a seller from forging ownership attribution to an arbitrary customer id.
+    const canAssignOwner = principal.permissions.has(Permission.AssetManage);
+    const ownerCustomerId =
+      (canAssignOwner ? input.ownerCustomerId : undefined) ?? principal.customerId ?? undefined;
 
     return this.uow.execute(actor, async (ctx) => {
       // Durable seller-org attribution (pack 01 doc 09): capture the consigning
@@ -65,9 +70,18 @@ export class InventoryService {
     });
   }
 
-  async getAsset(id: string) {
+  async getAsset(principal: Principal, id: string) {
     const asset = await this.prisma.asset.findUnique({ where: { id } });
     if (!asset) throw new NotFoundException('Asset not found');
+    // Object-level authorization: the raw Asset row carries the owner customer id, the selling
+    // organization and — for drafts — unpublished attributes. It is NOT the public catalogue
+    // projection (that path is catalogue-v2, owner reduced to `{ verified }`, public statuses
+    // only). Only the owner or staff (asset:manage) may read the raw row; anonymous/other
+    // callers are refused so this cannot be used as an IDOR side-channel.
+    const canManageAny = principal.permissions.has(Permission.AssetManage);
+    if (!canManageAny && asset.ownerCustomerId !== principal.customerId) {
+      throw new ForbiddenException('Not permitted to read this asset');
+    }
     return asset;
   }
 

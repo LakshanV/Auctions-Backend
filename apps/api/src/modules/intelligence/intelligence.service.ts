@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Permission } from '@singha/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
+import { type Principal } from '../../shared/auth/principal';
 
 type SaleWithCategory = {
   amountMinor: bigint;
@@ -126,10 +128,36 @@ export class IntelligenceService {
     return { assetId, ...comps };
   }
 
-  /** Seller intelligence: an organisation's sold performance. */
-  async sellerIntelligence(orgId: string) {
+  /**
+   * Authorize a seller-intelligence read. `intelligence:read` alone is not enough (every seller
+   * holds it) — an org's sold performance is competitively sensitive, so the caller must be an
+   * owner/admin member of THAT org, or platform staff. Prevents cross-tenant BOLA.
+   */
+  private async assertCanReadSellerIntelligence(principal: Principal, orgId: string) {
+    const isStaff =
+      principal.permissions.has(Permission.ExchangeOperate) ||
+      principal.permissions.has(Permission.MemberRead) ||
+      principal.permissions.has(Permission.CustomerRead);
+    if (isStaff) return;
+    const membership = principal.customerId
+      ? await this.prisma.organizationMember.findFirst({
+          where: {
+            organizationId: orgId,
+            customerId: principal.customerId,
+            role: { in: ['owner', 'admin'] },
+          },
+        })
+      : null;
+    if (!membership) {
+      throw new ForbiddenException('Not permitted to view this organization’s intelligence');
+    }
+  }
+
+  /** Seller intelligence: an organisation's sold performance. Owner/admin-of-org or staff only. */
+  async sellerIntelligence(principal: Principal, orgId: string) {
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
     if (!org) throw new NotFoundException('Organization not found');
+    await this.assertCanReadSellerIntelligence(principal, orgId);
     // Assets owned by org members → their sold listings.
     const members = await this.prisma.organizationMember.findMany({
       where: { organizationId: orgId },

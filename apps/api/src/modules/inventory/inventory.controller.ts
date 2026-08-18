@@ -25,9 +25,10 @@ export class InventoryController {
     return this.inventory.createAsset(principal, input);
   }
 
+  /** Raw asset read — owner-or-staff only (object-level authz in the service). */
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.inventory.getAsset(id);
+  get(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.inventory.getAsset(principal, id);
   }
 
   /** Ownership- or AssetManage-authorized in the service. */

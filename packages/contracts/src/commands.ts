@@ -429,6 +429,21 @@ export const applyDraftSchema = z.object({
 export type ApplyDraftInput = z.infer<typeof applyDraftSchema>;
 
 /**
+ * §8 — human correction/evaluation loop. A human records their verdict on an AI run's derived
+ * output: they accepted it, corrected it (with the per-field before/after), or rejected it. This is
+ * append-only feedback — the original AI output is never mutated (rule 3) — and it is the labelled
+ * signal the evaluation summary aggregates into accuracy metrics.
+ */
+export const aiFeedbackOutcomes = ['accepted', 'corrected', 'rejected'] as const;
+export const aiFeedbackSchema = z.object({
+  outcome: z.enum(aiFeedbackOutcomes),
+  /** Per-field corrections the human made, keyed by field: `{ make: { from, to } }`. */
+  correctedFields: z.record(z.object({ from: z.unknown().optional(), to: z.unknown() })).optional(),
+  note: z.string().max(2000).optional(),
+});
+export type AiFeedbackInput = z.infer<typeof aiFeedbackSchema>;
+
+/**
  * §6/§7 — stateless pre-publish quality-check input. The seller sends the facts they have entered
  * so far (from the draft) and gets back a deterministic, ADVISORY readiness assessment. The set of
  * REQUIRED category attributes and whether the category is a divisible commodity are NOT trusted

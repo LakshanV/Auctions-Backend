@@ -1,5 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  type AiFeedbackInput,
   type ApplyDraftInput,
   type AssistInput,
   DomainEventName,
@@ -7,7 +8,7 @@ import {
   type TranslateInput,
   newId,
 } from '@singha/contracts';
-import { guardAiRequest } from '@singha/domain';
+import { type AiFeedbackRecord, guardAiRequest, summarizeAiEvaluation } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
@@ -282,5 +283,59 @@ export class AiService {
       });
       return { listingId: input.listingId, title: updated.title, appliedFrom: aiRunId };
     });
+  }
+
+  /**
+   * §8 — record a human's verdict on an AI run (accepted / corrected / rejected). Append-only: the
+   * AI output is never mutated (rule 3), each correction is a new immutable record (rule 5). This is
+   * the correction half of the loop; `evaluation()` aggregates the accumulated feedback.
+   */
+  async recordFeedback(principal: Principal, aiRunId: string, input: AiFeedbackInput) {
+    const run = await this.prisma.aiRun.findUnique({ where: { id: aiRunId } });
+    if (!run) throw new NotFoundException('AI run not found');
+    const actor = toActor(principal);
+    const id = newId();
+    return this.uow.execute(actor, async (ctx) => {
+      await ctx.tx.aiFeedback.create({
+        data: {
+          id,
+          aiRunId,
+          outcome: input.outcome,
+          // Omit the Json column entirely when there are no corrections (a nullable Prisma Json
+          // rejects a bare JS `null`); a provided map is stored as-is.
+          ...(input.correctedFields ? { correctedFields: input.correctedFields as object } : {}),
+          note: input.note,
+          actorId: actor.id,
+        },
+      });
+      // The feedback is a HUMAN action (actor = the principal), not the AI.
+      ctx.audit({
+        action: 'AI_FEEDBACK_RECORDED',
+        targetType: 'AiRun',
+        targetId: aiRunId,
+        after: { outcome: input.outcome },
+      });
+      return { id, aiRunId, outcome: input.outcome };
+    });
+  }
+
+  /**
+   * §8 — the evaluation half of the loop: aggregate all human feedback into deterministic accuracy
+   * metrics (overall + per task type). Advisory, read-only. Joins each feedback to its run's task
+   * type so acceptance/correction/rejection can be read per AI capability.
+   */
+  async evaluation() {
+    const feedback = await this.prisma.aiFeedback.findMany({
+      include: { aiRun: { select: { taskType: true } } },
+    });
+    const records: AiFeedbackRecord[] = feedback.map((f) => ({
+      outcome: f.outcome as AiFeedbackRecord['outcome'],
+      taskType: f.aiRun.taskType,
+      correctedFieldCount:
+        f.correctedFields && typeof f.correctedFields === 'object'
+          ? Object.keys(f.correctedFields as Record<string, unknown>).length
+          : 0,
+    }));
+    return summarizeAiEvaluation(records);
   }
 }

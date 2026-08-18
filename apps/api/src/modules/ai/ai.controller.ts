@@ -1,15 +1,18 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
+  type AiFeedbackInput,
   type ApplyDraftInput,
   type AssistInput,
   type DraftListingInput,
   type TranslateInput,
   Permission,
+  aiFeedbackSchema,
   applyDraftSchema,
   assistSchema,
   draftListingSchema,
   translateSchema,
 } from '@singha/contracts';
+import { HttpCode } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
@@ -65,5 +68,27 @@ export class AiController {
     @Body(new ZodBody(applyDraftSchema)) input: ApplyDraftInput,
   ) {
     return this.ai.applyDraft(principal, id, input);
+  }
+
+  /**
+   * §8 — record a human's verdict on an AI run (accepted / corrected / rejected). Append-only; the
+   * AI output is never mutated. Closes the correction half of the evaluation loop.
+   */
+  @Post('runs/:id/feedback')
+  @RequirePermissions(Permission.AiUse)
+  recordFeedback(
+    @CurrentActor() principal: Principal,
+    @Param('id') id: string,
+    @Body(new ZodBody(aiFeedbackSchema)) input: AiFeedbackInput,
+  ) {
+    return this.ai.recordFeedback(principal, id, input);
+  }
+
+  /** §8 — aggregated AI accuracy metrics from accumulated human feedback (advisory, read-only). */
+  @Get('evaluation')
+  @HttpCode(200)
+  @RequirePermissions(Permission.AiUse)
+  evaluation() {
+    return this.ai.evaluation();
   }
 }

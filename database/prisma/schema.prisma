@@ -1313,9 +1313,31 @@ model AiRun {
   appliedBy   String?    @map("applied_by")
   createdAt   DateTime   @default(now()) @map("created_at")
 
+  feedback AiFeedback[]
+
   @@index([subjectType, subjectId])
   @@index([taskType])
   @@map("ai_run")
+}
+
+// §8 — human correction/evaluation loop. Append-only feedback on an AiRun: a human accepts,
+// corrects or rejects the AI's derived output. The original AiRun.output is NEVER mutated (rule 3);
+// each correction is a new immutable record (rule 5), so the loop yields an auditable labelled set
+// from which AI accuracy is evaluated over time. `correctedFields` captures per-field {from,to}.
+model AiFeedback {
+  id              String   @id
+  aiRunId         String   @map("ai_run_id")
+  outcome         String // 'accepted' | 'corrected' | 'rejected'
+  correctedFields Json?    @map("corrected_fields")
+  note            String?
+  actorId         String?  @map("actor_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  aiRun AiRun @relation(fields: [aiRunId], references: [id])
+
+  @@index([aiRunId])
+  @@index([outcome])
+  @@map("ai_feedback")
 }
 
 // ---------------------------------------------------------------------------

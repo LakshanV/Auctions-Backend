@@ -46,3 +46,35 @@ scored on the _semantic_ rows above — the local rows never regress when the mo
 Today the intake passes nominal per-photo refs (no bytes leave the browser). When the secure media
 pipeline hands the vision service the stored original (or the browser sends a downscaled analysis
 copy), the provider runs unchanged — it is already DI-registered in `VisionModule`.
+
+## Human correction / evaluation loop (§8)
+
+The evaluation harness above measures the AI in the lab. The **correction/evaluation loop** measures
+it in production, from real human verdicts, and is the labelled signal a future model-improvement
+pass consumes.
+
+Every AI invocation is already recorded as an immutable `AiRun` (its `output` is a derived record —
+rule 3 — and is never mutated). The loop adds an **append-only** `AiFeedback` record (rule 5): when a
+human accepts, corrects or rejects that output, their verdict — and, for a correction, the per-field
+`{from, to}` — is written as a new row that references the run. The original AI output stays intact,
+so the pair (AI output, human verdict) is a permanent, auditable training/eval example.
+
+Endpoints (all `ai:use`; feedback is a human action, audited as `AI_FEEDBACK_RECORDED`):
+
+- `POST /ai/runs/:id/feedback` — `{ outcome: 'accepted' | 'corrected' | 'rejected', correctedFields?,
+note? }`. Append-only; does not touch the `AiRun`.
+- `GET /ai/evaluation` — deterministic aggregation (`summarizeAiEvaluation` in `@singha/domain`) over
+  all feedback: totals, `byOutcome`, acceptance / correction / rejection rates, the raw
+  `correctedFieldCount`, and a **per-task-type** breakdown (`listing_draft`, `media_caption`,
+  `quality_check`, …) with each capability's own acceptance rate.
+
+Interpretation. Acceptance rate is the headline "how often is the AI taken as-is" number; correction
+rate + `correctedFieldCount` show _how much_ editing the AI still needs and _which_ fields; rejection
+rate flags outright-wrong outputs. Because it is per-task-type, a weak capability (say make/model OCR)
+is visible next to a strong one (title drafting) without conflating them. The metrics are deterministic
+and computed on demand — no model, no external call — so they are FULLY_WORKING today and populate the
+moment sellers/staff start giving feedback through the seller flow.
+
+Tests: `packages/domain/src/modules/ai/evaluation.test.ts` (pure aggregation) +
+`scripts/e2e-catalogue-v2.mjs` §8 block (draft → correction feedback → per-task evaluation; invalid
+outcome rejected). Storage: `AiFeedback` (append-only), `AiRun.feedback[]`.

@@ -571,6 +571,54 @@ async function main() {
       `a non-owner/non-staff cannot read the assessment (got ${qcForbidden.status})`,
     );
 
+    // --- §8 AI correction/evaluation loop ---
+    const draftRun = await v1('/ai/listing-draft', {
+      token: sellerToken,
+      method: 'POST',
+      body: { category: 'vehicles', attributes: { make: 'Toyota', model: 'Aqua', year: 2015 } },
+    });
+    const aiRunId = draftRun.json?.aiRunId;
+    check(!!aiRunId, `AI listing draft returns an aiRunId (got ${aiRunId})`);
+    // The human corrects the AI's suggestion — append-only feedback (never mutates the AI output).
+    const fb = await v1(`/ai/runs/${aiRunId}/feedback`, {
+      token: sellerToken,
+      method: 'POST',
+      body: {
+        outcome: 'corrected',
+        correctedFields: { title: { from: 'Toyota Aqua', to: 'Toyota Aqua Hybrid 2015' } },
+        note: 'Refined the title.',
+      },
+    });
+    check(
+      (fb.status === 200 || fb.status === 201) && fb.json?.outcome === 'corrected',
+      `human correction feedback is recorded (got ${fb.status})`,
+    );
+    // A bad outcome value is rejected by the contract.
+    const fbBad = await v1(`/ai/runs/${aiRunId}/feedback`, {
+      token: sellerToken,
+      method: 'POST',
+      body: { outcome: 'love-it' },
+    });
+    check(fbBad.status === 400, `an invalid feedback outcome is rejected (got ${fbBad.status})`);
+    // The evaluation summary aggregates the accumulated feedback.
+    const evalSummary = await v1('/ai/evaluation', { token: sellerToken });
+    check(
+      evalSummary.status === 200 &&
+        evalSummary.json?.totalFeedback >= 1 &&
+        evalSummary.json?.byOutcome?.corrected >= 1,
+      `AI evaluation aggregates feedback (total=${evalSummary.json?.totalFeedback})`,
+    );
+    check(
+      (evalSummary.json?.byTaskType ?? []).some(
+        (t) => t.taskType === 'listing_draft' && t.total >= 1,
+      ),
+      'AI evaluation breaks accuracy down per task type',
+    );
+    check(
+      evalSummary.json?.correctedFieldCount >= 1,
+      'AI evaluation counts the individual fields humans corrected',
+    );
+
     // --- Watch: authoritative, server-owned ---
     const denied = await v1('/watch', {
       token: staffToken,

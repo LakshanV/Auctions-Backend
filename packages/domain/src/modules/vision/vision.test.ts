@@ -12,17 +12,17 @@ describe('capture coach', () => {
   it('marks covered required views present and leaves the rest missing', () => {
     const coach = buildCaptureCoach('vehicles', ['front_quarter', 'odometer']);
     const byView = Object.fromEntries(coach.map((c) => [c.view, c]));
-    expect(byView.front_quarter.present).toBe(true);
-    expect(byView.odometer.present).toBe(true);
-    expect(byView.vin_plate.present).toBe(false);
-    expect(byView.vin_plate.required).toBe(true);
+    expect(byView.front_quarter!.present).toBe(true);
+    expect(byView.odometer!.present).toBe(true);
+    expect(byView.vin_plate!.present).toBe(false);
+    expect(byView.vin_plate!.required).toBe(true);
   });
 
   it('is case/space-insensitive on the view hint', () => {
     const coach = buildCaptureCoach('gems', [' Face_Up ', 'SCALE']);
     const byView = Object.fromEntries(coach.map((c) => [c.view, c]));
-    expect(byView.face_up.present).toBe(true);
-    expect(byView.scale.present).toBe(true);
+    expect(byView.face_up!.present).toBe(true);
+    expect(byView.scale!.present).toBe(true);
   });
 
   it('reports unmet required captures until every required view is present', () => {
@@ -77,8 +77,8 @@ describe('finalizeFields', () => {
     ]);
     const model = out.filter((f) => f.field === 'model');
     expect(model).toHaveLength(1);
-    expect(model[0].confidence).toBe(0.88);
-    expect(model[0].state).toBe('observed');
+    expect(model[0]!.confidence).toBe(0.88);
+    expect(model[0]!.state).toBe('observed');
   });
 
   it('flags a confident observation that contradicts the seller claim (never silently overwrites)', () => {

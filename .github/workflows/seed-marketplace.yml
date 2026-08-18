@@ -13,17 +13,17 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type I_UNDERSTAND to confirm — reseeds the target DB (destructive to SMKT-* SIM rows)"
+        description: 'Type I_UNDERSTAND to confirm — reseeds the target DB (destructive to SMKT-* SIM rows)'
         required: true
-        default: ""
+        default: ''
       images_per_listing:
-        description: "Images per image-bearing listing (1 = cover-only, matches the uploaded set)"
+        description: 'Images per image-bearing listing (1 = cover-only, matches the uploaded set)'
         required: false
-        default: "1"
+        default: '1'
       media_ext:
-        description: "Demo media file extension (png for the committed covers)"
+        description: 'Demo media file extension (png for the committed covers)'
         required: false
-        default: "png"
+        default: 'png'
 
 # Least-privilege token (anti-clone doc 03): no repo write needed to seed a DB.
 permissions:

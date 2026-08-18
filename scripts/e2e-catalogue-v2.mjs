@@ -369,6 +369,80 @@ async function main() {
       `an invalid subcategory for the category is rejected (got ${badSub.status})`,
     );
 
+    // --- §2/§11 seller-declared quantity/unit + structured Incoterm/logistics ---
+    const logiListing = await publishListing(
+      sellerToken,
+      staffToken,
+      'bulk',
+      'MAKE_OFFER',
+      { itemType: 'Red onions', quantity: 40, unit: 'MT' },
+      'Red onions — 40 MT lot',
+      'vegetables',
+    );
+    // Invalid Incoterm is rejected by the content contract.
+    const badIncoterm = await v1(`/listings/${logiListing}/content`, {
+      token: sellerToken,
+      method: 'PATCH',
+      body: { defaultIncoterm: 'ZZZ' },
+    });
+    check(
+      badIncoterm.status === 400,
+      `an unknown Incoterm is rejected by the content contract (got ${badIncoterm.status})`,
+    );
+    // Seller declares the structured commercial + logistics terms.
+    const patched = await v1(`/listings/${logiListing}/content`, {
+      token: sellerToken,
+      method: 'PATCH',
+      body: {
+        quantityAvailable: 40,
+        minOrderQuantity: 5,
+        quantityUnitCode: 'MT',
+        unitPriceMinor: 120000,
+        pricingBasis: 'per_unit',
+        defaultIncoterm: 'FOB',
+        pickupAvailable: true,
+        deliveryAvailable: true,
+      },
+    });
+    check(patched.status === 200, `seller sets structured qty + logistics (got ${patched.status})`);
+
+    const logiCards = await v2('/catalogue?category=bulk&limit=60');
+    const logiCard = logiCards.json.items.find((i) => i.id === logiListing);
+    check(logiCard?.quantity === '40', 'card projects seller-declared quantity');
+    check(logiCard?.quantityUnitCode === 'MT', 'card projects the unit code');
+    check(logiCard?.incoterm === 'FOB', 'card projects the seller-declared Incoterm');
+    check(logiCard?.pickupAvailable === true, 'card reflects declared pickup availability');
+    check(logiCard?.deliveryAvailable === true, 'card reflects declared delivery availability');
+
+    // Structured facets now find the lot via the seller's declaration (not just Location roles).
+    const byUnit = await v2('/catalogue?category=bulk&unit=MT&limit=60');
+    check(
+      byUnit.json.items.some((i) => i.id === logiListing),
+      'unit facet matches the lot',
+    );
+    const byPickup = await v2('/catalogue?category=bulk&pickup=true&limit=60');
+    check(
+      byPickup.json.items.some((i) => i.id === logiListing),
+      'pickup facet matches the lot',
+    );
+    const byDelivery = await v2('/catalogue?category=bulk&delivery=true&limit=60');
+    check(
+      byDelivery.json.items.some((i) => i.id === logiListing),
+      'delivery facet matches the lot',
+    );
+    const byQty = await v2('/catalogue?category=bulk&minQuantity=30&maxQuantity=50&limit=60');
+    check(
+      byQty.json.items.some((i) => i.id === logiListing),
+      'quantity-band facet matches the lot',
+    );
+
+    // Lot detail carries the richer structured commercial fields.
+    const logiDetail = await v2(`/catalogue/${logiListing}`);
+    check(logiDetail.json?.minOrderQuantity === '5', 'detail carries min order quantity');
+    check(logiDetail.json?.unitPriceMinor === 120000, 'detail carries unit price (minor)');
+    check(logiDetail.json?.pricingBasis === 'per_unit', 'detail carries pricing basis');
+    check(logiDetail.json?.incoterm === 'FOB', 'detail carries the Incoterm');
+
     // --- Watch: authoritative, server-owned ---
     const denied = await v1('/watch', {
       token: staffToken,

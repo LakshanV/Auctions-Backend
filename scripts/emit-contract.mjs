@@ -123,6 +123,16 @@ async function main() {
         status: 'scheduled',
         publicRef: `CONTRACT-${Date.now()}`,
         title: 'Contract Lot',
+        // §2/§11 — seeded so the card/detail contract snapshot pins the structured
+        // quantity + logistics keys (incoterm, unit, quantity, min-order, unit-price).
+        quantityAvailable: 40,
+        minOrderQuantity: 5,
+        quantityUnitCode: 'MT',
+        unitPriceMinor: 120_000n,
+        pricingBasis: 'per_unit',
+        defaultIncoterm: 'FOB',
+        pickupAvailable: true,
+        deliveryAvailable: true,
       },
     });
     await prisma.auction.create({

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CATEGORY_KEYS, isSubcategoryOf } from './categories';
 import { ALL_ROLES } from './rbac';
+import { incotermCodes } from './logistics-domains';
 
 /**
  * Command DTOs (docs/16). The API exposes business COMMANDS, not raw PATCH of
@@ -591,6 +592,19 @@ export const updateListingContentSchema = z.object({
   showGuidePrice: z.boolean().optional(),
   opensAt: z.string().datetime().nullable().optional(),
   closesAt: z.string().datetime().nullable().optional(),
+  // §2 — structured quantity + unit + unit-pricing (pack doc 13 quantity engine). Decimals are
+  // carried as numbers over the wire and stored as Prisma Decimal (no float precision loss on the
+  // DB side). All optional/additive; `null` clears a previously-set value, omitted leaves it as-is.
+  quantityAvailable: z.number().nonnegative().nullable().optional(),
+  minOrderQuantity: z.number().nonnegative().nullable().optional(),
+  quantityUnitCode: z.string().max(16).nullable().optional(),
+  unitPriceMinor: z.number().int().nonnegative().nullable().optional(),
+  pricingBasis: z.string().max(24).nullable().optional(),
+  // §11 — seller-declared logistics terms: a default trade term (Incoterm) + pickup/delivery
+  // availability. The Incoterm is validated against the configurable INCOTERMS list.
+  defaultIncoterm: z.enum(incotermCodes).nullable().optional(),
+  pickupAvailable: z.boolean().optional(),
+  deliveryAvailable: z.boolean().optional(),
 });
 export type UpdateListingContentInput = z.infer<typeof updateListingContentSchema>;
 

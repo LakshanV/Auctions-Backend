@@ -100,6 +100,22 @@ export class MarketplaceService {
               : input.closesAt
                 ? new Date(input.closesAt)
                 : null,
+          // §2 — structured quantity + unit-pricing. Prisma accepts a number for a Decimal column;
+          // undefined leaves it, null clears it (mirrors the guide-price nullable handling above).
+          quantityAvailable: input.quantityAvailable,
+          minOrderQuantity: input.minOrderQuantity,
+          quantityUnitCode: input.quantityUnitCode,
+          pricingBasis: input.pricingBasis,
+          unitPriceMinor:
+            input.unitPriceMinor === undefined
+              ? undefined
+              : input.unitPriceMinor === null
+                ? null
+                : BigInt(input.unitPriceMinor),
+          // §11 — seller-declared logistics terms.
+          defaultIncoterm: input.defaultIncoterm,
+          pickupAvailable: input.pickupAvailable,
+          deliveryAvailable: input.deliveryAvailable,
         },
       });
       ctx.audit({ action: 'LISTING_CONTENT_UPDATED', targetType: 'Listing', targetId: id });

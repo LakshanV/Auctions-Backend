@@ -222,8 +222,8 @@ model Asset {
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
-  owner              Customer?     @relation(fields: [ownerCustomerId], references: [id])
-  sellerOrganization Organization? @relation(fields: [sellerOrganizationId], references: [id])
+  owner              Customer?                 @relation(fields: [ownerCustomerId], references: [id])
+  sellerOrganization Organization?             @relation(fields: [sellerOrganizationId], references: [id])
   listings           Listing[]
   media              MediaObject[]
   inspectionEvidence AssetInspectionEvidence[]
@@ -286,16 +286,23 @@ model Listing {
   // Operator + origin-node attribution (Addendum A: origination is attribution, not ownership).
   operatorId             String?  @map("operator_id")
   originNodeId           String?  @map("origin_node_id")
+  // §2/§11 — seller-declared logistics terms captured at listing time (all nullable/additive).
+  // `defaultIncoterm` is validated against the configurable INCOTERMS list at the app layer;
+  // pickup/delivery are the seller's own availability declaration, OR-combined in the catalogue
+  // facets with the structured pickup/destination Location roles above so either path surfaces.
+  defaultIncoterm        String?  @map("default_incoterm")
+  pickupAvailable        Boolean? @map("pickup_available")
+  deliveryAvailable      Boolean? @map("delivery_available")
 
-  asset           Asset             @relation(fields: [assetId], references: [id])
-  auction         Auction?
-  eois            Eoi[]
-  sale            Sale?
-  offers          Offer[]
-  tenderBids      TenderBid[]
-  invoice         Invoice?
-  fulfilment      Fulfilment?
-  settlement      Settlement?
+  asset             Asset                    @relation(fields: [assetId], references: [id])
+  auction           Auction?
+  eois              Eoi[]
+  sale              Sale?
+  offers            Offer[]
+  tenderBids        TenderBid[]
+  invoice           Invoice?
+  fulfilment        Fulfilment?
+  settlement        Settlement?
   watches           Watch[]
   eventLots         AuctionEventLot[]
   discoveryEvents   DiscoveryEvent[]
@@ -2257,11 +2264,11 @@ model SupplyProgramme {
   product              String
   category             String?
   originCountry        String?   @map("origin_country")
-  availableQuantity    Decimal?  @db.Decimal(38, 9) @map("available_quantity")
+  availableQuantity    Decimal?  @map("available_quantity") @db.Decimal(38, 9)
   quantityUnitCode     String?   @map("quantity_unit_code")
   frequency            String?
-  minOrderQuantity     Decimal?  @db.Decimal(38, 9) @map("min_order_quantity")
-  maxOrderQuantity     Decimal?  @db.Decimal(38, 9) @map("max_order_quantity")
+  minOrderQuantity     Decimal?  @map("min_order_quantity") @db.Decimal(38, 9)
+  maxOrderQuantity     Decimal?  @map("max_order_quantity") @db.Decimal(38, 9)
   pricingBasis         String?   @map("pricing_basis")
   indicativePriceMinor BigInt?   @map("indicative_price_minor")
   currency             String    @default("LKR")
@@ -2295,15 +2302,15 @@ model PerishableMetadata {
   variety             String?
   grade               String?
   size                String?
-  moisturePercent     Decimal?  @db.Decimal(6, 3) @map("moisture_percent")
+  moisturePercent     Decimal?  @map("moisture_percent") @db.Decimal(6, 3)
   qualitySpec         String?   @map("quality_spec")
   coldChain           Boolean   @default(false) @map("cold_chain")
-  tempMinC            Decimal?  @db.Decimal(6, 2) @map("temp_min_c")
-  tempMaxC            Decimal?  @db.Decimal(6, 2) @map("temp_max_c")
+  tempMinC            Decimal?  @map("temp_min_c") @db.Decimal(6, 2)
+  tempMaxC            Decimal?  @map("temp_max_c") @db.Decimal(6, 2)
   phytosanitaryCert   Boolean   @default(false) @map("phytosanitary_cert")
   originCert          Boolean   @default(false) @map("origin_cert")
-  availableQuantity   Decimal?  @db.Decimal(38, 9) @map("available_quantity")
-  minQuantity         Decimal?  @db.Decimal(38, 9) @map("min_quantity")
+  availableQuantity   Decimal?  @map("available_quantity") @db.Decimal(38, 9)
+  minQuantity         Decimal?  @map("min_quantity") @db.Decimal(38, 9)
   shipmentWindowStart DateTime? @map("shipment_window_start")
   shipmentWindowEnd   DateTime? @map("shipment_window_end")
   createdAt           DateTime  @default(now()) @map("created_at")
@@ -2334,16 +2341,16 @@ model CustomerProfile {
 // Capability-based verification grant (Evolution E11). A member requests a capability; an operator
 // decides it (O7 governs the evidence bar). A gated activity requires a verified, unexpired grant.
 model CustomerCapability {
-  id                 String    @id
-  customerId         String    @map("customer_id")
-  capability         String
-  status             String    @default("pending")
-  evidenceRef        String?   @map("evidence_ref")
-  decidedByCustomerId String?  @map("decided_by_customer_id")
-  verifiedAt         DateTime? @map("verified_at")
-  expiresAt          DateTime? @map("expires_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  id                  String    @id
+  customerId          String    @map("customer_id")
+  capability          String
+  status              String    @default("pending")
+  evidenceRef         String?   @map("evidence_ref")
+  decidedByCustomerId String?   @map("decided_by_customer_id")
+  verifiedAt          DateTime? @map("verified_at")
+  expiresAt           DateTime? @map("expires_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@unique([customerId, capability])
   @@index([customerId])
@@ -2354,12 +2361,12 @@ model CustomerCapability {
 // of a deterministic intelligence computation (match / offer comparison / price comparables / risk).
 // Derived records never overwrite facts (rule 3); nothing here binds a transaction (rule 11 / doc 12).
 model IntelligenceReport {
-  id                   String   @id
-  kind                 String
-  requestedByCustomerId String? @map("requested_by_customer_id")
-  subjectRef           String?  @map("subject_ref")
-  result               Json
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                    String   @id
+  kind                  String
+  requestedByCustomerId String?  @map("requested_by_customer_id")
+  subjectRef            String?  @map("subject_ref")
+  result                Json
+  createdAt             DateTime @default(now()) @map("created_at")
 
   @@index([kind])
   @@map("intelligence_report")
@@ -2370,14 +2377,14 @@ model IntelligenceReport {
 // listings/offers/bids/sales/payments/shipments — those remain the single central canonical records.
 // It records origin_node + the resolved outcome for audit (Addendum A acceptance).
 model NodeOrigination {
-  id            String   @id
-  nodeCode      String   @map("node_code")
-  capability    String
-  outcome       String
-  operatorCode  String?  @map("operator_code")
-  subjectRef    String?  @map("subject_ref")
-  requestedBy   String?  @map("requested_by")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id           String   @id
+  nodeCode     String   @map("node_code")
+  capability   String
+  outcome      String
+  operatorCode String?  @map("operator_code")
+  subjectRef   String?  @map("subject_ref")
+  requestedBy  String?  @map("requested_by")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([nodeCode])
   @@map("node_origination")

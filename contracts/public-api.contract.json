@@ -38,10 +38,13 @@
           "deliveryAvailable": "boolean",
           "featured": "boolean",
           "id": "string",
+          "incoterm": "string",
           "media": {
             "videoAvailable": "boolean"
           },
           "pickupAvailable": "boolean",
+          "quantity": "string",
+          "quantityUnitCode": "string",
           "reference": "string",
           "saleMethod": "string",
           "seller": {
@@ -75,10 +78,13 @@
           "deliveryAvailable": "boolean",
           "featured": "boolean",
           "id": "string",
+          "incoterm": "string",
           "media": {
             "videoAvailable": "boolean"
           },
           "pickupAvailable": "boolean",
+          "quantity": "string",
+          "quantityUnitCode": "string",
           "reference": "string",
           "saleMethod": "string",
           "seller": {
@@ -112,10 +118,15 @@
       "featured": "boolean",
       "fullDescription": "null",
       "id": "string",
+      "incoterm": "string",
       "inspectionSummary": "null",
       "media": ["unknown"],
+      "minOrderQuantity": "string",
       "pickupAvailable": "boolean",
+      "pricingBasis": "string",
       "publicTermsRef": "null",
+      "quantity": "string",
+      "quantityUnitCode": "string",
       "reference": "string",
       "saleMethod": "string",
       "seller": {
@@ -124,6 +135,7 @@
       "status": "string",
       "subcategory": "string",
       "title": "string",
+      "unitPriceMinor": "number",
       "watchers": "number"
     },
     "GET /auctions/:id/state": {

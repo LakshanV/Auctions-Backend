@@ -191,6 +191,11 @@ export class CatalogueV2Service {
       inspectionSummary: listing.inspectionSummary,
       collectionSummary: listing.collectionSummary,
       publicTermsRef: listing.publicTermsRef,
+      // §2 — structured quantity/unit-pricing detail (card already carries quantity + unit code).
+      minOrderQuantity:
+        listing.minOrderQuantity == null ? undefined : listing.minOrderQuantity.toString(),
+      unitPriceMinor: listing.unitPriceMinor == null ? undefined : Number(listing.unitPriceMinor),
+      pricingBasis: listing.pricingBasis ?? undefined,
       attributes: listing.asset.attributes,
       media: this.mediaList(listing),
       evidence,
@@ -253,8 +258,12 @@ export class CatalogueV2Service {
       and.push({ quantityAvailable: qty });
     }
     if (q.unit) and.push({ quantityUnitCode: q.unit });
-    if (q.pickup) and.push({ pickupLocationId: { not: null } });
-    if (q.delivery) and.push({ destinationLocationId: { not: null } });
+    // §11 — a lot is pickup/delivery-able either via a structured Location role OR the seller's
+    // own declaration on the listing (both surfaced identically to the customer).
+    if (q.pickup)
+      and.push({ OR: [{ pickupLocationId: { not: null } }, { pickupAvailable: true }] });
+    if (q.delivery)
+      and.push({ OR: [{ destinationLocationId: { not: null } }, { deliveryAvailable: true }] });
     // §19 — verified-seller facet: the owning customer's identity is confirmed. Applied at the
     // DB so facet counts and pagination stay exact. Org-only consignments (no owner customer)
     // are conservatively excluded from the verified set until org verification exists.
@@ -338,8 +347,11 @@ export class CatalogueV2Service {
       // it is projected as a string (no precision loss) to match the frontend's declared shape.
       quantity: l.quantityAvailable == null ? undefined : l.quantityAvailable.toString(),
       quantityUnitCode: l.quantityUnitCode ?? undefined,
-      pickupAvailable: l.pickupLocationId != null,
-      deliveryAvailable: l.destinationLocationId != null,
+      // §11 — pickup/delivery is true via a structured Location role OR the seller's declaration.
+      pickupAvailable: l.pickupLocationId != null || l.pickupAvailable === true,
+      deliveryAvailable: l.destinationLocationId != null || l.deliveryAvailable === true,
+      // §11 — seller-declared default trade term (Incoterm); undefined when not set.
+      incoterm: l.defaultIncoterm ?? undefined,
       // §19 — customer-safe seller trust signal. A single boolean derived from the owner's
       // KYC state; the raw kycStatus, seller identity and org attribution never leave the API.
       seller: { verified: l.asset.owner?.kycStatus === 'verified' },

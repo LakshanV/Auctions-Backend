@@ -476,6 +476,33 @@ async function main() {
       `submitting a listing that already carries a unit price does not 500 (got ${submitAfterPrice.status})`,
     );
 
+    // --- §5 server-generated Singha reference: omit publicRef → server assigns SNG-YYYY-XXXXXXXX ---
+    const refAsset = await v1('/assets', {
+      token: sellerToken,
+      method: 'POST',
+      body: { category: 'general', attributes: {} },
+    });
+    const autoListing = await v1('/listings', {
+      token: sellerToken,
+      method: 'POST',
+      body: { assetId: refAsset.json.id, saleMethod: 'BUY_NOW', title: 'Auto-ref lot' },
+    });
+    check(
+      autoListing.status === 201 &&
+        /^SNG-\d{4}-[0-9A-Z]{8}$/.test(autoListing.json?.publicRef ?? ''),
+      `listing created without a publicRef gets an auto-assigned Singha reference (got ${autoListing.json?.publicRef})`,
+    );
+    // A second one is distinct (derived from each listing's unique id).
+    const autoListing2 = await v1('/listings', {
+      token: sellerToken,
+      method: 'POST',
+      body: { assetId: refAsset.json.id, saleMethod: 'BUY_NOW', title: 'Auto-ref lot 2' },
+    });
+    check(
+      autoListing2.json?.publicRef && autoListing2.json.publicRef !== autoListing.json.publicRef,
+      'a second auto-referenced listing gets a distinct reference',
+    );
+
     // --- Watch: authoritative, server-owned ---
     const denied = await v1('/watch', {
       token: staffToken,

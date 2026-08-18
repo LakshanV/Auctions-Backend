@@ -1,5 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { catalogueQuerySchema, catalogueRowQuerySchema } from './commands';
+import {
+  catalogueQuerySchema,
+  catalogueRowQuerySchema,
+  createListingSchema,
+  generateListingReference,
+} from './commands';
+
+/**
+ * §5 — the public listing reference is server-assigned when the seller omits it, and branded
+ * (SNG-YYYY-XXXXXXXX). These pin both the optionality in the contract and the reference format.
+ */
+describe('listing reference — server-generated (§5)', () => {
+  it('accepts a create without a publicRef (server will assign one)', () => {
+    const parsed = createListingSchema.parse({ assetId: 'a1', saleMethod: 'TIMED_AUCTION' });
+    expect(parsed.publicRef).toBeUndefined();
+  });
+
+  it('still accepts a caller-supplied publicRef and keeps its constraints', () => {
+    const parsed = createListingSchema.parse({
+      assetId: 'a1',
+      saleMethod: 'BUY_NOW',
+      publicRef: 'LEGACY-123',
+    });
+    expect(parsed.publicRef).toBe('LEGACY-123');
+    expect(() =>
+      createListingSchema.parse({ assetId: 'a1', saleMethod: 'BUY_NOW', publicRef: 'bad ref!' }),
+    ).toThrow();
+  });
+
+  it('generates a branded, uppercase, uniquely-derived reference from the id', () => {
+    const ref = generateListingReference('01M0A0W5R5Q13S3KPD2E06CE24', 2026);
+    expect(ref).toMatch(/^SNG-2026-[0-9A-Z]{8}$/);
+    // Derived from the id tail → different ids yield different references.
+    expect(generateListingReference('01M0A0W5R5Q13S3KPD2E06CE24', 2026)).not.toBe(
+      generateListingReference('01M0A0W5R5Q13S3KPD2E06CE99', 2026),
+    );
+  });
+});
 
 /**
  * V3 non-negotiable (pack doc 08): when the catalogue `sort` is omitted the server

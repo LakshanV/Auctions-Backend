@@ -5,6 +5,7 @@ import {
   Permission,
   type ReviewListingInput,
   type UpdateListingContentInput,
+  generateListingReference,
   newId,
 } from '@singha/contracts';
 import { assertListingTransition, saleMethodCodeForLegacyEnum } from '@singha/domain';
@@ -27,6 +28,8 @@ export class MarketplaceService {
 
     const actor = toActor(principal);
     const id = newId();
+    // §5 — auto-assign a branded Singha reference when the caller did not supply one.
+    const publicRef = input.publicRef ?? generateListingReference(id, new Date().getFullYear());
     return this.uow.execute(actor, async (ctx) => {
       const listing = await ctx.tx.listing.create({
         data: {
@@ -37,7 +40,7 @@ export class MarketplaceService {
           // DECISIONS D3) so new rows match the migration backfill; the enum stays authoritative
           // until a later phase switches consumers over.
           saleMethodCode: saleMethodCodeForLegacyEnum(input.saleMethod),
-          publicRef: input.publicRef,
+          publicRef,
           title: input.title,
           status: 'draft',
         },

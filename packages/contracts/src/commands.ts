@@ -79,9 +79,21 @@ export const createListingSchema = z.object({
   assetId: z.string().min(1),
   saleMethod: z.enum(saleMethodValues),
   title: z.string().max(200).optional(),
-  publicRef,
+  // §5 — the public reference is OPTIONAL: when omitted the server assigns a unique, branded
+  // Singha reference (SNG-YYYY-XXXXXXXX). A caller MAY still supply its own (staff/integration
+  // import, legacy backfill); a supplied value keeps the same alphanumeric-dash constraints.
+  publicRef: publicRef.optional(),
 });
 export type CreateListingInput = z.infer<typeof createListingSchema>;
+
+/**
+ * §5 — deterministic, collision-safe Singha listing reference derived from the listing's
+ * ULID id (its tail is 80 bits of randomness, so an 8-char base32 slice is effectively unique;
+ * the DB `@unique` constraint is the final backstop). Branded + human-readable + sortable by year.
+ */
+export function generateListingReference(id: string, year: number): string {
+  return `SNG-${year}-${id.slice(-8).toUpperCase()}`;
+}
 
 export const reviewListingSchema = z.object({
   decision: z.enum(['approve', 'changes_required']),

@@ -148,14 +148,29 @@ async function main() {
     const stillUnpaid = await get(`/commerce/invoices/${invoiceId}`, { token: staffToken });
     check(stillUnpaid.json?.status === 'issued', 'invoice still issued before verification');
 
-    // Accounts verifies → invoice paid + fulfilment payment_confirmed.
-    const verify = await post(`/commerce/payments/${payment.json.id}/verify`, {
-      token: accountsToken,
-      body: { decision: 'confirm' },
-    });
+    // Accounts verifies → invoice paid + fulfilment payment_confirmed. Fire TWO concurrent
+    // confirms of the SAME payment (D07): exactly one may transition it out of
+    // pending_verification — the other gets a clean 4xx — so the append-only ledger records
+    // exactly one payment_received (verified in the ledger block below), never a double credit.
+    const [v1, v2] = await Promise.all([
+      post(`/commerce/payments/${payment.json.id}/verify`, {
+        token: accountsToken,
+        body: { decision: 'confirm' },
+      }),
+      post(`/commerce/payments/${payment.json.id}/verify`, {
+        token: accountsToken,
+        body: { decision: 'confirm' },
+      }),
+    ]);
+    const verify = [v1, v2].find((r) => r.status === 201) ?? v1;
+    const verifyStatuses = [v1.status, v2.status].sort((a, b) => a - b);
     check(
       verify.status === 201 && verify.json?.status === 'confirmed',
       'accounts confirmed payment',
+    );
+    check(
+      verifyStatuses[0] === 201 && verifyStatuses[1] >= 400 && verifyStatuses[1] < 500,
+      `concurrent double-confirm: one 201 + one 4xx (got ${verifyStatuses.join(',')})`,
     );
     const paid = await get(`/commerce/invoices/${invoiceId}`, { token: staffToken });
     check(paid.json?.status === 'paid', 'invoice marked paid after verification');
@@ -215,6 +230,11 @@ async function main() {
           (t) => types.includes(t),
         ),
         `ledger has all event types (${[...new Set(types)].join(', ')})`,
+      );
+      // D07 — the concurrent double-confirm above must NOT have double-credited the ledger.
+      check(
+        types.filter((t) => t === 'payment_received').length === 1,
+        `exactly one payment_received entry — no double-credit (got ${types.filter((t) => t === 'payment_received').length})`,
       );
       let blocked = false;
       try {

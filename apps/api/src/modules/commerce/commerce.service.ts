@@ -183,14 +183,22 @@ export class CommerceService {
     const actor = toActor(principal);
     const confirm = input.decision === 'confirm';
     return this.uow.execute(actor, async (ctx) => {
-      const updated = await ctx.tx.payment.update({
-        where: { id: paymentId },
+      // Conditional claim: only ONE concurrent verify may transition the payment out of
+      // pending_verification. The status guard above runs OUTSIDE the transaction and cannot stop
+      // a double-confirm race on its own — without this predicate both racers would each append a
+      // `payment_received` row to the immutable ledger, over-stating the paid total. The loser
+      // matches 0 rows and rolls back with a clean 409.
+      const claimed = await ctx.tx.payment.updateMany({
+        where: { id: paymentId, status: 'pending_verification' },
         data: {
           status: confirm ? 'confirmed' : 'rejected',
           verifiedBy: principal.customerId ?? 'staff',
           verifiedAt: new Date(),
         },
       });
+      if (claimed.count === 0) throw new ConflictException('Payment is not pending verification');
+      const updated = await ctx.tx.payment.findUnique({ where: { id: paymentId } });
+      if (!updated) throw new NotFoundException('Payment not found');
       if (confirm) {
         await this.ledger(
           ctx,

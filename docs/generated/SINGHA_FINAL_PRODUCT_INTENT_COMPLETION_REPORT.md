@@ -87,3 +87,43 @@ Genuinely still open (additive, non-customer-blocking):
 - **PROVIDER_GATED** PRV-1 (vision model), PRV-2 (payments/FX/logistics/WhatsApp/voice/streaming),
   PRV-3 (GSI/gem-lab); real photographic 4-view demo imagery.
 - **LEGAL_GATED** O1–O8.
+
+## Final Additive Completion Pass — this session
+
+The remaining additive product-intent items, built as intended product (not "polish") and each
+**browser-tested through the real UI, then verified against authoritative API/DB state**. Loop
+followed throughout: audit → implement → browser-test → diagnose → fix → regression-test → commit.
+Non-negotiables honoured (rule 2 UI-never-truth, rule 3 AI/derived-never-overwrites,
+rule 5 append-only, rule 11 AI-advisory, rule 12 engine-authoritative). All items **FULLY_WORKING**
+(no provider key, owner infra or legal sign-off required).
+
+| Item (directive §)                         | Class         | What shipped                                                                                                                                                                                                              | Verification                                                                                                                                           | Commits (BE / FE)                     |
+| ------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| §3 Subcategory taxonomy                    | FULLY_WORKING | Config-driven `CATEGORY_SUBCATEGORIES` + `Asset.subcategory` (additive migration); catalogue "Type" facet rail + filter + per-card caption; sell-wizard subcategory selector                                              | Browser: Vehicles→Type rail (SUVs/4x4 2, Cars 1, Trucks 1, Motorcycles 1); SUV filter → exactly 2 cards; e2e 4 checks; contract snapshot regen         | BE `4aaa0a4` / FE `56e9b02`           |
+| §1 Produce + Scrap specialist profiles     | FULLY_WORKING | `scrap` category + `scrapV1` Zod/descriptors; enriched `bulkV1` produce fields; scrap capture-requirements; category tiles                                                                                                | Browser: seller wizard renders full scrap profile (material*, materialCategory/sortedStatus selects, loading checkbox…) + produce fields + 8 subs each | BE `4aaa0a4` / FE `56e9b02`           |
+| §2/§11 Quantity/units + Incoterm/logistics | FULLY_WORKING | Seller declares structured quantity/unit/min-order/unit-price + Incoterm + pickup/delivery; `updateListingContent` persists them; card `incoterm` + OR-combined pickup/delivery facets; lot-detail facts; +14 e2e         | Browser: wizard set qty 40 MT, min 5, unit price, FOB, pickup+delivery → **DB row carries every field**; card + facets + detail project correctly      | BE `069eb05`,`54c56df` / FE `54a689c` |
+| §5 Server-generated Singha references      | FULLY_WORKING | `publicRef` optional on create; server assigns `SNG-YYYY-XXXXXXXX` (ULID-derived, collision-safe, `@unique` backstop); wizard field optional + confirmation shows the assigned ref                                        | Browser: blank ref → "Listing **SNG-2026-QQK91VTR** submitted"; DB row matches; contracts + e2e (distinct refs)                                        | BE `9c138e2` / FE `905e47f`           |
+| §4 Mobile live-camera capture              | FULLY_WORKING | `getUserMedia` in-app capture → immutable-original pipeline; front/rear switch; graceful denied/unsupported fallback; **fixed `Permissions-Policy` that blocked camera** (`camera=(self)`)                                | Browser (390px, fake device): capture adds a photo (0→1) as cover; permission-denied path degrades gracefully                                          | FE `ad1dbb0`                          |
+| §6/§7 Pre-publish quality-control gate     | FULLY_WORKING | Deterministic ADVISORY `assessListingQuality` (score/status/checks); `POST /listings/quality-check` (preview) + `GET /:id/quality-check` (owner/staff); submit records a `quality_check` AiRun (lifecycle); Preview panel | Browser: Preview shows **51/100 NEEDS FIXING** + issue list, submit stays enabled; e2e (incomplete/ready/403); DB shows a quality_check AiRun/submit   | BE `28c4ccb` / FE `fd676d8`,`a2684cd` |
+| §8 AI correction/evaluation loop           | FULLY_WORKING | Append-only `AiFeedback` (accepted/corrected/rejected + per-field {from,to}); `POST /ai/runs/:id/feedback` + `GET /ai/evaluation` (per-task accuracy); AI Assistant feedback control; report section                      | Browser: "Accurate" → thank-you; **DB feedback row + `/ai/evaluation`** reflect it (acceptanceRate per task); domain + e2e green                       | BE `8de313e` / FE `4954921`           |
+
+### Final validation (this session)
+
+- **Consolidated backend E2E** (`e2e-catalogue-v2.mjs`, fresh DB) — all checks pass, covering §3
+  subcategory, §2/§11 quantity+Incoterm+facets, §5 auto-reference, §6/§7 quality gate, §8 feedback loop,
+  plus the pre-existing catalogue/watch/dashboard suite. **Security E2E** (`e2e-security.mjs`) green — no
+  regression. Domain **233** + contracts **41** unit tests green.
+- **Security spot-check** — every new endpoint is permission-gated: `POST /listings/quality-check`,
+  `GET /ai/evaluation`, `POST /ai/runs/:id/feedback` all return **403** unauthenticated; the per-listing
+  quality assessment returns **403** to a non-owner/non-staff caller (e2e-asserted).
+- **Responsive** — `/catalogue` (Vehicles + Type rail + logistics card lines, Grid view) at **360 / 768 /
+  1440** px: **zero** page-level horizontal overflow at every width; the §3 Type rail renders at all three.
+- **Latent-bug fixes surfaced + closed**: (a) `submit/review/publish` returned a raw Listing → 500
+  "cannot serialize BigInt" once a money column was set (now a BigInt-safe `{id,status}`, regression-guarded);
+  (b) `CAPTURE_REQUIREMENTS` was missing a `scrap` entry after `scrap` joined `CATEGORY_KEYS`, breaking the
+  domain dts build (added); (c) `Permissions-Policy: camera=()` blocked the app's own camera (now `(self)`).
+- **Auth harness** — a reusable local mock-GoTrue lets the real login form + SSR middleware authenticate
+  against a demo-token-backed seller, so every seller/staff-gated flow above was exercised through the
+  genuine UI, not a bypass.
+
+Owner/provider/legal gates remain exactly as listed above — unchanged and not engineering-closable.

@@ -31,6 +31,6 @@ describe('summarizeAiEvaluation (§8)', () => {
     expect(draft.acceptanceRate).toBe(0.667);
 
     // Sorted by total desc — listing_draft (3) before media_caption (2).
-    expect(s.byTaskType[0].taskType).toBe('listing_draft');
+    expect(s.byTaskType[0]?.taskType).toBe('listing_draft');
   });
 });

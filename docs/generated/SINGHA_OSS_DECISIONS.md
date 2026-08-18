@@ -83,3 +83,22 @@ fakes** so the full flow is engineering-complete and testable now. Real activati
 infra (CPU/GPU host, model download, or a managed key) and is marked **PROVIDER_GATED (PRV-1)** in
 `SINGHA_REMAINING_WORK_OPEN_ITEMS.md`. AI must **degrade gracefully** — if vision/OCR/valuation is
 unavailable the seller completes the listing manually.
+
+## Shipped status (directive §13/§14 — real, not mock)
+
+The deterministic local tasks are now REAL implementations, not interface+mock:
+
+- **`DeterministicImageProvider`** (`apps/api/src/modules/vision/adapters/`) — **sharp** (Apache-2.0;
+  libvips LGPL, dynamically linked → boundary safe) for decode/resize + **exifr** (MIT) for EXIF/GPS,
+  feeding pure `@singha/domain` primitives (`laplacianVariance`, `exposureStats`, `dHash`,
+  `hammingDistance`, `isPerceptualDuplicate`). Covers **blur/quality, exposure/glare, perceptual
+  hashing + duplicate detection, and metadata** — no key, no per-call cost, CPU-local. DI-registered
+  in `VisionModule`. Benchmarked on a reproducible synthetic corpus
+  (`deterministic-image.spec.ts` + `deterministic.test.ts`, all green) — see
+  `SINGHA_AI_VISION_EVALUATION_REPORT.md`.
+- **OCR (Tesseract/PaddleOCR), object detection, segmentation, embeddings, and the semantic VLM**
+  remain PROVIDER_GATED (need model weights / a managed key); the ports + the deterministic layer
+  above are the activation-ready foundation.
+
+Weights-licence note re-confirmed: sharp/libvips/exifr carry no model weights (pure algorithms), so
+there is no non-commercial-weights risk for the shipped deterministic layer.

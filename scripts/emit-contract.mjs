@@ -108,7 +108,12 @@ async function main() {
     const id = randomUUID();
     const auctionId = randomUUID();
     await prisma.asset.create({
-      data: { id: assetId, category: 'vehicles', attributes: { make: 'Toyota' } },
+      data: {
+        id: assetId,
+        category: 'vehicles',
+        subcategory: 'suv_4x4',
+        attributes: { make: 'Toyota' },
+      },
     });
     await prisma.listing.create({
       data: {

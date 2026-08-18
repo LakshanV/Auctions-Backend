@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CATEGORY_KEYS } from './categories';
+import { CATEGORY_KEYS, isSubcategoryOf } from './categories';
 import { ALL_ROLES } from './rbac';
 
 /**
@@ -55,11 +55,18 @@ export const addOrganizationMemberSchema = z.object({
 });
 export type AddOrganizationMemberInput = z.infer<typeof addOrganizationMemberSchema>;
 
-export const createAssetSchema = z.object({
-  category: z.enum(CATEGORY_KEYS),
-  attributes: z.record(z.unknown()).default({}),
-  ownerCustomerId: z.string().min(1).optional(),
-});
+export const createAssetSchema = z
+  .object({
+    category: z.enum(CATEGORY_KEYS),
+    // §3 — optional customer-facing subcategory; validated against the category's taxonomy below.
+    subcategory: z.string().max(60).optional(),
+    attributes: z.record(z.unknown()).default({}),
+    ownerCustomerId: z.string().min(1).optional(),
+  })
+  .refine((v) => !v.subcategory || isSubcategoryOf(v.category, v.subcategory), {
+    message: 'subcategory is not valid for this category',
+    path: ['subcategory'],
+  });
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 
 export const updateAssetAttributesSchema = z.object({
@@ -613,6 +620,8 @@ export type AddEventLotInput = z.infer<typeof addEventLotSchema>;
 /** Query for the enriched v2 catalogue (facets/pagination/search). */
 export const catalogueQuerySchema = z.object({
   category: z.string().max(40).optional(),
+  // §3 — filter to a customer-facing subcategory within a category.
+  subcategory: z.string().max(60).optional(),
   saleMethod: z.enum(saleMethodValues).optional(),
   status: z.string().max(20).optional(),
   search: z.string().max(120).optional(),
@@ -649,6 +658,7 @@ export type CatalogueQuery = z.infer<typeof catalogueQuerySchema>;
  */
 export const catalogueRowQuerySchema = z.object({
   category: z.string().min(1).max(40),
+  subcategory: z.string().max(60).optional(),
   saleMethod: z.enum(saleMethodValues).optional(),
   status: z.string().max(20).optional(),
   search: z.string().max(120).optional(),

@@ -206,6 +206,9 @@ model OrganizationMember {
 model Asset {
   id                   String         @id
   category             String
+  // §3 — customer-facing subcategory (config-driven taxonomy in @singha/contracts). Nullable +
+  // additive; indexed for catalogue facets/filtering. The category stays the stable top-level key.
+  subcategory          String?
   schemaVersion        Int            @default(1) @map("schema_version")
   // Category-specific attributes, validated against the versioned category
   // schema (docs/06). Nullable + additive so pre-existing assets stay valid.
@@ -226,6 +229,7 @@ model Asset {
   inspectionEvidence AssetInspectionEvidence[]
 
   @@index([category])
+  @@index([category, subcategory])
   @@index([ownerCustomerId])
   @@index([sellerOrganizationId])
   @@map("asset")

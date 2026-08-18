@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CATEGORY_FIELD_SCHEMAS, UNIT_DEFINITIONS } from '@singha/contracts';
+import {
+  CATEGORY_FIELD_SCHEMAS,
+  CATEGORY_SUBCATEGORIES,
+  UNIT_DEFINITIONS,
+} from '@singha/contracts';
 import { activeSaleMethods } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -25,7 +29,12 @@ export class PlatformConfigService {
    * server-side against the versioned Zod `CATEGORY_SCHEMAS`. Non-sensitive reference data.
    */
   categorySchemas() {
-    return Object.values(CATEGORY_FIELD_SCHEMAS);
+    // §3 — fold each category's subcategory taxonomy into the served descriptor so the seller UI
+    // renders a subcategory selector (and the catalogue/search consume the same source of truth).
+    return Object.values(CATEGORY_FIELD_SCHEMAS).map((schema) => ({
+      ...schema,
+      subcategories: CATEGORY_SUBCATEGORIES[schema.key] ?? [],
+    }));
   }
 
   units() {

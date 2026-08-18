@@ -1,5 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CATEGORY_KEYS, type CatalogueQuery, type CatalogueRowQuery } from '@singha/contracts';
+import {
+  CATEGORY_KEYS,
+  CATEGORY_SUBCATEGORIES,
+  isCategoryKey,
+  type CatalogueQuery,
+  type CatalogueRowQuery,
+} from '@singha/contracts';
 import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InspectionEvidenceService } from '../inspection-evidence/inspection-evidence.service';
@@ -7,6 +13,7 @@ import { InspectionEvidenceService } from '../inspection-evidence/inspection-evi
 /** Filter fields shared by the full catalogue query and a single Rubik row. */
 type CatalogueFilters = {
   category?: string;
+  subcategory?: string;
   saleMethod?: CatalogueQuery['saleMethod'];
   status?: string;
   search?: string;
@@ -85,6 +92,22 @@ export class CatalogueV2Service {
       ),
     ]);
 
+    // §3 — subcategory facet, computed ONLY within a selected category (subcategories are
+    // category-scoped). One bounded COUNT per known subcategory of that category; empty otherwise.
+    const subcatDefs =
+      q.category && isCategoryKey(q.category) ? CATEGORY_SUBCATEGORIES[q.category] : [];
+    const subcategoryFacet = (
+      await Promise.all(
+        subcatDefs.map(async (s) => ({
+          value: s.value,
+          label: s.label,
+          count: await this.prisma.listing.count({
+            where: { AND: [where, { asset: { subcategory: s.value } }] },
+          }),
+        })),
+      )
+    ).filter((f) => f.count > 0);
+
     return {
       items: rows.map((l) => this.toCardV2(l as FullListing)),
       page: q.page,
@@ -93,6 +116,7 @@ export class CatalogueV2Service {
       totalPages: Math.max(1, Math.ceil(total / q.limit)),
       facets: {
         category: categoryFacet.filter((f) => f.count > 0).sort((a, b) => b.count - a.count),
+        subcategory: subcategoryFacet.sort((a, b) => b.count - a.count),
         saleMethod: saleMethodFacet.map((f) => ({ value: f.saleMethod, count: f._count })),
         status: (statusFacet as { status: string; _count: number }[]).map((f) => ({
           value: f.status,
@@ -183,6 +207,7 @@ export class CatalogueV2Service {
       { status: { in: (q.status ? [q.status] : [...OPEN_STATUSES]) as never } },
     ];
     if (q.category) and.push({ asset: { category: q.category } });
+    if (q.subcategory) and.push({ asset: { subcategory: q.subcategory } });
     if (q.saleMethod) and.push({ saleMethod: q.saleMethod });
     if (q.featured) and.push({ featured: true });
     if (q.auctionEventId) and.push({ eventLots: { some: { auctionEventId: q.auctionEventId } } });
@@ -299,6 +324,8 @@ export class CatalogueV2Service {
       title: l.title ?? l.asset.category,
       shortDescription: l.shortDescription ?? undefined,
       category: l.asset.category,
+      // §3 — customer-facing subcategory (config-driven taxonomy); undefined when not set.
+      subcategory: l.asset.subcategory ?? undefined,
       location:
         l.locationCity || l.locationRegion
           ? { city: l.locationCity, region: l.locationRegion }

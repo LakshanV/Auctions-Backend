@@ -63,11 +63,19 @@ const registerCustomer = async (label) =>
     })
   ).json?.id;
 
-async function publishListing(sellerToken, staffToken, category, saleMethod, attrs, title) {
+async function publishListing(
+  sellerToken,
+  staffToken,
+  category,
+  saleMethod,
+  attrs,
+  title,
+  subcategory,
+) {
   const asset = await v1('/assets', {
     token: sellerToken,
     method: 'POST',
-    body: { category, attributes: attrs },
+    body: { category, attributes: attrs, ...(subcategory ? { subcategory } : {}) },
   });
   const listing = await v1('/listings', {
     token: sellerToken,
@@ -316,6 +324,49 @@ async function main() {
     check(
       vRow.json.items.length >= 1 && vRow.json.items.every((i) => i.seller?.verified === true),
       'row endpoint honours verifiedOnly + projects seller.verified',
+    );
+
+    // --- §3 customer-facing subcategory taxonomy ---
+    const suvListing = await publishListing(
+      sellerToken,
+      staffToken,
+      'vehicles',
+      'BUY_NOW',
+      { make: 'Toyota', model: 'Prado', year: 2018 },
+      'Toyota Prado 2018',
+      'suv_4x4',
+    );
+    const withSubcat = await v2('/catalogue?category=vehicles&limit=60');
+    const suvCard = withSubcat.json.items.find((i) => i.id === suvListing);
+    check(suvCard?.subcategory === 'suv_4x4', 'card projects the customer-facing subcategory');
+    const facetVehicles = withSubcat.json.facets?.subcategory ?? [];
+    check(
+      facetVehicles.some((f) => f.value === 'suv_4x4' && f.count >= 1 && f.label === 'SUVs / 4x4'),
+      'subcategory facet (with labels) appears within the selected category',
+    );
+    const onlySuv = await v2('/catalogue?category=vehicles&subcategory=suv_4x4&limit=60');
+    check(
+      onlySuv.json.items.length >= 1 &&
+        onlySuv.json.items.every((i) => i.subcategory === 'suv_4x4'),
+      'subcategory filter returns only that subcategory',
+    );
+    check(
+      !onlySuv.json.items.some((i) => i.id === auctionListing),
+      'subcategory filter excludes other-subcategory vehicles',
+    );
+    // Server rejects a subcategory that is not valid for the category.
+    const badSub = await v1('/assets', {
+      token: sellerToken,
+      method: 'POST',
+      body: {
+        category: 'vehicles',
+        attributes: { make: 'X', model: 'Y', year: 2010 },
+        subcategory: 'sapphire',
+      },
+    });
+    check(
+      badSub.status === 400,
+      `an invalid subcategory for the category is rejected (got ${badSub.status})`,
     );
 
     // --- Watch: authoritative, server-owned ---

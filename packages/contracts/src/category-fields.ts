@@ -35,6 +35,10 @@ export interface CategoryFieldSchema {
   version: number;
   label: string;
   fields: CategoryFieldDescriptor[];
+  // §3 — the category's customer-facing subcategories, served alongside the fields so the seller UI
+  // can render a subcategory selector without a hard-coded map. Populated from CATEGORY_SUBCATEGORIES
+  // by the platform-config service; optional here so the descriptor literal stays fields-focused.
+  subcategories?: CategoryFieldOption[];
 }
 
 const opt = (...values: string[]): CategoryFieldOption[] =>
@@ -163,9 +167,78 @@ export const CATEGORY_FIELD_SCHEMAS: Record<CategoryKey, CategoryFieldSchema> = 
         required: true,
         help: 'e.g. kg, tonne, unit, crate',
       },
+      { key: 'variety', label: 'Variety', type: 'text', required: false },
       { key: 'grade', label: 'Grade / specification', type: 'text', required: false },
-      { key: 'packing', label: 'Packing type / size', type: 'text', required: false },
+      { key: 'origin', label: 'Origin', type: 'text', required: false },
+      { key: 'packing', label: 'Packing type', type: 'text', required: false },
+      { key: 'packSize', label: 'Pack size', type: 'text', required: false },
       { key: 'minOrderQuantity', label: 'Minimum order', type: 'number', required: false },
+      { key: 'harvestDate', label: 'Harvest date', type: 'text', required: false },
+      { key: 'availableDate', label: 'Available from', type: 'text', required: false },
+      { key: 'shelfLifeDays', label: 'Shelf life', type: 'number', required: false, unit: 'days' },
+      { key: 'storageRequirement', label: 'Storage requirement', type: 'text', required: false },
+      {
+        key: 'coldChainRequired',
+        label: 'Cold-chain required',
+        type: 'boolean',
+        required: false,
+      },
+      {
+        key: 'qualityNotes',
+        label: 'Quality notes',
+        type: 'text',
+        required: false,
+        help: 'Seller declaration — photos never grade lab quality',
+      },
+      {
+        key: 'recurringSupply',
+        label: 'Recurring supply available',
+        type: 'boolean',
+        required: false,
+      },
+      { key: 'deliveryFrequency', label: 'Delivery frequency', type: 'text', required: false },
+    ],
+  },
+  scrap: {
+    key: 'scrap',
+    version: CURRENT_CATEGORY_VERSION,
+    label: 'Scrap & materials',
+    fields: [
+      { key: 'material', label: 'Material', type: 'text', required: true },
+      {
+        key: 'materialCategory',
+        label: 'Material category',
+        type: 'select',
+        required: false,
+        options: opt('ferrous', 'non_ferrous', 'mixed', 'other'),
+      },
+      { key: 'gradeSpec', label: 'Grade / specification', type: 'text', required: false },
+      { key: 'quantity', label: 'Quantity available', type: 'number', required: false },
+      { key: 'unit', label: 'Unit', type: 'text', required: false, help: 'e.g. tonne, kg' },
+      { key: 'contamination', label: 'Contamination', type: 'text', required: false },
+      {
+        key: 'sortedStatus',
+        label: 'Sorted status',
+        type: 'select',
+        required: false,
+        options: opt('sorted', 'mixed', 'unsorted'),
+      },
+      {
+        key: 'recoveryCondition',
+        label: 'Reusable / recovery condition',
+        type: 'text',
+        required: false,
+      },
+      { key: 'loadingAvailable', label: 'Loading available', type: 'boolean', required: false },
+      { key: 'loadingMethod', label: 'Loading method', type: 'text', required: false },
+      { key: 'weighbridgeBasis', label: 'Weighbridge basis', type: 'text', required: false },
+      {
+        key: 'collectionRequirements',
+        label: 'Collection requirements',
+        type: 'text',
+        required: false,
+      },
+      { key: 'condition', label: 'Condition notes', type: 'text', required: false },
     ],
   },
   general: {

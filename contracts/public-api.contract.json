@@ -21,7 +21,8 @@
             "count": "number",
             "value": "string"
           }
-        ]
+        ],
+        "subcategory": ["unknown"]
       },
       "items": [
         {
@@ -47,6 +48,7 @@
             "verified": "boolean"
           },
           "status": "string",
+          "subcategory": "string",
           "title": "string",
           "watchers": "number"
         }
@@ -83,6 +85,7 @@
             "verified": "boolean"
           },
           "status": "string",
+          "subcategory": "string",
           "title": "string",
           "watchers": "number"
         }
@@ -119,6 +122,7 @@
         "verified": "boolean"
       },
       "status": "string",
+      "subcategory": "string",
       "title": "string",
       "watchers": "number"
     },

@@ -47,6 +47,7 @@ export class InventoryService {
         data: {
           id,
           category: input.category,
+          subcategory: input.subcategory ?? null,
           schemaVersion: CURRENT_CATEGORY_VERSION,
           attributes: validation.data as unknown as Prisma.InputJsonValue,
           ownerCustomerId,

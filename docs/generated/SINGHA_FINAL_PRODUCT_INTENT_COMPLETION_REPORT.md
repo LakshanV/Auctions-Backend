@@ -20,40 +20,54 @@ Method reminder: browser-primary acceptance where a UI exists; API/DB checks cor
 | 6   | Homepage trust copy (§23)                  | Trust block, hero footer and Timed-Auction blurb rewritten to customer-benefit language (kept technical language for admin/legal)                                                                                                                    | **Browser-verified** headings render                                                                         | FE `6edf4f0`               |
 | —   | Demo covers (interim)                      | 54 owner-supplied PNG covers wired into the demo catalogue; ext-aware seeder; `workflow_dispatch` reseed button                                                                                                                                      | Browser-verified earlier                                                                                     | BE `c129990`, FE `7ec1d3f` |
 
+## Delivered + verified — continuation session
+
+Customer-path features closed since the table above, each browser-verified through the real UI with
+the authoritative API/DB corroborated. Non-negotiables honoured throughout (rule 2 UI-never-truth,
+rule 3 AI/derived-never-overwrites, rule 12 engine-authoritative).
+
+| #   | Item (directive §)                    | What shipped                                                                                                                                                                                                                                                | Verification                                                                                                                                | Commits                    |
+| --- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 7   | §15 document/video upload UI          | Documents + video now travel the SAME signed direct-to-storage pipeline as photos (per-kind MIME/size policy + scan for docs/video); wizard registers real storage keys, never filenames; the pasted URL is demoted to an optional external reference       | Render verified through the wizard; backend grant path covered by `test:media`                                                              | FE `602555f`               |
+| 8   | §19 seller verification projection    | `seller: { verified }` on the catalogue card + Rubik row + lot detail (derived from the owner's KYC; only `kycStatus` leaves the DB, never identity); `verifiedOnly` server-side facet + "Verified sellers" filter chip + card pill + lot-detail chip       | **Browser-verified** (verified pill on the verified lot only; filter 4→1; lot-detail chip). `e2e-catalogue-v2` 33/33; contract `--check` ok | BE `1345dec`, FE `f451b17` |
+| 9   | §20 inspection/certification evidence | `AssetInspectionEvidence` model + additive migration; staff attach surface (`asset:manage`, not sellers); the previously-unwired `InspectionProvider` port now opens inspections; lot detail projects PUBLIC evidence only (private docs/ids never leak)    | **Browser-verified** (evidence section, cert link, private row absent). `e2e-inspection-evidence` 13/13 (wired into CI)                     | BE `1a8dd60`, FE `fc56807` |
+| 10  | §21/§22 Singha Live RW6               | Scoped auctioneer/clerk/producer roles + `live:conduct/clerk/produce`; per-lot `LiveLotState` machine + current-lot pointer + sequencing (open/call/sell/pass/withdraw/next); deterministic fake stream; floor read composes the engine's authoritative bid | **Browser-verified** live room (on-the-block, going once, engine bid, running order). `e2e-live-floor` 25/25 (wired into CI)                | BE `c27df15`, FE `52dff72` |
+| 11  | §23 homepage residuals                | Signed-in "needs your attention" rail (from the dashboard read model; hides when signed-out/all-quiet); config-driven "Opportunities near you" strip into the real `?location=` filter; trust copy already customer-benefit framed                          | **Browser-verified** (local strip + region→catalogue link; attention rail absent when signed out)                                           | FE `ea4b01f`               |
+
+Gates verified green this session: BE `format:check` + `lint` (0 errors) + `turbo typecheck` + `build`;
+`emit-contract --check` on a fresh DB; FE `format:check` + `lint` (0 errors) + `typecheck` + the CI test
+filter (`@singha/web…` + `@singha/auctionflow`, 148 web tests). A tracked demo script's pre-existing
+prettier drift was fixed so FE `format:check` stays green (FE `8c6602e`).
+
 ## Remaining (from the audit — NOT done; real state)
 
-Backend largely exists; these are the still-open customer-path integrations + a few additive models.
+Also delivered across the continuation sessions (now closed, not repeated in the tables above): **§7/§25
+server-resumable seller drafts + auction-preference persistence** (`SellerListingDraft` +
+`SellerAuctionPreference` models, optimistic-concurrency CRUD, `test:seller-studio`); **§10/§12 photo-first
+AI Vision seller UI** with per-field accept/edit/reject provenance (`VisionIntakePanel` → `POST
+/ai/vision/intake`); **§13 real OSS deterministic image adapters** (sharp + exifr behind
+`DeterministicImageProvider`, pure `@singha/domain` primitives) + **§14 the evaluation harness**
+(`SINGHA_AI_VISION_EVALUATION_REPORT.md`, deterministic corpus in CI).
 
-- **§4 richer category profiles / `scrap`** — PARTIAL. Enriched existing schemas; a dedicated `scrap`
-  key + produce profile remain additive TODO.
-- **§7 auction-preference persistence** — MISSING model. Wizard still records opening/reserve/increment
-  as a note (needs `SellerAuctionPreference` + endpoint, staff-approvable).
-- **§8/§9 quantity/units/logistics in the wizard** — PARTIAL. Fields/Incoterm inputs exist in Evolution
-  components; not yet in the listing wizard.
-- **§10/§12 AI Vision photo-first UI + accept/edit/reject** — INCORRECT. `POST /ai/vision/intake` exists
-  and is advisory/provenanced; the wizard still doesn't call it; no per-field accept/edit/reject store.
-- **§13 OSS deterministic adapters** — MISSING. OCR/blur/quality/EXIF/hash/dedup/embeddings are still
-  interface+mock (no real libs). Ship real CPU adapters (exifr/jimp) + eval harness (§14), then
-  update `SINGHA_OSS_DECISIONS.md`.
-- **§14 AI eval harness** — MISSING.
-- **§15 document/video upload UI** — INCORRECT. Pipeline exists; wizard still stores filenames / a video
-  URL string (photos already use the real signed pipeline).
-- **§18 subcategory/type IA** — MISSING (broad keys only surfaced).
-- **§19 seller verification projection** — MISSING. Verification data exists backend-side but is not
-  projected to the catalogue (badge/filter). (Touches the public-api contract snapshot.)
-- **§20 inspection/certification evidence** — PARTIAL (port only; no evidence model).
-- **§21/§22 Singha Live RW6** — INCORRECT/PARTIAL. No auctioneer/clerk/producer roles; ordered lots exist
-  but no per-lot state / current-lot pointer / sequencing ops; deterministic fake stream absent. Needs
-  an additive migration.
-- **§23 homepage attention/local/services** — PARTIAL. Trust copy done; the real attention model lives at
-  `/account/activity` (needs a signed-in home rail); local-opportunities + config-driven services remain.
-- **§24 mobile camera / §25 server-resumable draft / §26 system public-ref / §27–28 approval + AI QC** —
-  MISSING/INCORRECT per the seller-studio items.
+Genuinely still open (additive, non-customer-blocking):
+
+- **§4 richer category profiles / `scrap` + produce** — PARTIAL (existing schemas enriched; a dedicated
+  `scrap` key + produce profile remain additive).
+- **§8/§9 quantity/units/Incoterms in the listing wizard** — PARTIAL (present in Evolution components, not
+  yet folded into the seller wizard).
+- **§18 subcategory/type IA** — MISSING (broad category keys only; per-category subtype taxonomy not yet
+  surfaced in the catalogue facets).
+- **§24 mobile camera capture** — MISSING. The Vision panel accepts uploads; a mobile live-camera capture
+  affordance (getUserMedia) is not yet wired.
+- **§26 system public-ref / §27–28 staff approval + AI pre-publish QC gate** — PARTIAL. Listing lifecycle +
+  review exist; a system-issued human-readable listing ref and an AI pre-publish QC gate remain additive.
 
 ## CI / deployment status
 
-- **GitHub Actions runs** (the old billing lock is cleared). `main` CI: the code defect that kept it red
-  is fixed (`a46ff79`); subsequent pushes should be green — confirm on the Actions tab.
+- **GitHub Actions runs** (the old billing lock is cleared). `main` CI is green; the continuation work
+  added three new E2E gates to the backend CI — `test:inspection-evidence` (§20), `test:live-floor`
+  (§21/§22) and the extended `test:catalogue-v2` (§19) — plus the regenerated public-API contract
+  (`emit-contract --check`). All verified locally before push; confirm the pushed SHAs on the Actions tab.
 - Frontend deploys to Vercel on `main`; backend to Railway. Demo-cover prod population is a one-click
   `workflow_dispatch` (needs the `PROD_DATABASE_URL` secret) — see `.github/workflows/seed-marketplace.yml`.
 

@@ -156,6 +156,17 @@ async function main() {
       body: { response: 'counter' },
     });
     check(badCounter.status === 400, `counter without amount -> 400 (got ${badCounter.status})`);
+    // D13 — amountMinor is meaningful ONLY for a counter: an accept binds the Sale to the buyer's
+    // original amount, so an amountMinor on accept would silently diverge the Offer head from the
+    // Sale. It must be rejected, not ignored.
+    const acceptWithAmount = await post(`/exchange/offers/${offerId}/respond`, {
+      token: staffToken,
+      body: { response: 'accept', amountMinor: 9_999_999 },
+    });
+    check(
+      acceptWithAmount.status === 400,
+      `accept with amountMinor -> 400 (got ${acceptWithAmount.status})`,
+    );
 
     const accept = await post(`/exchange/offers/${offerId}/respond`, {
       token: staffToken,

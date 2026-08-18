@@ -300,6 +300,13 @@ export const respondOfferSchema = z
   .refine((v) => v.response !== 'counter' || v.amountMinor != null, {
     message: 'A counter requires amountMinor',
     path: ['amountMinor'],
+  })
+  // amountMinor is meaningful ONLY for a counter. Accepting an offer binds the Sale to the
+  // buyer's ORIGINAL amount, so an amountMinor passed on accept/reject would silently diverge the
+  // Offer head from the authoritative Sale — reject it rather than accept an ignored value.
+  .refine((v) => v.response === 'counter' || v.amountMinor == null, {
+    message: 'amountMinor is only valid when countering',
+    path: ['amountMinor'],
   });
 export type RespondOfferInput = z.infer<typeof respondOfferSchema>;
 

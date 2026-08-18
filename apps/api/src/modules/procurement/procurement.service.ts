@@ -156,18 +156,28 @@ export class ProcurementService {
    */
   async award(principal: Principal, requestId: string, input: AwardProcurementInput) {
     this.requireFeature();
-    const request = await this.requireOwnedRequest(principal, requestId);
-    const proposals = await this.prisma.procurementProposal.findMany({ where: { requestId } });
-    const winner = selectProcurementWinner(
-      proposals.map((p) => this.view(p)),
-      {
-        closed: request.status === 'closed',
-        explicitSelectionId: input.selectedProposalId,
-      },
-    );
-    assertProcurementTransition(request.status as never, 'awarded');
+    await this.requireOwnedRequest(principal, requestId); // ownership check + fast fail
     const actor = toActor(principal);
     return this.uow.execute(actor, async (ctx) => {
+      // Lock the request row and re-read its status INSIDE the tx so two concurrent awards
+      // serialize: the second sees 'awarded' and fails the transition assert, instead of both
+      // reading 'closed' and each accepting a DIFFERENT proposal (two winners + a clobbered
+      // awardedProposalId). Selection stays explicit (§09 / D4 — never auto-cheapest).
+      await ctx.tx.$queryRawUnsafe(
+        'SELECT id FROM procurement_request WHERE id = $1 FOR UPDATE',
+        requestId,
+      );
+      const fresh = await ctx.tx.procurementRequest.findUnique({ where: { id: requestId } });
+      if (!fresh) throw new NotFoundException('Procurement request not found');
+      assertProcurementTransition(fresh.status as never, 'awarded');
+      const proposals = await ctx.tx.procurementProposal.findMany({ where: { requestId } });
+      const winner = selectProcurementWinner(
+        proposals.map((p) => this.view(p)),
+        {
+          closed: fresh.status === 'closed',
+          explicitSelectionId: input.selectedProposalId,
+        },
+      );
       await ctx.tx.procurementProposal.update({
         where: { id: winner.id },
         data: { status: 'accepted' },

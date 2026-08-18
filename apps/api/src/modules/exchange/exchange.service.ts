@@ -237,6 +237,14 @@ export class ExchangeService {
         },
       });
       if (accepted) {
+        // Lock the listing row so two concurrent accepts (or an accept racing a Buy Now on the
+        // same listing) serialize on it — otherwise both pass the sale-existence check and the
+        // second hits a raw unique-violation 500 instead of a clean 409. Sale.listingId @unique
+        // still guarantees no double-sale; this just makes the loser fail cleanly. Mirrors buyNow.
+        await ctx.tx.$queryRawUnsafe(
+          'SELECT id FROM listing WHERE id = $1 FOR UPDATE',
+          offer.listingId,
+        );
         const existing = await ctx.tx.sale.findUnique({ where: { listingId: offer.listingId } });
         if (existing) throw new ConflictException('Listing already sold');
         const sale = await ctx.tx.sale.create({
@@ -385,8 +393,14 @@ export class ExchangeService {
     const actor = toActor(principal);
     return this.uow.execute(actor, async (ctx) => {
       const now = new Date();
+      // Lock the listing and RE-READ the tender bids inside the tx: a concurrent submitTender
+      // could otherwise land a (possibly winning) bid between the pre-tx read above and this
+      // update, so it would be marked opened yet excluded from ranking. Rank the fresh set.
+      await ctx.tx.$queryRawUnsafe('SELECT id FROM listing WHERE id = $1 FOR UPDATE', listingId);
+      const freshBids = await ctx.tx.tenderBid.findMany({ where: { listingId } });
+      if (freshBids.length === 0) throw new BadRequestException('No tender bids to open');
       await ctx.tx.tenderBid.updateMany({ where: { listingId }, data: { openedAt: now } });
-      const ranked = [...bids].sort((a, b) => Number(b.amountMinor - a.amountMinor));
+      const ranked = [...freshBids].sort((a, b) => Number(b.amountMinor - a.amountMinor));
       const winner = ranked[0];
       if (!winner) throw new BadRequestException('No tender bids to open');
       const sale = await ctx.tx.sale.create({
@@ -413,7 +427,7 @@ export class ExchangeService {
         name: DomainEventName.TenderOpened,
         aggregateType: 'Listing',
         aggregateId: listingId,
-        payload: { listingId, bidCount: bids.length, winnerCustomerId: winner.customerId },
+        payload: { listingId, bidCount: freshBids.length, winnerCustomerId: winner.customerId },
       });
       ctx.emit({
         name: DomainEventName.SaleConfirmed,

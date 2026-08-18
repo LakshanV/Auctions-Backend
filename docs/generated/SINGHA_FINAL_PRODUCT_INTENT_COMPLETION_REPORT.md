@@ -64,17 +64,26 @@ Genuinely still open (additive, non-customer-blocking):
 
 ## CI / deployment status
 
-- **GitHub Actions runs** (the old billing lock is cleared). `main` CI is green; the continuation work
-  added three new E2E gates to the backend CI — `test:inspection-evidence` (§20), `test:live-floor`
-  (§21/§22) and the extended `test:catalogue-v2` (§19) — plus the regenerated public-API contract
-  (`emit-contract --check`). All verified locally before push; confirm the pushed SHAs on the Actions tab.
-- Frontend deploys to Vercel on `main`; backend to Railway. Demo-cover prod population is a one-click
-  `workflow_dispatch` (needs the `PROD_DATABASE_URL` secret) — see `.github/workflows/seed-marketplace.yml`.
+- **Backend (`LakshanV/Auctions-Backend`) `main` CI is GREEN** on all continuation commits — verified on
+  the Actions tab: `1345dec` (§19), `1a8dd60` (§20), `c27df15` (§21/§22) all `success`. The continuation
+  work added three new E2E gates — `test:inspection-evidence` (§20), `test:live-floor` (§21/§22) and the
+  extended `test:catalogue-v2` (§19) — plus the regenerated public-API contract (`emit-contract --check`).
+- **Frontend (`MUA1234/Auctions-New`) GitHub Actions is OWNER-GATED and cannot execute.** Every `main` run
+  — including ones from before this programme — fails in ~3 s with **zero steps executed** (job "verify"
+  created then immediately fails), the signature of Actions being disabled / billing-locked on the
+  **MUA1234 account** (a different owner from the backend's LakshanV). This is NOT a code defect: the exact
+  CI gates (`format:check`, `lint` 0-errors, `turbo typecheck`, and the `@singha/web…`+`@singha/auctionflow`
+  test filter — 148 web tests) all pass locally on every commit. **Owner action:** enable GitHub Actions /
+  clear the spending limit on the MUA1234 account. The FE still ships to production via **Vercel**, which
+  builds independently of GitHub Actions and is unaffected.
+- Demo-cover prod population is a one-click `workflow_dispatch` (needs the `PROD_DATABASE_URL` secret) — see
+  `.github/workflows/seed-marketplace.yml`.
 
 ## Owner / provider / legal gates (unchanged; not engineering-closable)
 
 - **OWNER_ONLY** SEC-1/2/3 (private repos, branch protection, GHAS); `PROD_DATABASE_URL` secret for the
-  demo reseed.
+  demo reseed; **GitHub Actions enablement / billing on the MUA1234 (frontend) account** so the FE CI can
+  execute (code already passes every gate locally; Vercel deploy is unaffected).
 - **PROVIDER_GATED** PRV-1 (vision model), PRV-2 (payments/FX/logistics/WhatsApp/voice/streaming),
   PRV-3 (GSI/gem-lab); real photographic 4-view demo imagery.
 - **LEGAL_GATED** O1–O8.

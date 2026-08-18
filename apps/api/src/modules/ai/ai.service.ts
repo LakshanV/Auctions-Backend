@@ -8,7 +8,12 @@ import {
   type TranslateInput,
   newId,
 } from '@singha/contracts';
-import { type AiFeedbackRecord, guardAiRequest, summarizeAiEvaluation } from '@singha/domain';
+import {
+  type AiFeedbackRecord,
+  guardAiRequest,
+  redactContext,
+  summarizeAiEvaluation,
+} from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
@@ -53,7 +58,12 @@ export class AiService {
       if (guard.allowed) attributes = { ...attributes, notes: input.notes };
     }
 
-    const draft = await this.ai.draftListing(category, attributes, input.locale);
+    // Redact sensitive keys (reserve / proxy-max / internal / credit / …) from the attributes
+    // before they cross into the provider — the SAME data boundary assist()/vision enforce
+    // (rule 3, pack doc 12). A listing draft is derived from PUBLIC facts; Tier-A values must
+    // never reach a model. This was the one provider call that skipped redaction.
+    const { safe: safeAttributes, redactedKeys } = redactContext(attributes);
+    const draft = await this.ai.draftListing(category, safeAttributes, input.locale);
     const actor = toActor(principal);
     const id = newId();
     return this.uow.execute(actor, async (ctx) => {
@@ -81,8 +91,9 @@ export class AiService {
         targetType: 'Asset',
         targetId: input.assetId ?? 'draft',
         actorType: 'ai',
+        after: { redactedKeys },
       });
-      return { aiRunId: id, provider: this.ai.name, model: this.ai.model, draft };
+      return { aiRunId: id, provider: this.ai.name, model: this.ai.model, draft, redactedKeys };
     });
   }
 

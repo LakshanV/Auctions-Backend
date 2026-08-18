@@ -67,6 +67,19 @@ describe('data-boundary redaction (pack doc 12)', () => {
     expect(safe).toEqual({ lotTitle: 'Toyota Axio' });
     expect(redactedKeys).toEqual(['apiKey', 'creditLimit', 'internalScore', 'proxyMax']);
   });
+  it('redacts sensitive keys nested inside sub-objects and arrays (deep)', () => {
+    const { safe, redactedKeys } = redactContext({
+      lotTitle: 'Toyota Axio',
+      subject: { grade: 'A', reservePrice: 500, proxyMax: 9000 },
+      history: [{ note: 'ok', internalScore: 7 }],
+    });
+    expect(safe).toEqual({
+      lotTitle: 'Toyota Axio',
+      subject: { grade: 'A' },
+      history: [{ note: 'ok' }],
+    });
+    expect(redactedKeys).toEqual(['internalScore', 'proxyMax', 'reservePrice']);
+  });
 });
 
 describe('guardAiRequest (the boundary the AI service calls)', () => {
@@ -94,5 +107,15 @@ describe('guardAiRequest (the boundary the AI service calls)', () => {
     const r = guardAiRequest('assistant', 'a'.repeat(3000));
     expect(r.allowed).toBe(false);
     expect(r.refusalReason).toBe('input_too_long');
+  });
+  it('refuses free text under a structured-only task (allowsFreeText:false)', () => {
+    const r = guardAiRequest('listing_draft', 'here is some free-form prose');
+    expect(r.allowed).toBe(false);
+    expect(r.refusalReason).toBe('free_text_not_allowed');
+  });
+  it('allows an empty/whitespace prompt under a structured-only task', () => {
+    const r = guardAiRequest('listing_draft', '   ');
+    expect(r.allowed).toBe(true);
+    expect(r.refusalReason).toBeNull();
   });
 });

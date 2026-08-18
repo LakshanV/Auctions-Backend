@@ -110,17 +110,33 @@ const FORBIDDEN_KEY =
  * "no proxy-max / credit / internal fields cross the boundary"). Returns the safe object
  * plus the list of keys that were dropped (for the audit trail).
  */
+/** Deep-redact: drop any forbidden key at ANY depth (nested objects and arrays included). */
+function redactValue(value: unknown, redactedKeys: string[]): unknown {
+  if (Array.isArray(value)) return value.map((v) => redactValue(v, redactedKeys));
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (FORBIDDEN_KEY.test(k)) {
+        redactedKeys.push(k);
+        continue;
+      }
+      out[k] = redactValue(v, redactedKeys);
+    }
+    return out;
+  }
+  return value;
+}
+
 export function redactContext(context: Record<string, unknown> | undefined): {
   safe: Record<string, unknown>;
   redactedKeys: string[];
 } {
-  const safe: Record<string, unknown> = {};
+  // Recurse so a sensitive key nested inside a sub-object or array is dropped too — a shallow
+  // top-level-only pass let e.g. `{ subject: { proxyMax } }` reach the provider. Keys are
+  // de-duplicated across depths for a stable audit list.
   const redactedKeys: string[] = [];
-  for (const [k, v] of Object.entries(context ?? {})) {
-    if (FORBIDDEN_KEY.test(k)) redactedKeys.push(k);
-    else safe[k] = v;
-  }
-  return { safe, redactedKeys: redactedKeys.sort() };
+  const safe = redactValue(context ?? {}, redactedKeys) as Record<string, unknown>;
+  return { safe, redactedKeys: [...new Set(redactedKeys)].sort() };
 }
 
 export interface AiGuardResult {
@@ -147,13 +163,23 @@ export function guardAiRequest(
   const injection = detectPromptInjection(text);
   const { safe, redactedKeys } = redactContext(context);
   const overLength = text.length > policy.maxInputChars;
-  const allowed = !injection.flagged && !overLength;
+  // Enforce the declared policy: a structured-only task (allowsFreeText:false) must REFUSE any
+  // non-empty free text rather than silently forwarding it. Previously this flag was declared
+  // but never checked, so the guarantee was inert.
+  const freeTextNotAllowed = !policy.allowsFreeText && text.trim().length > 0;
+  const allowed = !injection.flagged && !overLength && !freeTextNotAllowed;
   return {
     allowed,
     tier: policy.tier,
     injection,
     safeContext: safe,
     redactedKeys,
-    refusalReason: injection.flagged ? 'prompt_injection' : overLength ? 'input_too_long' : null,
+    refusalReason: injection.flagged
+      ? 'prompt_injection'
+      : overLength
+        ? 'input_too_long'
+        : freeTextNotAllowed
+          ? 'free_text_not_allowed'
+          : null,
   };
 }

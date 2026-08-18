@@ -262,6 +262,38 @@ async function main() {
       'a free-text binding-bid instruction sent to /ai/translate is refused too (rule 11 boundary)',
     );
 
+    // D21 — AI provenance is append-only at the DB level (rule 5 for derived AI records). The
+    // apply flow above already proved a NON-output ai_run update (the applied flag) is allowed;
+    // here we prove ai_run.output is frozen and ai_feedback is insert-only.
+    let outputFrozen = false;
+    try {
+      await prisma.aiRun.update({ where: { id: aiRunId }, data: { output: { tampered: true } } });
+    } catch {
+      outputFrozen = true;
+    }
+    check(outputFrozen, 'ai_run.output UPDATE rejected at the DB (immutable derived record)');
+
+    const fb = await post(`/ai/runs/${aiRunId}/feedback`, {
+      token: sellerToken,
+      body: { outcome: 'accepted' },
+    });
+    check(fb.status === 201, `AI feedback recorded (${fb.status})`);
+    const fbId = fb.json?.id;
+    let feedbackNoUpdate = false;
+    try {
+      await prisma.aiFeedback.update({ where: { id: fbId }, data: { outcome: 'rejected' } });
+    } catch {
+      feedbackNoUpdate = true;
+    }
+    check(feedbackNoUpdate, 'ai_feedback UPDATE rejected at the DB (append-only)');
+    let feedbackNoDelete = false;
+    try {
+      await prisma.aiFeedback.delete({ where: { id: fbId } });
+    } catch {
+      feedbackNoDelete = true;
+    }
+    check(feedbackNoDelete, 'ai_feedback DELETE rejected at the DB (append-only)');
+
     await prisma.$disconnect();
   } finally {
     child.kill('SIGKILL');

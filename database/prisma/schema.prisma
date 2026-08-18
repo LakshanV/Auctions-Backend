@@ -447,6 +447,7 @@ model Sale {
 
   listing            Listing       @relation(fields: [listingId], references: [id])
   sellerOrganization Organization? @relation(fields: [sellerOrganizationId], references: [id])
+  invoice            Invoice?
 
   @@index([buyerCustomerId])
   @@index([sellerOrganizationId])
@@ -983,6 +984,10 @@ model Bid {
   auction Auction @relation(fields: [auctionId], references: [id])
 
   @@unique([auctionId, sequence])
+  // Defense-in-depth for idempotent retries: at most one bid per (auction, idempotency key).
+  // NULL keys are distinct in Postgres, so ordinary keyless bids are unaffected; only a
+  // duplicate NON-null key collides. Backstops the in-request dedupe done under the row lock.
+  @@unique([auctionId, idempotencyKey])
   @@index([auctionId])
   @@map("bid")
 }
@@ -1073,7 +1078,9 @@ model Invoice {
   id                  String        @id
   number              String        @unique
   listingId           String        @unique @map("listing_id")
-  saleId              String        @map("sale_id")
+  // One invoice per sale (unique) + a real FK to the authoritative Sale, so an invoice can never
+  // dangle from or be mis-linked to a non-existent sale (referential integrity, not a bare id).
+  saleId              String        @unique @map("sale_id")
   buyerCustomerId     String        @map("buyer_customer_id")
   currency            String        @default("LKR")
   hammerMinor         BigInt        @map("hammer_minor")
@@ -1088,6 +1095,7 @@ model Invoice {
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
   listing  Listing       @relation(fields: [listingId], references: [id])
+  sale     Sale          @relation(fields: [saleId], references: [id], onDelete: Restrict)
   payments Payment[]
   ledger   LedgerEntry[]
 

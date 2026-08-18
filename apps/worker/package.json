@@ -16,7 +16,7 @@
     "@singha/database": "workspace:*",
     "@singha/domain": "workspace:*",
     "@singha/observability": "workspace:*",
-    "bullmq": "^5.34.0",
+    "bullmq": "^6.0.10",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {

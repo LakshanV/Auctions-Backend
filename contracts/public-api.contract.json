@@ -34,11 +34,13 @@
             "kind": "string",
             "openingBidMinor": "number"
           },
+          "deliveryAvailable": "boolean",
           "featured": "boolean",
           "id": "string",
           "media": {
             "videoAvailable": "boolean"
           },
+          "pickupAvailable": "boolean",
           "reference": "string",
           "saleMethod": "string",
           "status": "string",
@@ -65,11 +67,13 @@
             "kind": "string",
             "openingBidMinor": "number"
           },
+          "deliveryAvailable": "boolean",
           "featured": "boolean",
           "id": "string",
           "media": {
             "videoAvailable": "boolean"
           },
+          "pickupAvailable": "boolean",
           "reference": "string",
           "saleMethod": "string",
           "status": "string",
@@ -77,7 +81,7 @@
           "watchers": "number"
         }
       ],
-      "nextCursor": "null"
+      "nextCursor": "string"
     },
     "GET /api/v2/catalogue/:id": {
       "attributes": {
@@ -93,12 +97,14 @@
         "kind": "string",
         "openingBidMinor": "number"
       },
+      "deliveryAvailable": "boolean",
       "event": "null",
       "featured": "boolean",
       "fullDescription": "null",
       "id": "string",
       "inspectionSummary": "null",
       "media": ["unknown"],
+      "pickupAvailable": "boolean",
       "publicTermsRef": "null",
       "reference": "string",
       "saleMethod": "string",

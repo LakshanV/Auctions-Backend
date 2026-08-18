@@ -98,3 +98,34 @@ AI safety, transactional/DB invariants) + 3 live runtime probes (bid concurrency
 
 - Real provider credentials (AI vision/text, payment, messaging) — mock adapters used; real keys are an owner action.
 - Merge of validated branch to deployed `main` — owner launch gate.
+
+## Fix loop — COMPLETE
+
+All confirmed defects D01–D22 corrected at root cause, each with a proven regression, across 8
+commits on `claude/new-session-at0qp4` (base `ea706a0`):
+
+| Commit    | Defects                         | Area                                                                                        |
+| --------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `856be9e` | D01 (P0), D02 (P2)              | auction `close()` row-lock + idempotent — winner/price integrity                            |
+| `ac4ed70` | D03, D04, D06, D08, D12 (P2/P3) | object-level authz (intelligence, assets) + money bounds + market-pulse clamp + owner-forge |
+| `bab1ee0` | D05 (P2), D19, D20 (P3)         | AI data-boundary redaction (uniform + recursive) + structured-only policy                   |
+| `813ff7d` | D07 (P2)                        | payment verification idempotent under concurrency                                           |
+| `27b2013` | D13, D14, D15, D16 (P3)         | offer-accept amount + offer/tender/procurement row locks                                    |
+| `3b9fdbc` | D09 (P2), D22 (P3)              | outbox retry of failed events + raw-SQL sequence allowlist                                  |
+| `c9ac95e` | D17, D18, D21 (P3)              | DB invariants: invoice→sale FK, bid idempotency unique, AI append-only triggers             |
+| `321261f` | D10, D11 (P3)                   | AI-run + shipment-timeline object-level authz                                               |
+
+**Q1 (design, NOT silently changed):** the legacy `SEALED_TENDER` (`/exchange/listings/:id/tender/open`)
+auto-awards the highest bid. The current V2 sealed-OFFER path already enforces explicit award
+(no auto-highest, verified). Whether directive §14's "no auto-award" binds the pre-V2 classic
+sealed-bid method is a **product-policy decision escalated to the owner** — not changed unilaterally
+(it would alter shipped commercial behaviour). D15 fixed only its stale-read race.
+
+### Gates (this run)
+
+- `pnpm run check` (format + lint + typecheck + build + unit): **PASS** — domain 236, api 153, contracts 41, all packages green.
+- `contract:check`: **PASS** — public API contract unchanged (all fixes are runtime/DB, contract-stable).
+- Full backend e2e (**39/39** suites, each on its own fresh DB, CI-faithful): **PASS**.
+- FE static gate (typecheck + lint): **PASS** (FE unchanged this session; contract copy in sync). Full FE `turbo build` blocked locally only by `next/font/google` egress (environmental; builds on Vercel).
+
+Verdict: **CONTROLLED_PILOT_GO_WITH_OWNER_ACTIONS** — see `SINGHA_MAXIMUM_SYSTEM_VALIDATION_REPORT.md`.

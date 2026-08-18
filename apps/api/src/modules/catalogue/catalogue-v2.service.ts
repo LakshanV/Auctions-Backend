@@ -21,11 +21,15 @@ type CatalogueFilters = {
   unit?: string;
   pickup?: boolean;
   delivery?: boolean;
+  // §19 — restrict to lots whose seller has completed identity verification.
+  verifiedOnly?: boolean;
 };
 
 type FullListing = Prisma.ListingGetPayload<{
   include: {
-    asset: { include: { media: true } };
+    // `owner` is selected down to `kycStatus` ONLY (never legalName/email/phone) so the
+    // public card can project a single customer-safe verified flag with zero identity leak.
+    asset: { include: { media: true; owner: { select: { kycStatus: true } } } };
     auction: true;
     eventLots: { include: { event: true } };
     _count: { select: { watches: true; eois: true; offers: true; tenderBids: true } };
@@ -218,6 +222,10 @@ export class CatalogueV2Service {
     if (q.unit) and.push({ quantityUnitCode: q.unit });
     if (q.pickup) and.push({ pickupLocationId: { not: null } });
     if (q.delivery) and.push({ destinationLocationId: { not: null } });
+    // §19 — verified-seller facet: the owning customer's identity is confirmed. Applied at the
+    // DB so facet counts and pagination stay exact. Org-only consignments (no owner customer)
+    // are conservatively excluded from the verified set until org verification exists.
+    if (q.verifiedOnly) and.push({ asset: { owner: { kycStatus: 'verified' } } });
     return { AND: and };
   }
 
@@ -265,7 +273,9 @@ export class CatalogueV2Service {
 
   private include() {
     return {
-      asset: { include: { media: true } },
+      // Seller KYC is projected to a single boolean on the card (§19); only `kycStatus`
+      // leaves the DB, never the seller's identity fields.
+      asset: { include: { media: true, owner: { select: { kycStatus: true } } } },
       auction: true,
       eventLots: { include: { event: true } },
       _count: { select: { watches: true, eois: true, offers: true, tenderBids: true } },
@@ -295,6 +305,9 @@ export class CatalogueV2Service {
       quantityUnitCode: l.quantityUnitCode ?? undefined,
       pickupAvailable: l.pickupLocationId != null,
       deliveryAvailable: l.destinationLocationId != null,
+      // §19 — customer-safe seller trust signal. A single boolean derived from the owner's
+      // KYC state; the raw kycStatus, seller identity and org attribution never leave the API.
+      seller: { verified: l.asset.owner?.kycStatus === 'verified' },
       media: this.coverMedia(l),
       commercial: this.commercial(l),
       event: l.eventLots[0]

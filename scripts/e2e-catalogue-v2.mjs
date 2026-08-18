@@ -255,6 +255,69 @@ async function main() {
       'v2 lot detail is enriched',
     );
 
+    // --- §19 seller verification projection (customer-safe badge + filter) ---
+    // A second seller whose identity is verified (Customer.kycStatus='verified' via the
+    // compliance-gated KYC command); the first seller stays unverified.
+    const verifiedSellerId = await registerCustomer('vseller');
+    const verifiedSellerToken = await token(['seller'], verifiedSellerId);
+    const complianceToken = await token(['compliance'], verifiedSellerId);
+    const kyc = await v1(`/customers/${verifiedSellerId}/kyc`, {
+      token: complianceToken,
+      method: 'POST',
+      body: { status: 'verified' },
+    });
+    check(
+      kyc.status === 200 || kyc.status === 201,
+      `compliance can mark a seller KYC-verified (got ${kyc.status})`,
+    );
+    const verifiedListing = await publishListing(
+      verifiedSellerToken,
+      staffToken,
+      'vehicles',
+      'BUY_NOW',
+      { make: 'Nissan', model: 'Leaf', year: 2019 },
+      'Nissan Leaf 2019 (verified seller)',
+    );
+
+    const withSeller = await v2('/catalogue?category=vehicles&limit=60');
+    const vCard = withSeller.json.items.find((i) => i.id === verifiedListing);
+    const uCard = withSeller.json.items.find((i) => i.id === auctionListing);
+    check(vCard?.seller?.verified === true, 'verified-seller lot projects seller.verified=true');
+    check(
+      uCard?.seller?.verified === false,
+      'unverified-seller lot projects seller.verified=false',
+    );
+    // The projection is a LONE boolean — the raw kycStatus / seller identity never leaks.
+    check(
+      vCard &&
+        typeof vCard.seller?.verified === 'boolean' &&
+        Object.keys(vCard.seller).length === 1 &&
+        !('kycStatus' in vCard) &&
+        !('legalName' in vCard) &&
+        !('owner' in vCard),
+      'seller projection is a single boolean (kycStatus / identity never exposed)',
+    );
+
+    // verifiedOnly facet: exact — only verified-seller lots, unverified excluded.
+    const onlyVerified = await v2('/catalogue?verifiedOnly=true&limit=60');
+    check(
+      onlyVerified.json.items.length >= 1 &&
+        onlyVerified.json.items.every((i) => i.seller?.verified === true),
+      'verifiedOnly=true returns only verified-seller lots',
+    );
+    check(
+      !onlyVerified.json.items.some((i) => i.id === auctionListing),
+      'verifiedOnly excludes the unverified-seller lot',
+    );
+    // Detail + Rubik row inherit the same signal.
+    const vDetail = await v2(`/catalogue/${verifiedListing}`);
+    check(vDetail.json?.seller?.verified === true, 'lot detail carries seller.verified');
+    const vRow = await v2('/catalogue/row?category=vehicles&verifiedOnly=true&limit=30');
+    check(
+      vRow.json.items.length >= 1 && vRow.json.items.every((i) => i.seller?.verified === true),
+      'row endpoint honours verifiedOnly + projects seller.verified',
+    );
+
     // --- Watch: authoritative, server-owned ---
     const denied = await v1('/watch', {
       token: staffToken,

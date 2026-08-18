@@ -579,6 +579,10 @@ export const catalogueQuerySchema = z.object({
   unit: z.string().min(1).max(16).optional(),
   pickup: z.coerce.boolean().optional(),
   delivery: z.coerce.boolean().optional(),
+  // §19 — customer-safe trust facet: restrict to lots whose seller has completed
+  // identity verification (Customer.kycStatus === 'verified'). Never exposes the
+  // KYC value itself; the projection is a single boolean per card.
+  verifiedOnly: z.coerce.boolean().optional(),
   sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('ending'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(60).default(24),
@@ -607,6 +611,8 @@ export const catalogueRowQuerySchema = z.object({
   unit: z.string().min(1).max(16).optional(),
   pickup: z.coerce.boolean().optional(),
   delivery: z.coerce.boolean().optional(),
+  // §19 — same customer-safe verified-seller facet as the list query.
+  verifiedOnly: z.coerce.boolean().optional(),
   sort: z.enum(['ending', 'newest', 'price_asc', 'price_desc']).default('ending'),
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(30).default(12),

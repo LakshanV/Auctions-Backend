@@ -43,6 +43,9 @@
           "pickupAvailable": "boolean",
           "reference": "string",
           "saleMethod": "string",
+          "seller": {
+            "verified": "boolean"
+          },
           "status": "string",
           "title": "string",
           "watchers": "number"
@@ -76,12 +79,15 @@
           "pickupAvailable": "boolean",
           "reference": "string",
           "saleMethod": "string",
+          "seller": {
+            "verified": "boolean"
+          },
           "status": "string",
           "title": "string",
           "watchers": "number"
         }
       ],
-      "nextCursor": "string"
+      "nextCursor": "null"
     },
     "GET /api/v2/catalogue/:id": {
       "attributes": {
@@ -108,6 +114,9 @@
       "publicTermsRef": "null",
       "reference": "string",
       "saleMethod": "string",
+      "seller": {
+        "verified": "boolean"
+      },
       "status": "string",
       "title": "string",
       "watchers": "number"

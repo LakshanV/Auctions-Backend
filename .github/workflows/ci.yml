@@ -152,6 +152,12 @@ jobs:
       - name: E2E (media — upload policy, authorized download, IDOR guard)
         run: pnpm run test:media
 
+      # Seller Studio persistence (directive §25/§7) — server-resumable drafts (owner-scoped,
+      # optimistic-concurrency conflict on save) + structurally-persisted, staff-approvable auction
+      # preferences (owner-set, never the authoritative auction).
+      - name: E2E (seller-studio — resumable drafts + auction preferences)
+        run: pnpm run test:seller-studio
+
       # Satellite Market Node + SEO (Evolution E13, pack Addendum A + doc 11) — the two node modes,
       # the non-negotiable central-ledger invariant (a node-originated listing is the SAME central
       # canonical record; origination is attribution, gated by mode/capability/verification), and the

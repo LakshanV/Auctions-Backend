@@ -144,6 +144,7 @@ model Customer {
   buyerTwin              BuyerTwinProjection?
   notificationPreference NotificationPreference?
   notificationDeliveries NotificationDelivery[]
+  sellerListingDrafts    SellerListingDraft[]
 
   @@map("customer")
 }
@@ -290,9 +291,10 @@ model Listing {
   invoice         Invoice?
   fulfilment      Fulfilment?
   settlement      Settlement?
-  watches         Watch[]
-  eventLots       AuctionEventLot[]
-  discoveryEvents DiscoveryEvent[]
+  watches           Watch[]
+  eventLots         AuctionEventLot[]
+  discoveryEvents   DiscoveryEvent[]
+  auctionPreference SellerAuctionPreference?
 
   assetLocation        Location?   @relation("ListingAssetLocation", fields: [assetLocationId], references: [id])
   sellerLocation       Location?   @relation("ListingSellerLocation", fields: [sellerLocationId], references: [id])
@@ -2354,4 +2356,71 @@ model NodeOrigination {
 
   @@index([nodeCode])
   @@map("node_origination")
+}
+
+// ---------------------------------------------------------------------------
+// Seller persistence (directive §25 / §7) — server-authoritative seller drafts
+// and requested auction settings. UI is never the source of truth: these follow
+// the seller across devices and (for auction prefs) become a staff-approvable
+// request before the authoritative auction is created.
+// ---------------------------------------------------------------------------
+
+enum SellerDraftStatus {
+  active
+  submitted
+  archived
+}
+
+/// A resumable, server-owned Listing Studio draft (directive §25). Payload is the
+/// wizard state; `version` powers optimistic-concurrency conflict handling.
+model SellerListingDraft {
+  id            String            @id
+  ownerId       String            @map("owner_id")
+  schemaVersion Int               @default(1) @map("schema_version")
+  version       Int               @default(1)
+  status        SellerDraftStatus @default(active)
+  title         String?
+  payload       Json
+  mediaState    Json?             @map("media_state")
+  aiProvenance  Json?             @map("ai_provenance")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  owner Customer @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, status])
+  @@map("seller_listing_draft")
+}
+
+enum SellerAuctionPrefStatus {
+  requested
+  approved
+  rejected
+  superseded
+}
+
+/// A seller's requested auction settings for one listing (directive §7). Persisted
+/// structurally (not a UI note) so staff can approve/adjust before the authoritative
+/// Auction is configured. Never itself the live auction.
+model SellerAuctionPreference {
+  id               String                  @id
+  listingId        String                  @unique @map("listing_id")
+  ownerId          String                  @map("owner_id")
+  openingBidMinor  BigInt?                 @map("opening_bid_minor")
+  reserveMinor     BigInt?                 @map("reserve_minor")
+  incrementMinor   BigInt?                 @map("increment_minor")
+  currency         String?
+  preferredOpenAt  DateTime?               @map("preferred_open_at")
+  preferredCloseAt DateTime?               @map("preferred_close_at")
+  notes            String?
+  status           SellerAuctionPrefStatus @default(requested)
+  reviewedBy       String?                 @map("reviewed_by")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("seller_auction_preference")
 }

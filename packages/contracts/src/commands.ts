@@ -730,3 +730,35 @@ export const recordPerformanceEventSchema = z.object({
   sourceEntityId: z.string().min(1).optional(),
 });
 export type RecordPerformanceEventInput = z.infer<typeof recordPerformanceEventSchema>;
+
+// --- Seller persistence (directive §25 / §7) --------------------------------
+// Server-authoritative Listing Studio drafts + requested auction settings. The UI
+// is never the source of truth: drafts follow the seller across devices, and auction
+// preferences are a staff-approvable request, not the live auction.
+
+/** Create/save a resumable seller draft. `expectedVersion` enables optimistic-
+ * concurrency conflict detection on save (omit on create). */
+export const sellerDraftUpsertSchema = z.object({
+  title: z.string().max(200).optional(),
+  payload: z.record(z.unknown()),
+  mediaState: z.record(z.unknown()).optional(),
+  aiProvenance: z.record(z.unknown()).optional(),
+  schemaVersion: z.number().int().positive().max(1000).default(1),
+  expectedVersion: z.number().int().positive().optional(),
+});
+export type SellerDraftUpsertInput = z.infer<typeof sellerDraftUpsertSchema>;
+
+const minorAmount = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+
+/** A seller's requested auction settings for a listing (minor units). Advisory —
+ * staff validate + create the authoritative auction. */
+export const sellerAuctionPreferenceSchema = z.object({
+  openingBidMinor: minorAmount.optional(),
+  reserveMinor: minorAmount.optional(),
+  incrementMinor: minorAmount.optional(),
+  currency: z.string().min(3).max(3).optional(),
+  preferredOpenAt: z.string().datetime().optional(),
+  preferredCloseAt: z.string().datetime().optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type SellerAuctionPreferenceInput = z.infer<typeof sellerAuctionPreferenceSchema>;

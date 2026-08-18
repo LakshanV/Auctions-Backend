@@ -12,6 +12,7 @@ import { HealthModule } from './health/health.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { SellerModule } from './modules/seller/seller.module';
+import { SellerStudioModule } from './modules/seller-studio/seller-studio.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { AuctionModule } from './modules/auction/auction.module';
@@ -71,6 +72,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     FeatureFlagsModule,
     IdentityModule,
     SellerModule,
+    SellerStudioModule,
     InventoryModule,
     MarketplaceModule,
     AuctionModule,

@@ -47,6 +47,7 @@
     "test:vision": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-vision.mjs\"",
     "test:media": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-media.mjs\"",
     "test:seller-studio": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-seller-studio.mjs\"",
+    "test:inspection-evidence": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-inspection-evidence.mjs\"",
     "test:assistant": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-assistant.mjs\"",
     "test:assistant-channels": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-assistant-channels.mjs\"",
     "test:assistant-search": "node scripts/with-ephemeral-db.mjs bash -c \"pnpm turbo run build --filter=@singha/api && pnpm db:migrate:deploy && node scripts/e2e-assistant-search.mjs\"",

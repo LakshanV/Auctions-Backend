@@ -158,6 +158,12 @@ jobs:
       - name: E2E (seller-studio — resumable drafts + auction preferences)
         run: pnpm run test:seller-studio
 
+      # §20 (RW9) inspection/certification evidence — staff-only attach (asset:manage), the
+      # provider-port seam (requested + inspectionId, never a fabricated certificate), and the
+      # customer-safe lot-detail projection (PUBLIC evidence only; private docs/ids never leak).
+      - name: E2E (inspection evidence — staff attach + customer-safe projection)
+        run: pnpm run test:inspection-evidence
+
       # Satellite Market Node + SEO (Evolution E13, pack Addendum A + doc 11) — the two node modes,
       # the non-negotiable central-ledger invariant (a node-originated listing is the SAME central
       # canonical record; origination is attribution, gated by mode/capability/verification), and the

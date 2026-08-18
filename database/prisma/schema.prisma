@@ -223,6 +223,7 @@ model Asset {
   sellerOrganization Organization? @relation(fields: [sellerOrganizationId], references: [id])
   listings           Listing[]
   media              MediaObject[]
+  inspectionEvidence AssetInspectionEvidence[]
 
   @@index([category])
   @@index([ownerCustomerId])
@@ -565,8 +566,9 @@ model MediaObject {
   durationMs Int?    @map("duration_ms")
   checksum   String?
 
-  asset       Asset             @relation(fields: [assetId], references: [id])
-  derivatives MediaDerivative[]
+  asset              Asset                     @relation(fields: [assetId], references: [id])
+  derivatives        MediaDerivative[]
+  inspectionEvidence AssetInspectionEvidence[]
 
   @@index([assetId])
   @@index([assetId, sortOrder])
@@ -2423,4 +2425,50 @@ model SellerAuctionPreference {
   @@index([ownerId])
   @@index([status])
   @@map("seller_auction_preference")
+}
+
+enum InspectionEvidenceStatus {
+  requested
+  scheduled
+  in_progress
+  completed
+  failed
+}
+
+/// Third-party inspection / certification EVIDENCE for an asset (directive §20; RW9,
+/// matrix PRV-3). A DERIVED trust record that informs a listing — never an authoritative
+/// overwrite of the asset's facts (rule 3) and never binding on a sale. The original
+/// certificate document flows through the RW3 secure media pipeline (scanned +
+/// access-controlled) and is linked here by `mediaObjectId`; only PUBLIC evidence is ever
+/// projected to customers. Additive + all-nullable-where-safe so existing assets stay valid.
+model AssetInspectionEvidence {
+  id             String                   @id
+  assetId        String                   @map("asset_id")
+  // InspectionKind from the provider port (gem_certification / vehicle_inspection /
+  // machinery_inspection / assay / general). String (not enum) to stay additive as new
+  // inspection types appear without a migration; validated by the command schema.
+  kind           String
+  provider       String
+  status         InspectionEvidenceStatus @default(requested)
+  // The lab/inspector's own certificate reference — stored, never fabricated (rule 3).
+  certificateRef String?                  @map("certificate_ref")
+  // The provider-port inspection id (present when requested via the InspectionProvider seam).
+  inspectionId   String?                  @map("inspection_id")
+  // Customer-safe short outcome summary (e.g. "Grade A, no structural damage").
+  summary        String?
+  inspectedAt    DateTime?                @map("inspected_at")
+  // public → shown on the lot; private/internal → staff-only (never leaks to customers).
+  visibility     String                   @default("private")
+  // Optional link to the certificate document in the secure media pipeline.
+  mediaObjectId  String?                  @map("media_object_id")
+  createdBy      String?                  @map("created_by")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+
+  asset       Asset        @relation(fields: [assetId], references: [id])
+  mediaObject MediaObject? @relation(fields: [mediaObjectId], references: [id])
+
+  @@index([assetId])
+  @@index([assetId, visibility])
+  @@map("asset_inspection_evidence")
 }

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CATEGORY_KEYS, type CatalogueQuery, type CatalogueRowQuery } from '@singha/contracts';
 import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InspectionEvidenceService } from '../inspection-evidence/inspection-evidence.service';
 
 /** Filter fields shared by the full catalogue query and a single Rubik row. */
 type CatalogueFilters = {
@@ -50,7 +51,10 @@ const OPEN_STATUSES = ['scheduled', 'live'] as const;
  */
 @Injectable()
 export class CatalogueV2Service {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly inspectionEvidence: InspectionEvidenceService,
+  ) {}
 
   async list(q: CatalogueQuery) {
     const where = this.buildWhere(q);
@@ -154,6 +158,9 @@ export class CatalogueV2Service {
     if (!listing) throw new NotFoundException('Lot not found');
 
     const card = this.toCardV2(listing);
+    // §20 — customer-safe inspection/certification evidence: PUBLIC rows only; a linked
+    // certificate document surfaces only when it is itself public + ready (private docs stay gated).
+    const evidence = await this.inspectionEvidence.publicForAsset(listing.assetId);
     return {
       ...card,
       fullDescription: listing.fullDescription,
@@ -162,6 +169,7 @@ export class CatalogueV2Service {
       publicTermsRef: listing.publicTermsRef,
       attributes: listing.asset.attributes,
       media: this.mediaList(listing),
+      evidence,
       event: listing.eventLots[0]
         ? this.eventSummary(listing.eventLots[0].event, listing.eventLots[0].sequence)
         : null,

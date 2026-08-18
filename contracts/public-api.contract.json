@@ -105,6 +105,7 @@
       },
       "deliveryAvailable": "boolean",
       "event": "null",
+      "evidence": ["unknown"],
       "featured": "boolean",
       "fullDescription": "null",
       "id": "string",

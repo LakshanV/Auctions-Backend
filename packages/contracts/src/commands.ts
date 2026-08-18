@@ -132,6 +132,46 @@ export const mediaDownloadQuerySchema = z.object({
 });
 export type MediaDownloadQuery = z.infer<typeof mediaDownloadQuerySchema>;
 
+// §20 (RW9, PRV-3) — third-party inspection / certification EVIDENCE. Staff-recorded, derived
+// trust records that inform a listing; never an authoritative overwrite of asset facts (rule 3)
+// and never binding. Only `public` evidence is ever projected to customers.
+export const inspectionEvidenceKindValues = [
+  'gem_certification',
+  'vehicle_inspection',
+  'machinery_inspection',
+  'assay',
+  'general',
+] as const;
+export type InspectionEvidenceKind = (typeof inspectionEvidenceKindValues)[number];
+
+export const inspectionEvidenceStatusValues = [
+  'requested',
+  'scheduled',
+  'in_progress',
+  'completed',
+  'failed',
+] as const;
+export type InspectionEvidenceStatus = (typeof inspectionEvidenceStatusValues)[number];
+
+export const recordInspectionEvidenceSchema = z.object({
+  kind: z.enum(inspectionEvidenceKindValues),
+  provider: z.string().min(1).max(120),
+  status: z.enum(inspectionEvidenceStatusValues).optional(),
+  // The lab/inspector's own certificate reference — recorded verbatim, never fabricated.
+  certificateRef: z.string().max(200).optional(),
+  // Customer-safe short outcome summary.
+  summary: z.string().max(1000).optional(),
+  inspectedAt: z.string().datetime().optional(),
+  // Defaults to `private` server-side; set `public` to surface the evidence on the lot.
+  visibility: z.enum(mediaVisibilityValues).optional(),
+  // Optional link to the certificate document already registered in the secure media pipeline.
+  mediaObjectId: z.string().min(1).max(200).optional(),
+  // When true, the record is opened through the InspectionProvider port (gets an inspectionId +
+  // provider-reported status) instead of being entered directly from an already-issued certificate.
+  requestViaProvider: z.boolean().optional(),
+});
+export type RecordInspectionEvidenceInput = z.infer<typeof recordInspectionEvidenceSchema>;
+
 // Passwordless demo login (email → bidder token). Not for real production auth.
 export const demoLoginSchema = z.object({
   email: z.string().email(),

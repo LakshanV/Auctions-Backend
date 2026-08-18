@@ -10,11 +10,19 @@ import { type Prisma } from '@singha/database';
 
 const PAD = 6;
 
+// `nextval()` takes a sequence name that cannot be passed as a bind parameter, so the name is
+// interpolated into the raw SQL. Allowlist the known sequences so a future caller can never
+// thread untrusted input into that string (defense-in-depth against a SQL-injection-shaped bug).
+const ALLOWED_SEQUENCES = new Set(['customer_client_ref_seq', 'organization_ref_seq']);
+
 function format(prefix: string, seq: bigint): string {
   return `${prefix}-${seq.toString().padStart(PAD, '0')}`;
 }
 
 async function nextval(tx: Prisma.TransactionClient, sequence: string): Promise<bigint> {
+  if (!ALLOWED_SEQUENCES.has(sequence)) {
+    throw new Error(`Refusing to draw from a non-allowlisted sequence: ${sequence}`);
+  }
   const rows = await tx.$queryRawUnsafe<{ nextval: bigint }[]>(
     `SELECT nextval('${sequence}') AS nextval`,
   );

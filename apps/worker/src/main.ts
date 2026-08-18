@@ -27,8 +27,15 @@ async function main(): Promise<void> {
 
   const repo: OutboxRepo = {
     async fetchPending(limit) {
+      // At-least-once with a retry cap (rule 7): sweep both never-sent (pending) AND previously
+      // failed rows, so a transient publish error is not terminal. Previously only 'pending' was
+      // fetched, so any 'failed' row (once a real, throwing channel adapter replaces the no-op
+      // publisher) was stranded forever — silent domain-event loss. Rows that exhaust
+      // MAX_OUTBOX_ATTEMPTS stop being retried (the dead-letter set: status='failed', attempts at
+      // the cap) and can be inspected/replayed out of band.
+      const MAX_OUTBOX_ATTEMPTS = 12;
       const rows = await prisma.outboxEvent.findMany({
-        where: { status: 'pending' },
+        where: { status: { in: ['pending', 'failed'] }, attempts: { lt: MAX_OUTBOX_ATTEMPTS } },
         orderBy: { createdAt: 'asc' },
         take: limit,
       });

@@ -503,6 +503,74 @@ async function main() {
       'a second auto-referenced listing gets a distinct reference',
     );
 
+    // --- §6/§7 pre-publish quality-control gate (deterministic, advisory) ---
+    const qcIncomplete = await v1('/listings/quality-check', {
+      token: sellerToken,
+      method: 'POST',
+      body: {
+        saleMethod: 'BUY_NOW',
+        category: 'vehicles',
+        title: '',
+        presentAttributeKeys: ['make'], // missing model + year
+        photoCount: 0,
+        hasCover: false,
+        buyNowPriceMinor: null,
+      },
+    });
+    check(
+      qcIncomplete.status === 200 &&
+        qcIncomplete.json?.status === 'incomplete' &&
+        qcIncomplete.json?.advisory === true,
+      `QC marks an empty listing incomplete + advisory (got ${qcIncomplete.json?.status})`,
+    );
+    check(
+      (qcIncomplete.json?.checks ?? []).some(
+        (c) => c.key === 'required_attributes' && c.severity === 'critical',
+      ),
+      'QC derives required category attributes server-side (missing model/year → critical)',
+    );
+    check(
+      (qcIncomplete.json?.checks ?? []).some((c) => c.key === 'price' && c.severity === 'critical'),
+      'QC flags a Buy Now listing with no price as critical',
+    );
+
+    const qcReady = await v1('/listings/quality-check', {
+      token: sellerToken,
+      method: 'POST',
+      body: {
+        saleMethod: 'BUY_NOW',
+        category: 'vehicles',
+        title: 'Toyota Land Cruiser Prado 2019',
+        fullDescription: 'One owner, full service history, no accidents.',
+        presentAttributeKeys: ['make', 'model', 'year'],
+        photoCount: 4,
+        hasCover: true,
+        buyNowPriceMinor: 12_500_000,
+        hasLocation: true,
+      },
+    });
+    check(
+      qcReady.status === 200 && qcReady.json?.status === 'ready' && qcReady.json?.score === 100,
+      `QC scores a complete listing ready (got ${qcReady.json?.status}/${qcReady.json?.score})`,
+    );
+
+    // Per-listing assessment recomputes from the persisted listing (owner or staff).
+    const qcListing = await v1(`/listings/${auctionListing}/quality-check`, { token: sellerToken });
+    check(
+      qcListing.status === 200 &&
+        Array.isArray(qcListing.json?.checks) &&
+        typeof qcListing.json?.score === 'number',
+      `per-listing quality assessment returns score + checks (got ${qcListing.status})`,
+    );
+    // A non-owner, non-staff customer cannot read someone else's assessment.
+    const qcForbidden = await v1(`/listings/${auctionListing}/quality-check`, {
+      token: buyerToken,
+    });
+    check(
+      qcForbidden.status === 403,
+      `a non-owner/non-staff cannot read the assessment (got ${qcForbidden.status})`,
+    );
+
     // --- Watch: authoritative, server-owned ---
     const denied = await v1('/watch', {
       token: staffToken,

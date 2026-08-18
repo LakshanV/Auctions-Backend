@@ -208,6 +208,32 @@ export const CAPTURE_REQUIREMENTS: Record<CategoryKey, CaptureRequirementSpec[]>
       guidance: 'A scale or count reference for quantity.',
     },
   ],
+  scrap: [
+    {
+      view: 'load',
+      label: 'Whole load',
+      required: true,
+      guidance: 'The full pile/skip/consignment in one frame.',
+    },
+    {
+      view: 'material_closeup',
+      label: 'Material close-up',
+      required: true,
+      guidance: 'Close-up showing the material, grade and any sorting.',
+    },
+    {
+      view: 'contamination',
+      label: 'Contamination / condition',
+      required: false,
+      guidance: 'Honest close-up of any contamination, mixing or attached fittings.',
+    },
+    {
+      view: 'weighbridge',
+      label: 'Weighbridge / scale',
+      required: false,
+      guidance: 'A weighbridge docket or scale reference for the tonnage.',
+    },
+  ],
   general: [
     {
       view: 'main',

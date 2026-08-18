@@ -1294,6 +1294,8 @@ enum AiTaskType {
   translation
   recommendation
   support
+  // §6/§7 — pre-publish quality-control assessment recorded as a derived AiRun.
+  quality_check
 }
 
 model AiRun {

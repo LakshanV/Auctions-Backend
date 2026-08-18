@@ -429,6 +429,31 @@ export const applyDraftSchema = z.object({
 export type ApplyDraftInput = z.infer<typeof applyDraftSchema>;
 
 /**
+ * §6/§7 — stateless pre-publish quality-check input. The seller sends the facts they have entered
+ * so far (from the draft) and gets back a deterministic, ADVISORY readiness assessment. The set of
+ * REQUIRED category attributes and whether the category is a divisible commodity are NOT trusted
+ * from the client — the server derives them from the authoritative category schema and merges them
+ * before scoring. `presentAttributeKeys` are the attribute keys the seller has filled in.
+ */
+export const qualityCheckInputSchema = z.object({
+  saleMethod: z.enum(saleMethodValues),
+  category: z.string().max(40),
+  title: z.string().max(200).optional(),
+  shortDescription: z.string().max(400).optional(),
+  fullDescription: z.string().max(8000).optional(),
+  presentAttributeKeys: z.array(z.string().max(60)).max(100).default([]),
+  photoCount: z.number().int().nonnegative().default(0),
+  hasCover: z.boolean().default(false),
+  videoAvailable: z.boolean().optional(),
+  guidePriceMinor: z.number().int().nonnegative().nullable().optional(),
+  buyNowPriceMinor: z.number().int().nonnegative().nullable().optional(),
+  quantityAvailable: z.number().nonnegative().nullable().optional(),
+  quantityUnitCode: z.string().max(16).nullable().optional(),
+  hasLocation: z.boolean().optional(),
+});
+export type QualityCheckInput = z.infer<typeof qualityCheckInputSchema>;
+
+/**
  * Translate free text (docs/10 Customer AI — multilingual assistant). `text` is
  * free text, so it goes through `guardAiRequest('translation', ...)` for
  * injection detection (rule 3/12) before it ever reaches a provider. The 6000

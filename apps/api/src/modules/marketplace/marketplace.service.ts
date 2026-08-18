@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
+import { ListingQualityService } from './listing-quality.service';
 
 /** Marketplace module (docs/06): a Listing is one sale attempt for an Asset. */
 @Injectable()
@@ -20,7 +21,26 @@ export class MarketplaceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly uow: UnitOfWork,
+    private readonly quality: ListingQualityService,
   ) {}
+
+  /**
+   * §6/§7 — the pre-publish quality assessment for a persisted listing. Owner (the asset's seller)
+   * or staff with listing:review may read it; advisory + read-only (never mutates the listing).
+   */
+  async qualityForListing(principal: Principal, id: string) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id },
+      include: { asset: true },
+    });
+    if (!listing) throw new NotFoundException('Listing not found');
+    const isStaff = principal.permissions.has(Permission.ListingReview);
+    const isOwner = listing.asset.ownerCustomerId === principal.customerId;
+    if (!isStaff && !isOwner) {
+      throw new ForbiddenException('Only the seller or staff can view this assessment');
+    }
+    return this.quality.forListing(id);
+  }
 
   async createListing(principal: Principal, input: CreateListingInput) {
     const asset = await this.prisma.asset.findUnique({ where: { id: input.assetId } });
@@ -171,9 +191,32 @@ export class MarketplaceService {
     const listing = await this.requireListing(id);
     assertListingTransition(listing.status, 'submitted');
 
+    // §6/§7 — compute the pre-publish quality assessment from the persisted listing and record it
+    // as a derived AiRun so staff have it at review. Advisory: it never blocks the submit (rule 11).
+    const assessment = await this.quality.forListing(id);
     const actor = toActor(principal);
+    const aiRunId = newId();
     return this.uow.execute(actor, async (ctx) => {
       const updated = await ctx.tx.listing.update({ where: { id }, data: { status: 'submitted' } });
+      await ctx.tx.aiRun.create({
+        data: {
+          id: aiRunId,
+          taskType: 'quality_check',
+          model: 'deterministic-quality-v1',
+          provider: 'singha',
+          actorId: actor.id,
+          subjectType: 'Listing',
+          subjectId: id,
+          output: assessment as unknown as object,
+          confidence: assessment.score / 100,
+        },
+      });
+      ctx.emit({
+        name: DomainEventName.AiRunRecorded,
+        aggregateType: 'AiRun',
+        aggregateId: aiRunId,
+        payload: { aiRunId, taskType: 'quality_check', subjectId: id },
+      });
       ctx.audit({
         action: 'LISTING_SUBMITTED',
         targetType: 'Listing',

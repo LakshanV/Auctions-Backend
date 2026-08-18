@@ -443,6 +443,39 @@ async function main() {
     check(logiDetail.json?.pricingBasis === 'per_unit', 'detail carries pricing basis');
     check(logiDetail.json?.incoterm === 'FOB', 'detail carries the Incoterm');
 
+    // Regression: the seller wizard PATCHes content (which can set a BigInt unit-price column)
+    // BEFORE submitting. Submitting a listing that already carries a non-null BigInt money column
+    // must not 500 on JSON serialization (the transition endpoints return a BigInt-safe view).
+    const bigAsset = await v1('/assets', {
+      token: sellerToken,
+      method: 'POST',
+      body: { category: 'bulk', attributes: { itemType: 'X', quantity: 1, unit: 'kg' } },
+    });
+    const bigListing = await v1('/listings', {
+      token: sellerToken,
+      method: 'POST',
+      body: {
+        assetId: bigAsset.json.id,
+        saleMethod: 'MAKE_OFFER',
+        title: 'Unit-priced lot',
+        publicRef: `BIG-${Date.now()}`,
+      },
+    });
+    await v1(`/listings/${bigListing.json.id}/content`, {
+      token: sellerToken,
+      method: 'PATCH',
+      body: { unitPriceMinor: 999999, quantityAvailable: 2, quantityUnitCode: 'kg' },
+    });
+    const submitAfterPrice = await v1(`/listings/${bigListing.json.id}/submit`, {
+      token: sellerToken,
+      method: 'POST',
+      body: {},
+    });
+    check(
+      submitAfterPrice.status === 200 || submitAfterPrice.status === 201,
+      `submitting a listing that already carries a unit price does not 500 (got ${submitAfterPrice.status})`,
+    );
+
     // --- Watch: authoritative, server-owned ---
     const denied = await v1('/watch', {
       token: staffToken,

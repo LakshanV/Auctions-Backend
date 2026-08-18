@@ -178,7 +178,10 @@ export class MarketplaceService {
         before: { status: listing.status },
         after: { status: 'submitted' },
       });
-      return updated;
+      // Return a BigInt-safe projection — the raw Listing carries BigInt money columns
+      // (guide/buy-now/unit price) that Express' JSON serializer cannot stringify. Callers of
+      // these transition endpoints only need the id + new status.
+      return { id: updated.id, status: updated.status };
     });
   }
 
@@ -206,7 +209,10 @@ export class MarketplaceService {
           payload: { listingId: id, assetId: listing.assetId },
         });
       }
-      return updated;
+      // Return a BigInt-safe projection — the raw Listing carries BigInt money columns
+      // (guide/buy-now/unit price) that Express' JSON serializer cannot stringify. Callers of
+      // these transition endpoints only need the id + new status.
+      return { id: updated.id, status: updated.status };
     });
   }
 
@@ -230,7 +236,10 @@ export class MarketplaceService {
         aggregateId: id,
         payload: { listingId: id, assetId: listing.assetId, publicRef: listing.publicRef },
       });
-      return updated;
+      // Return a BigInt-safe projection — the raw Listing carries BigInt money columns
+      // (guide/buy-now/unit price) that Express' JSON serializer cannot stringify. Callers of
+      // these transition endpoints only need the id + new status.
+      return { id: updated.id, status: updated.status };
     });
   }
 

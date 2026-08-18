@@ -32,14 +32,27 @@ export class AiService {
   ) {}
 
   async draftListing(principal: Principal, input: DraftListingInput) {
-    const asset = await this.prisma.asset.findUnique({ where: { id: input.assetId } });
-    if (!asset) throw new NotFoundException('Asset not found');
+    // Resolve the facts from a persisted asset OR from the seller's in-progress inputs (§11). The
+    // asset (when present) is read-only here — the draft never writes over its facts (rule 3).
+    let category: string;
+    let attributes: Record<string, unknown>;
+    if (input.assetId) {
+      const asset = await this.prisma.asset.findUnique({ where: { id: input.assetId } });
+      if (!asset) throw new NotFoundException('Asset not found');
+      category = asset.category;
+      attributes = (asset.attributes as Record<string, unknown>) ?? {};
+    } else {
+      category = input.category!;
+      attributes = { ...(input.attributes ?? {}) };
+    }
+    // Free-text notes pass through the SAME injection guard as other free text (rule 3/12); a
+    // flagged note is dropped, never sent to the provider. Clean notes enrich the draft context.
+    if (input.notes) {
+      const guard = guardAiRequest('assistant', input.notes);
+      if (guard.allowed) attributes = { ...attributes, notes: input.notes };
+    }
 
-    const draft = await this.ai.draftListing(
-      asset.category,
-      (asset.attributes as Record<string, unknown>) ?? {},
-      input.locale,
-    );
+    const draft = await this.ai.draftListing(category, attributes, input.locale);
     const actor = toActor(principal);
     const id = newId();
     return this.uow.execute(actor, async (ctx) => {
@@ -50,8 +63,7 @@ export class AiService {
           model: this.ai.model,
           provider: this.ai.name,
           actorId: actor.id,
-          subjectType: 'Asset',
-          subjectId: input.assetId,
+          ...(input.assetId ? { subjectType: 'Asset', subjectId: input.assetId } : {}),
           output: draft as unknown as object,
           confidence: draft.confidence,
         },
@@ -61,12 +73,12 @@ export class AiService {
         name: DomainEventName.AiRunRecorded,
         aggregateType: 'AiRun',
         aggregateId: id,
-        payload: { aiRunId: id, taskType: 'listing_draft', subjectId: input.assetId },
+        payload: { aiRunId: id, taskType: 'listing_draft', subjectId: input.assetId ?? null },
       });
       ctx.audit({
         action: 'AI_LISTING_DRAFTED',
         targetType: 'Asset',
-        targetId: input.assetId,
+        targetId: input.assetId ?? 'draft',
         actorType: 'ai',
       });
       return { aiRunId: id, provider: this.ai.name, model: this.ai.model, draft };

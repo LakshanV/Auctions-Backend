@@ -340,10 +340,20 @@ export type CreateBidIntentInput = z.infer<typeof createBidIntentSchema>;
 
 // --- Singha AI Core (docs/10) ----------------------------------------------
 // AI outputs are DERIVED records; a human explicitly applies a draft (rule 3).
-export const draftListingSchema = z.object({
-  assetId: z.string().min(1),
-  locale: z.string().min(2).max(10).default('en'),
-});
+// Draft copy from either a persisted asset (assetId) OR the seller's in-progress confirmed facts
+// (category + attributes + notes) — the Listing Studio drafts before the asset is saved (directive
+// §11). Exactly one source is required. The draft is DERIVED; it never writes over asset facts.
+export const draftListingSchema = z
+  .object({
+    assetId: z.string().min(1).optional(),
+    category: z.string().min(1).optional(),
+    attributes: z.record(z.unknown()).optional(),
+    notes: z.string().max(4000).optional(),
+    locale: z.string().min(2).max(10).default('en'),
+  })
+  .refine((v) => Boolean(v.assetId) || Boolean(v.category), {
+    message: 'Provide either assetId or category to draft a listing',
+  });
 export type DraftListingInput = z.infer<typeof draftListingSchema>;
 
 export const assistSchema = z.object({

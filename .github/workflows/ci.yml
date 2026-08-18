@@ -164,6 +164,12 @@ jobs:
       - name: E2E (inspection evidence — staff attach + customer-safe projection)
         run: pnpm run test:inspection-evidence
 
+      # §21/§22 (RW6) Singha Live floor state-machine — scoped auctioneer/clerk/producer roles, the
+      # per-lot state machine + current-lot pointer + sequencing, the authoritative-engine floor read
+      # (rule 12), and the deterministic fake stream.
+      - name: E2E (live floor — auctioneer state machine + scoped roles)
+        run: pnpm run test:live-floor
+
       # Satellite Market Node + SEO (Evolution E13, pack Addendum A + doc 11) — the two node modes,
       # the non-negotiable central-ledger invariant (a node-originated listing is the SAME central
       # canonical record; origination is attribution, gated by mode/capability/verification), and the

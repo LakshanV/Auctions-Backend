@@ -21,12 +21,26 @@ export interface LiveStreamProvider {
 
 export const LIVE_PROVIDER = Symbol('LIVE_PROVIDER');
 
+/** FNV-1a — a small deterministic hash so the fake channel key is reproducible (no clock/random,
+ *  matching the codebase's other credential-free fakes; the real IVS/YouTube adapter issues its
+ *  own keys). */
+function stableKey(seed: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i += 1) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 export class MockLiveStreamProvider implements LiveStreamProvider {
   readonly name = 'mock';
   private readonly logger = new Logger('MockLiveStreamProvider');
 
   async createChannel(title: string): Promise<LiveChannel> {
-    const key = `mock-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    // Deterministic key derived from the title (RW6): no `Date.now()` / `Math.random()`, so the
+    // whole broadcast fake is reproducible in tests and resumable workflows.
+    const key = `mock-${stableKey(title)}`;
     this.logger.debug(`create channel for "${title}" (${key})`);
     return {
       ingestUrl: `rtmps://mock-ingest.singha.local/live/${key}`,

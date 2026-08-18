@@ -43,6 +43,24 @@ describe('rbac', () => {
     expect(permissionsForRoles([Role.Customer]).size).toBe(6);
   });
 
+  it('RW6 — scoped Singha Live floor roles each hold exactly their slice; staff hold all', () => {
+    // Auctioneer conducts the lot state machine but is not a clerk or producer.
+    expect(hasPermission([Role.Auctioneer], Permission.LiveConduct)).toBe(true);
+    expect(hasPermission([Role.Auctioneer], Permission.LiveClerk)).toBe(false);
+    expect(hasPermission([Role.Auctioneer], Permission.LiveProduce)).toBe(false);
+    // Clerk relays floor bids only; producer runs the broadcast only.
+    expect(hasPermission([Role.Clerk], Permission.LiveClerk)).toBe(true);
+    expect(hasPermission([Role.Clerk], Permission.LiveConduct)).toBe(false);
+    expect(hasPermission([Role.Producer], Permission.LiveProduce)).toBe(true);
+    expect(hasPermission([Role.Producer], Permission.LiveConduct)).toBe(false);
+    // Auction staff are the umbrella — they hold every scoped live grant.
+    expect(hasPermission([Role.AuctionStaff], Permission.LiveConduct)).toBe(true);
+    expect(hasPermission([Role.AuctionStaff], Permission.LiveClerk)).toBe(true);
+    expect(hasPermission([Role.AuctionStaff], Permission.LiveProduce)).toBe(true);
+    // A plain customer holds none.
+    expect(hasPermission([Role.Customer], Permission.LiveConduct)).toBe(false);
+  });
+
   it('unions permissions across multiple roles', () => {
     const perms = permissionsForRoles([Role.Seller, Role.Compliance]);
     expect(perms.has(Permission.ListingCreate)).toBe(true);

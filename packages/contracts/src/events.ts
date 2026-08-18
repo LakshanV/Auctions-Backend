@@ -44,6 +44,9 @@ export const DomainEventName = {
   SocialPublicationPublished: 'SOCIAL_PUBLICATION_PUBLISHED',
   LiveBroadcastStarted: 'LIVE_BROADCAST_STARTED',
   LiveBroadcastEnded: 'LIVE_BROADCAST_ENDED',
+  // §21/§22 (RW6) — auctioneer-driven per-lot floor transitions (presentation state; the bid
+  // ledger stays authoritative). One event per transition so realtime live-room consumers order.
+  LiveLotStateChanged: 'LIVE_LOT_STATE_CHANGED',
   // Member identity, credit, security & performance engine (Revision 05).
   ClientIdAssigned: 'CLIENT_ID_ASSIGNED',
   MembershipActivated: 'MEMBERSHIP_ACTIVATED',

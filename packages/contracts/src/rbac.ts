@@ -9,6 +9,12 @@ export const Role = {
   Seller: 'seller',
   SellerStaff: 'seller_staff',
   AuctionStaff: 'auction_staff',
+  // §21/§22 (RW6) — scoped Singha Live floor roles (a real auction has separate people on the
+  // rostrum, the clerk's desk and the broadcast gallery). Each holds exactly its slice; auction
+  // staff keep the umbrella `live:operate` + all three scoped grants.
+  Auctioneer: 'auctioneer',
+  Clerk: 'clerk',
+  Producer: 'producer',
   Accounts: 'accounts',
   Support: 'support',
   Compliance: 'compliance',
@@ -61,6 +67,13 @@ export const Permission = {
   SocialApprove: 'social:approve',
   IntelligenceRead: 'intelligence:read',
   LiveOperate: 'live:operate',
+  // §21/§22 (RW6) — scoped Singha Live floor roles. Auctioneer runs the per-lot state machine
+  // (on-block / going once/twice / sold / passed); clerk relays floor/phone/absentee bids through
+  // the authoritative engine; producer controls the broadcast (start/stop/simulcast). The umbrella
+  // `live:operate` (auction staff) still implies all three.
+  LiveConduct: 'live:conduct',
+  LiveClerk: 'live:clerk',
+  LiveProduce: 'live:produce',
   WatchManage: 'watch:manage',
   EventOperate: 'event:operate',
   ListingContent: 'listing:content',
@@ -137,6 +150,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.SocialOperate,
     P.IntelligenceRead,
     P.LiveOperate,
+    // Staff umbrella over the scoped Singha Live floor roles (RW6).
+    P.LiveConduct,
+    P.LiveClerk,
+    P.LiveProduce,
     P.EventOperate,
     P.ListingContent,
     // Onsite auction desk: register members, grant temporary access, take/verify
@@ -150,6 +167,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.PerformanceRead,
     P.MemberFlagRead,
   ],
+  // RW6 scoped Singha Live floor roles — each holds exactly its slice (auction staff hold all).
+  [Role.Auctioneer]: [P.LiveConduct],
+  [Role.Clerk]: [P.LiveClerk],
+  [Role.Producer]: [P.LiveProduce],
   [Role.Accounts]: [
     P.CustomerRead,
     P.CommerceOperate,

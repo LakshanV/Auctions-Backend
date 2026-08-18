@@ -348,6 +348,19 @@ enum AuctionEventStatus {
   cancelled
 }
 
+// §21/§22 (RW6) — per-lot state on the live floor (the auctioneer's rostrum lifecycle). The
+// AUTHORITATIVE bid/price stays in the Auction/Bid ledger (rule 12); this is the presentation
+// state the auctioneer drives (on the block → going once → going twice → sold/passed).
+enum LiveLotState {
+  pending
+  on_block
+  going_once
+  going_twice
+  sold
+  passed
+  withdrawn
+}
+
 model AuctionEvent {
   id             String             @id
   publicRef      String             @unique @map("public_ref")
@@ -363,6 +376,9 @@ model AuctionEvent {
   inspectionInfo String?            @map("inspection_info")
   liveEnabled    Boolean            @default(false) @map("live_enabled")
   featured       Boolean            @default(false)
+  // RW6 — the lot currently on the block (the auctioneer's current-lot pointer). Nullable +
+  // additive; references an AuctionEventLot.id but not an FK relation to keep the migration additive.
+  currentLotId   String?            @map("current_lot_id")
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
 
@@ -374,12 +390,15 @@ model AuctionEvent {
 }
 
 model AuctionEventLot {
-  id             String    @id
-  auctionEventId String    @map("auction_event_id")
-  listingId      String    @map("listing_id")
+  id             String       @id
+  auctionEventId String       @map("auction_event_id")
+  listingId      String       @map("listing_id")
   sequence       Int
   lane           String?
-  scheduledStart DateTime? @map("scheduled_start")
+  scheduledStart DateTime?    @map("scheduled_start")
+  // RW6 — auctioneer-driven presentation state (see LiveLotState). Additive, defaults to pending.
+  liveState      LiveLotState @default(pending) @map("live_state")
+  soldAt         DateTime?    @map("sold_at")
 
   event   AuctionEvent @relation(fields: [auctionEventId], references: [id])
   listing Listing      @relation(fields: [listingId], references: [id])

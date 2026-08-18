@@ -552,6 +552,18 @@ export const floorBidSchema = z.object({
 });
 export type FloorBidInput = z.infer<typeof floorBidSchema>;
 
+// §21/§22 (RW6) — auctioneer floor state-machine ops over an AuctionEvent's ordered lots. These
+// drive PRESENTATION state (which lot is on the block, going once/twice, sold/passed); the bid
+// ledger stays authoritative (rule 12). Gated by `live:conduct` (auctioneer + staff).
+export const openLotSchema = z.object({ lotId: z.string().min(1) });
+export type OpenLotInput = z.infer<typeof openLotSchema>;
+
+export const callStageSchema = z.object({ stage: z.enum(['going_once', 'going_twice']) });
+export type CallStageInput = z.infer<typeof callStageSchema>;
+
+export const withdrawLotSchema = z.object({ lotId: z.string().min(1) });
+export type WithdrawLotInput = z.infer<typeof withdrawLotSchema>;
+
 // --- Watchlist + enriched catalogue (consolidated pack docs 06/07) ----------
 export const watchSchema = z.object({ listingId: z.string().min(1) });
 export type WatchInput = z.infer<typeof watchSchema>;

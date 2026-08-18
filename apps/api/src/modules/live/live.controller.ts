@@ -25,8 +25,9 @@ import { type Principal } from '../../shared/auth/principal';
 import { ZodBody } from '../../shared/validation/zod.pipe';
 
 /**
- * Singha Live API (docs/08), gated on `liveV3`. Auctioneer/clerk/producer operations
- * require `live:operate`; playback + room state are public. When the flag is OFF the whole
+ * Singha Live API (docs/08), gated on `liveV3`. RW6 splits operator authority into scoped roles:
+ * broadcast/production ops require `live:produce`, floor-bid relay requires `live:clerk` (auction
+ * staff hold both via the umbrella); playback + room state are public. When the flag is OFF the whole
  * surface 404s, so the live experience stays hidden until its phase gate opens.
  */
 @Controller('live')
@@ -41,7 +42,7 @@ export class LiveController {
   }
 
   @Post('events')
-  @RequirePermissions(Permission.LiveOperate)
+  @RequirePermissions(Permission.LiveProduce)
   create(
     @CurrentActor() principal: Principal,
     @Body(new ZodBody(createLiveEventSchema)) input: CreateLiveEventInput,
@@ -51,21 +52,21 @@ export class LiveController {
   }
 
   @Post('events/:id/start')
-  @RequirePermissions(Permission.LiveOperate)
+  @RequirePermissions(Permission.LiveProduce)
   start(@CurrentActor() principal: Principal, @Param('id') id: string) {
     this.ensureEnabled();
     return this.live.start(principal, id);
   }
 
   @Post('events/:id/simulcast')
-  @RequirePermissions(Permission.LiveOperate)
+  @RequirePermissions(Permission.LiveProduce)
   simulcast(@CurrentActor() principal: Principal, @Param('id') id: string) {
     this.ensureEnabled();
     return this.live.simulcast(principal, id);
   }
 
   @Post('events/:id/stop')
-  @RequirePermissions(Permission.LiveOperate)
+  @RequirePermissions(Permission.LiveProduce)
   stop(@CurrentActor() principal: Principal, @Param('id') id: string) {
     this.ensureEnabled();
     return this.live.stop(principal, id);
@@ -73,7 +74,7 @@ export class LiveController {
 
   /** Clerk relays a floor/phone bid into the one ledger. */
   @Post('floor-bid')
-  @RequirePermissions(Permission.LiveOperate)
+  @RequirePermissions(Permission.LiveClerk)
   floorBid(
     @CurrentActor() principal: Principal,
     @Body(new ZodBody(floorBidSchema)) input: FloorBidInput,

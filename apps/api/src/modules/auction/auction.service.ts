@@ -277,12 +277,28 @@ export class AuctionService {
   }
 
   async close(principal: Principal, id: string) {
-    const auction = await this.requireAuction(id);
-    if (auction.status === 'closed') return this.publicAuction(auction);
-    if (auction.status !== 'open') throw new ConflictException('Auction is not open');
+    // Cheap pre-check for a fast 4xx on an obviously-wrong state. NOT authoritative — the
+    // binding decision is taken under a row lock inside the transaction below.
+    const pre = await this.requireAuction(id);
+    if (pre.status !== 'open' && pre.status !== 'closed') {
+      throw new ConflictException('Auction is not open');
+    }
 
     const actor = toActor(principal);
     const result = await this.uow.execute(actor, async (ctx) => {
+      // Lock the auction row and re-read the AUTHORITATIVE state INSIDE the tx, exactly as
+      // placeBid does. Without this lock, close() decided winner/hammer from a stale
+      // pre-transaction snapshot: a concurrent final bid (which DOES take this lock) could
+      // commit in between, making close() record the wrong buyer and price in the append-only
+      // Sale ledger (rule 12), or let two concurrent closes both act on an unsold auction and
+      // emit duplicate AuctionClosed events / double-release credit exposure.
+      await ctx.tx.$queryRawUnsafe('SELECT id FROM auction WHERE id = $1 FOR UPDATE', id);
+      const auction = await ctx.tx.auction.findUnique({ where: { id } });
+      if (!auction) throw new NotFoundException('Auction not found');
+      // Idempotent: a concurrent close already committed under this lock — return, no-op.
+      if (auction.status === 'closed') return this.publicAuction(auction);
+      if (auction.status !== 'open') throw new ConflictException('Auction is not open');
+
       const hammer = auction.currentBidMinor == null ? null : Number(auction.currentBidMinor);
       const sold =
         hammer != null &&

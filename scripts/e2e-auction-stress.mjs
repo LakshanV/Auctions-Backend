@@ -416,6 +416,64 @@ async function main() {
       record('Bid privacy', ok);
     }
 
+    // --- Scenario R — close/bid race + double-close idempotency (regression) --
+    // Root cause once: close() decided winner/hammer/Sale from a STALE pre-transaction read
+    // (no FOR UPDATE, no in-tx re-read), so a concurrent final bid could commit in between and
+    // the append-only Sale ledger recorded the WRONG buyer/price (rule 12); two concurrent
+    // closes on an unsold auction both ran and emitted duplicate AuctionClosed events / released
+    // credit twice. Fixed by locking + re-reading the auction inside the tx (mirroring placeBid).
+    console.log('\n[R] close/bid race + double-close idempotency');
+    {
+      let raceOk = 1;
+      for (let i = 0; i < 12; i += 1) {
+        const { auctionId, listingId } = await makeAuction(sellerToken, staffToken);
+        await openAuction(staffToken, auctionId);
+        await bid(A.token, auctionId, 150_000); // A leads at opening 100000
+        // Close and a higher bid fire at the same instant.
+        const [cl, b] = await Promise.all([
+          close(staffToken, auctionId),
+          bid(B.token, auctionId, 500_000),
+        ]);
+        raceOk &= check(cl.status < 500 && b.status < 500, `R${i}: no 5xx on close/bid race`);
+        const auc = await prisma.auction.findUnique({ where: { id: auctionId } });
+        const sales = await prisma.sale.findMany({ where: { listingId } });
+        raceOk &= check(sales.length <= 1, `R${i}: at most one Sale (got ${sales.length})`);
+        if (auc.winnerCustomerId) {
+          const sale = sales[0];
+          // THE invariant the P0 broke: the authoritative Sale must reflect the current head,
+          // not a stale snapshot — buyer == winner == highBidder and amount == current price.
+          raceOk &= check(
+            !!sale &&
+              sale.buyerCustomerId === auc.winnerCustomerId &&
+              auc.winnerCustomerId === auc.highBidderId &&
+              Number(sale.amountMinor) === Number(auc.currentBidMinor),
+            `R${i}: Sale ledger agrees with the authoritative head (buyer + price)`,
+          );
+        }
+      }
+      // Double-close on an UNSOLD auction (reserve not met) must be idempotent: exactly one
+      // AuctionClosed event, one close effect, no duplicate credit release.
+      const { auctionId } = await makeAuction(sellerToken, staffToken, { reserveMinor: 900_000 });
+      await openAuction(staffToken, auctionId);
+      await bid(A.token, auctionId, 150_000); // below reserve -> passes in
+      const [c1, c2] = await Promise.all([
+        close(staffToken, auctionId),
+        close(staffToken, auctionId),
+      ]);
+      const closedEvents = await prisma.outboxEvent.count({
+        where: { aggregateId: auctionId, name: 'AUCTION_CLOSED' },
+      });
+      const finalAuc = await prisma.auction.findUnique({ where: { id: auctionId } });
+      raceOk &=
+        check(c1.status < 500 && c2.status < 500, 'R: double-close no 5xx') &
+        check(finalAuc.status === 'closed', 'R: unsold auction is closed exactly once') &
+        check(
+          closedEvents === 1,
+          `R: exactly ONE AuctionClosed event emitted (got ${closedEvents})`,
+        );
+      record('Close/bid race + idempotency', raceOk);
+    }
+
     await prisma.$disconnect();
 
     console.log('\n=== Auction stress matrix ===');

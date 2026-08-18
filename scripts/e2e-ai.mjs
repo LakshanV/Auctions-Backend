@@ -273,11 +273,21 @@ async function main() {
     }
     check(outputFrozen, 'ai_run.output UPDATE rejected at the DB (immutable derived record)');
 
-    const fb = await post(`/ai/runs/${aiRunId}/feedback`, {
+    // Feedback is authored by the run's creator (staff here) or staff — a non-owner ai:use holder
+    // is refused (D10). Prove the refusal, then record as the authorized actor.
+    const foreignFb = await post(`/ai/runs/${aiRunId}/feedback`, {
       token: sellerToken,
       body: { outcome: 'accepted' },
     });
-    check(fb.status === 201, `AI feedback recorded (${fb.status})`);
+    check(
+      foreignFb.status === 403,
+      `non-owner ai:use holder cannot record feedback -> 403 (got ${foreignFb.status})`,
+    );
+    const fb = await post(`/ai/runs/${aiRunId}/feedback`, {
+      token: staffToken,
+      body: { outcome: 'accepted' },
+    });
+    check(fb.status === 201, `AI feedback recorded by the authorized actor (${fb.status})`);
     const fbId = fb.json?.id;
     let feedbackNoUpdate = false;
     try {

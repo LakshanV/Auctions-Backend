@@ -56,8 +56,8 @@ export class AiController {
 
   @Get('runs/:id')
   @RequirePermissions(Permission.AiUse)
-  getRun(@Param('id') id: string) {
-    return this.ai.getRun(id);
+  getRun(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.ai.getRun(principal, id);
   }
 
   @Post('runs/:id/apply')

@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { INCOTERMS, type QuoteRequest, type ShipmentEventInput, newId } from '@singha/contracts';
 import {
   type ShipmentStatus,
@@ -180,14 +186,24 @@ export class LogisticsService {
     });
   }
 
-  /** A shipment + its append-only event timeline. */
-  async getShipment(id: string) {
+  /** A shipment + its append-only event timeline. Owner-of-the-booking or staff only. */
+  async getShipment(principal: Principal, id: string) {
     this.requireFeature();
     const shipment = await this.prisma.logisticsShipment.findUnique({
       where: { id },
-      include: { events: { orderBy: { occurredAt: 'asc' } } },
+      include: {
+        events: { orderBy: { occurredAt: 'asc' } },
+        booking: { select: { bookedByCustomerId: true } },
+      },
     });
     if (!shipment) throw new NotFoundException('Shipment not found');
+    // Object-level authz: a shipment timeline (notes, locations, dates) is visible only to the
+    // customer who booked it, or to staff. exchange:participate alone (every customer) is not
+    // sufficient — this used to expose any buyer's delivery timeline to any participant.
+    const actor = toActor(principal);
+    if (actor.type !== 'staff' && shipment.booking.bookedByCustomerId !== principal.customerId) {
+      throw new ForbiddenException('Not permitted to view this shipment');
+    }
     return {
       id: shipment.id,
       bookingId: shipment.bookingId,

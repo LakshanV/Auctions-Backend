@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   type AiFeedbackInput,
   type ApplyDraftInput,
@@ -238,9 +244,16 @@ export class AiService {
     });
   }
 
-  async getRun(id: string) {
+  async getRun(principal: Principal, id: string) {
     const run = await this.prisma.aiRun.findUnique({ where: { id } });
     if (!run) throw new NotFoundException('AI run not found');
+    // Object-level authz: an AiRun's output belongs to its creating actor (a seller's draft copy,
+    // a customer's assistant reply). Only that actor or staff may read it — ai:use alone (held by
+    // every seller) is not sufficient. Prevents a seller reading another actor's run.
+    const actor = toActor(principal);
+    if (actor.type !== 'staff' && run.actorId !== actor.id) {
+      throw new ForbiddenException('Not permitted to read this AI run');
+    }
     return {
       id: run.id,
       taskType: run.taskType,
@@ -305,6 +318,12 @@ export class AiService {
     const run = await this.prisma.aiRun.findUnique({ where: { id: aiRunId } });
     if (!run) throw new NotFoundException('AI run not found');
     const actor = toActor(principal);
+    // Only the run's creating actor or staff may attach feedback — otherwise any ai:use holder
+    // (every seller) could pollute the platform-wide evaluation aggregate with verdicts on runs
+    // they never saw.
+    if (actor.type !== 'staff' && run.actorId !== actor.id) {
+      throw new ForbiddenException('Not permitted to record feedback on this AI run');
+    }
     const id = newId();
     return this.uow.execute(actor, async (ctx) => {
       await ctx.tx.aiFeedback.create({

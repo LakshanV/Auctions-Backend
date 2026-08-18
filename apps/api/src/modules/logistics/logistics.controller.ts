@@ -51,8 +51,8 @@ export class LogisticsController {
 
   @Get('shipments/:id')
   @RequirePermissions(Permission.ExchangeParticipate)
-  getShipment(@Param('id') id: string) {
-    return this.logistics.getShipment(id);
+  getShipment(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.logistics.getShipment(principal, id);
   }
 
   @Post('shipments/:id/events')

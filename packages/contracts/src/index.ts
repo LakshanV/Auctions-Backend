@@ -3,6 +3,7 @@ export * from './events';
 export * from './api';
 export * from './rbac';
 export * from './categories';
+export * from './category-fields';
 export * from './commands';
 export * from './config-domains';
 export * from './listing-domains';

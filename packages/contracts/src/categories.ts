@@ -17,13 +17,22 @@ export const CATEGORY_KEYS = [
 ] as const;
 export type CategoryKey = (typeof CATEGORY_KEYS)[number];
 
+// Additive rule: new fields are added OPTIONAL so existing assets (which lack them) keep validating
+// against version 1 — no destructive change, no version bump (directive §4 "version all category
+// evolution so old assets remain valid"). Making a field required later needs a new version.
 const vehiclesV1 = z.object({
   make: z.string().min(1),
   model: z.string().min(1),
   year: z.number().int().min(1900).max(2100),
+  variant: z.string().optional(),
   mileageKm: z.number().int().nonnegative().optional(),
   fuel: z.enum(['petrol', 'diesel', 'hybrid', 'electric', 'other']).optional(),
+  transmission: z.enum(['manual', 'automatic', 'other']).optional(),
+  bodyType: z.string().optional(),
   registration: z.string().optional(),
+  damageNotes: z.string().optional(),
+  keysPresent: z.boolean().optional(),
+  runsAndDrives: z.boolean().optional(),
 });
 
 const machineryV1 = z.object({
@@ -31,6 +40,9 @@ const machineryV1 = z.object({
   model: z.string().min(1),
   year: z.number().int().min(1900).max(2100).optional(),
   hoursUsed: z.number().int().nonnegative().optional(),
+  attachments: z.string().optional(),
+  serialNumber: z.string().optional(),
+  operational: z.boolean().optional(),
   condition: z.enum(['new', 'used', 'refurbished', 'for_parts']).optional(),
 });
 
@@ -39,8 +51,12 @@ const gemsV1 = z.object({
   caratWeight: z.number().positive(),
   colour: z.string().optional(),
   clarity: z.string().optional(),
+  shape: z.string().optional(),
+  dimensionsMm: z.string().optional(),
   origin: z.string().optional(),
   certified: z.boolean().optional(),
+  certificateRef: z.string().optional(),
+  treatment: z.string().optional(),
 });
 
 const propertyV1 = z.object({
@@ -48,16 +64,21 @@ const propertyV1 = z.object({
   extentPerches: z.number().positive().optional(),
   district: z.string().optional(),
   address: z.string().optional(),
+  access: z.string().optional(),
 });
 
 const bulkV1 = z.object({
   itemType: z.string().min(1),
   quantity: z.number().int().positive(),
   unit: z.string().min(1),
+  grade: z.string().optional(),
+  packing: z.string().optional(),
+  minOrderQuantity: z.number().nonnegative().optional(),
 });
 
 const generalV1 = z.object({
   description: z.string().optional(),
+  condition: z.enum(['new', 'used', 'refurbished', 'for_parts', 'salvage']).optional(),
 });
 
 export interface CategorySchema {

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { UNIT_DEFINITIONS } from '@singha/contracts';
+import { CATEGORY_FIELD_SCHEMAS, UNIT_DEFINITIONS } from '@singha/contracts';
 import { activeSaleMethods } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -17,6 +17,15 @@ export class PlatformConfigService {
 
   saleMethods() {
     return activeSaleMethods();
+  }
+
+  /**
+   * Customer-safe category field descriptors (directive §2/§3) — the presentation contract the
+   * seller Listing Studio renders as a dynamic form. Authoritative validation still happens
+   * server-side against the versioned Zod `CATEGORY_SCHEMAS`. Non-sensitive reference data.
+   */
+  categorySchemas() {
+    return Object.values(CATEGORY_FIELD_SCHEMAS);
   }
 
   units() {

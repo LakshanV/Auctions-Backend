@@ -30,40 +30,40 @@ Also found and **already fixed** this session: `main` CI had been red since RW2 
 
 Legend for cells: ✅ done · ◑ partial · ✗ missing/incorrect · n/a. "Final State" is the target class.
 
-| Capability | Backend | Customer UI | Staff UI | Real Browser E2E | Provider | Final State |
-|---|---|---|---|---|---|---|
-| Seller category selection (config-driven) | ◑ schemas exist, no field-schema endpoint | ✗ hard-coded `CATEGORY_FIELDS`, no `bulk` | n/a | ✗ | local | **PARTIAL→build** |
-| Bulk/produce listing | ◑ `bulk` key + attrs | ✗ absent from wizard | n/a | ✗ | local | **INCORRECT→build** |
-| Scrap/material listing | ✗ no `scrap` key | ✗ | n/a | ✗ | local | **MISSING→additive schema** |
-| Dynamic sale methods | ✅ `GET /platform/sale-methods` (17 defs) | ✗ hard-coded 6-array | n/a | ✗ | local | **INCORRECT→wire** |
-| Multi-currency listing | ✅ `/fx/currencies`, per-currency exponent | ✗ LKR hard-coded, ×100 | n/a | ✗ | local | **INCORRECT→wire** |
-| Auction preference persistence | ✗ no model | ✗ local note only | ✗ | ✗ | local | **MISSING→build** |
-| Structured logistics (Incoterm/port) | ✅ Incoterm/port config | ◑ free-text city only in wizard | n/a | ◑ | local | **PARTIAL→wire** |
-| AI Vision photo intake | ✅ `POST /ai/vision/intake` | ✗ FE never calls it | n/a | ✗ | mock (PRV-1) | **INCORRECT→wire** |
-| Capture coach | ✅ kernel | ✗ no UI | n/a | ✗ | mock | **INCORRECT→wire** |
-| AI condition report | ✅ advisory fields | ✗ | n/a | ✗ | mock | **PARTIAL→wire** |
-| AI valuation | ✅ comparables-based | ✗ | n/a | ✗ | local | **PARTIAL→wire** |
-| AI eval harness | ✗ | n/a | n/a | ✗ | n/a | **MISSING→build** |
-| AI listing-draft contract | ✗ FE/BE shapes mismatch → 400; silent catch | ◑ button exists, always fails | n/a | ✗ | mock | **INCORRECT→fix** |
-| Document upload | ✅ pipeline | ✗ local filenames only | n/a | ✗ | mock scan | **INCORRECT→wire** |
-| Video upload | ✅ pipeline | ✗ URL text field | n/a | ✗ | mock scan | **INCORRECT→wire** |
-| 4-view demo media | ✅ seeder default 4 + manifest | ✅ 216 svg + 54 png committed | n/a | ◑ | local (real imagery PRV) | **ALREADY_CORRECT (real imagery PROVIDER_GATED)** |
-| Listing gallery (swipe/zoom/video) | n/a | ◑ cover+thumbs; no arrows/swipe/zoom/inline-video | n/a | ◑ | local | **PARTIAL→build** |
-| Seller verification projection | ◑ data exists, not projected | ✗ no badge/filter | n/a | ✗ | local | **MISSING→build** |
-| Inspection/certification evidence | ◑ port only, no model | ✗ | ✗ | ✗ | mock (PRV-3) | **PARTIAL→build** |
-| Server-resumable seller draft | ✗ | ✗ localStorage only | n/a | ✗ | local | **MISSING→build** |
-| Seller quality-control lifecycle | ◑ draft→review→approved exists | ◑ status shown | ◑ approve/reject | ◑ | local | **PARTIAL→extend** |
-| AI QC preflight before publish | ✗ | ✗ | ✗ | ✗ | local | **MISSING→build** |
-| System-generated public ref | ✗ seller invents | ✗ | n/a | ✗ | local | **INCORRECT→fix** |
-| Category subcategory/type IA | ✗ broad keys only | ✗ | n/a | ✗ | local | **MISSING→build** |
-| Live staff roles | ✗ single `live:operate` | ✗ placeholder console | ✗ | ✗ | mock | **INCORRECT→build** |
-| Live multi-lot sequencing | ◑ ordered lots, no state/current-lot | ✗ landing only | ✗ | ✗ | mock | **PARTIAL→build (migration)** |
-| Live customer experience | ◑ engine SSE reconnect ok | ✗ no live room | n/a | ◑ bidding only | mock stream | **PARTIAL→build** |
-| Homepage "attention" | ✅ `ExchangeActivity` real | ◑ at /account/activity, not home | n/a | ◑ | local | **PARTIAL→place** |
-| Local opportunities | ✗ | ✗ | n/a | ✗ | local | **MISSING→build** |
-| Services discovery | ◑ static tiles + 1 gated link | ◑ | n/a | ◑ | local | **PARTIAL→config-drive** |
-| OSS deterministic AI adapters | ✗ interface-only, no libs | n/a | n/a | ✗ | none | **MISSING→ship** |
-| WhatsApp / voice / payment / FX / logistics activation | ✅ ports+fakes | n/a | n/a | ✗ | PROVIDER_GATED | **PROVIDER_GATED** |
+| Capability                                             | Backend                                     | Customer UI                                       | Staff UI         | Real Browser E2E | Provider                 | Final State                                       |
+| ------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------- | ---------------- | ---------------- | ------------------------ | ------------------------------------------------- |
+| Seller category selection (config-driven)              | ◑ schemas exist, no field-schema endpoint   | ✗ hard-coded `CATEGORY_FIELDS`, no `bulk`         | n/a              | ✗                | local                    | **PARTIAL→build**                                 |
+| Bulk/produce listing                                   | ◑ `bulk` key + attrs                        | ✗ absent from wizard                              | n/a              | ✗                | local                    | **INCORRECT→build**                               |
+| Scrap/material listing                                 | ✗ no `scrap` key                            | ✗                                                 | n/a              | ✗                | local                    | **MISSING→additive schema**                       |
+| Dynamic sale methods                                   | ✅ `GET /platform/sale-methods` (17 defs)   | ✗ hard-coded 6-array                              | n/a              | ✗                | local                    | **INCORRECT→wire**                                |
+| Multi-currency listing                                 | ✅ `/fx/currencies`, per-currency exponent  | ✗ LKR hard-coded, ×100                            | n/a              | ✗                | local                    | **INCORRECT→wire**                                |
+| Auction preference persistence                         | ✗ no model                                  | ✗ local note only                                 | ✗                | ✗                | local                    | **MISSING→build**                                 |
+| Structured logistics (Incoterm/port)                   | ✅ Incoterm/port config                     | ◑ free-text city only in wizard                   | n/a              | ◑                | local                    | **PARTIAL→wire**                                  |
+| AI Vision photo intake                                 | ✅ `POST /ai/vision/intake`                 | ✗ FE never calls it                               | n/a              | ✗                | mock (PRV-1)             | **INCORRECT→wire**                                |
+| Capture coach                                          | ✅ kernel                                   | ✗ no UI                                           | n/a              | ✗                | mock                     | **INCORRECT→wire**                                |
+| AI condition report                                    | ✅ advisory fields                          | ✗                                                 | n/a              | ✗                | mock                     | **PARTIAL→wire**                                  |
+| AI valuation                                           | ✅ comparables-based                        | ✗                                                 | n/a              | ✗                | local                    | **PARTIAL→wire**                                  |
+| AI eval harness                                        | ✗                                           | n/a                                               | n/a              | ✗                | n/a                      | **MISSING→build**                                 |
+| AI listing-draft contract                              | ✗ FE/BE shapes mismatch → 400; silent catch | ◑ button exists, always fails                     | n/a              | ✗                | mock                     | **INCORRECT→fix**                                 |
+| Document upload                                        | ✅ pipeline                                 | ✗ local filenames only                            | n/a              | ✗                | mock scan                | **INCORRECT→wire**                                |
+| Video upload                                           | ✅ pipeline                                 | ✗ URL text field                                  | n/a              | ✗                | mock scan                | **INCORRECT→wire**                                |
+| 4-view demo media                                      | ✅ seeder default 4 + manifest              | ✅ 216 svg + 54 png committed                     | n/a              | ◑                | local (real imagery PRV) | **ALREADY_CORRECT (real imagery PROVIDER_GATED)** |
+| Listing gallery (swipe/zoom/video)                     | n/a                                         | ◑ cover+thumbs; no arrows/swipe/zoom/inline-video | n/a              | ◑                | local                    | **PARTIAL→build**                                 |
+| Seller verification projection                         | ◑ data exists, not projected                | ✗ no badge/filter                                 | n/a              | ✗                | local                    | **MISSING→build**                                 |
+| Inspection/certification evidence                      | ◑ port only, no model                       | ✗                                                 | ✗                | ✗                | mock (PRV-3)             | **PARTIAL→build**                                 |
+| Server-resumable seller draft                          | ✗                                           | ✗ localStorage only                               | n/a              | ✗                | local                    | **MISSING→build**                                 |
+| Seller quality-control lifecycle                       | ◑ draft→review→approved exists              | ◑ status shown                                    | ◑ approve/reject | ◑                | local                    | **PARTIAL→extend**                                |
+| AI QC preflight before publish                         | ✗                                           | ✗                                                 | ✗                | ✗                | local                    | **MISSING→build**                                 |
+| System-generated public ref                            | ✗ seller invents                            | ✗                                                 | n/a              | ✗                | local                    | **INCORRECT→fix**                                 |
+| Category subcategory/type IA                           | ✗ broad keys only                           | ✗                                                 | n/a              | ✗                | local                    | **MISSING→build**                                 |
+| Live staff roles                                       | ✗ single `live:operate`                     | ✗ placeholder console                             | ✗                | ✗                | mock                     | **INCORRECT→build**                               |
+| Live multi-lot sequencing                              | ◑ ordered lots, no state/current-lot        | ✗ landing only                                    | ✗                | ✗                | mock                     | **PARTIAL→build (migration)**                     |
+| Live customer experience                               | ◑ engine SSE reconnect ok                   | ✗ no live room                                    | n/a              | ◑ bidding only   | mock stream              | **PARTIAL→build**                                 |
+| Homepage "attention"                                   | ✅ `ExchangeActivity` real                  | ◑ at /account/activity, not home                  | n/a              | ◑                | local                    | **PARTIAL→place**                                 |
+| Local opportunities                                    | ✗                                           | ✗                                                 | n/a              | ✗                | local                    | **MISSING→build**                                 |
+| Services discovery                                     | ◑ static tiles + 1 gated link               | ◑                                                 | n/a              | ◑                | local                    | **PARTIAL→config-drive**                          |
+| OSS deterministic AI adapters                          | ✗ interface-only, no libs                   | n/a                                               | n/a              | ✗                | none                     | **MISSING→ship**                                  |
+| WhatsApp / voice / payment / FX / logistics activation | ✅ ports+fakes                              | n/a                                               | n/a              | ✗                | PROVIDER_GATED           | **PROVIDER_GATED**                                |
 
 ## Per-section classification (evidence + smallest safe fix)
 
@@ -79,7 +79,7 @@ Legend for cells: ✅ done · ◑ partial · ✗ missing/incorrect · n/a. "Fina
   endpoint.
 - **§6 Multi-currency seller flow — INCORRECT.** `/fx/currencies` + per-currency exponent exist;
   wizard hard-codes LKR + ×100 (`format.ts:4,11`; `sell/new/page.tsx:360`). **Fix:** currency selector
-  + `formatMoneyExp`/`CurrencyAmountInput` (already built for Evolution) in the listing path.
+  - `formatMoneyExp`/`CurrencyAmountInput` (already built for Evolution) in the listing path.
 - **§7 Auction settings must persist — MISSING.** Opening/reserve/increment captured then dropped to
   a note (`sell/new/page.tsx:410-411`); no backend model. **Fix:** `SellerAuctionPreference` model +
   `POST /listings/:id/auction-preferences` (staff-approvable), FE persists.
@@ -91,7 +91,7 @@ Legend for cells: ✅ done · ◑ partial · ✗ missing/incorrect · n/a. "Fina
   persistence. **Fix:** photo-first intake step + capture coach + per-field accept/edit/reject that
   records the human decision.
 - **§11 AI listing-draft contract drift — INCORRECT (real bug).** FE sends `{category,attributes,
-  notes}`; BE requires `{assetId,locale}` → every call 400s; `catch{return null}` hides it
+notes}`; BE requires `{assetId,locale}` → every call 400s; `catch{return null}` hides it
   (`api.ts:80-89,86-88`). **Fix:** align the contract, remove the silent swallow, add telemetry, add a
   FE↔BE contract test.
 - **§13 OSS deterministic adapters — MISSING.** No sharp/exif/tesseract/opencv/onnx installed; only

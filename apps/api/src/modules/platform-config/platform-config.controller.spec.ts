@@ -10,6 +10,7 @@ function makeController(features: Features): PlatformConfigController {
   const platform = {
     saleMethods: () => [{ code: 'TIMED_AUCTION' }],
     units: () => [{ code: 'kg' }],
+    categorySchemas: () => [{ key: 'vehicles', version: 1, label: 'Vehicles', fields: [] }],
     markets: async () => [],
     operators: async () => [],
     marketNodes: async () => [],
@@ -38,6 +39,16 @@ describe('PlatformConfigController (Evolution E2 flag gating)', () => {
     expect(c.units().units[0]?.code).toBe('kg');
     await expect(c.markets()).resolves.toEqual({ markets: [] });
     await expect(c.nodes()).resolves.toEqual({ nodes: [] });
+  });
+
+  it('serves category schemas UNGATED (always available to the seller Studio)', () => {
+    const c = makeController({
+      saleMethodConfig: false,
+      quantityUnits: false,
+      multiOperator: false,
+    });
+    // No flag turns this off — the config-driven seller form always needs it (directive §2/§3).
+    expect(c.categorySchemas().categories[0]?.key).toBe('vehicles');
   });
 
   it('gates each surface independently (units on, others off)', async () => {

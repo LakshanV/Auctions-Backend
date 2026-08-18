@@ -20,6 +20,14 @@ export class PlatformConfigController {
     if (!this.config.get().features[flag]) throw new NotFoundException('Not found');
   }
 
+  // Ungated: category field schemas are non-sensitive core taxonomy the seller Listing Studio
+  // always needs to render a config-driven form (directive §2/§3) — no rollout risk, no operator
+  // identity. The frontend must consume this instead of hard-coding a private category universe.
+  @Get('category-schemas')
+  categorySchemas() {
+    return { categories: this.platform.categorySchemas() };
+  }
+
   @Get('sale-methods')
   saleMethods() {
     this.ensure('saleMethodConfig');

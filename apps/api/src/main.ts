@@ -56,6 +56,8 @@ async function bootstrap(): Promise<void> {
       // Unified Singha Cockpit owns the absolute /api/v2/me/cockpit path (unified-identity pass).
       { path: 'api/v2/me/cockpit', method: RequestMethod.GET },
       { path: 'api/v2/me/cockpit/account-health', method: RequestMethod.GET },
+      // Unified Activity Timeline projection (Cockpit correction pass).
+      { path: 'api/v2/me/cockpit/timeline', method: RequestMethod.GET },
       { path: 'api/v2/me/cockpit/ask', method: RequestMethod.POST },
     ],
   });

@@ -287,14 +287,19 @@ async function main() {
       health.status === 200 && (h?.status === 'clear' || h?.status === 'attention'),
       `account health is a deterministic status (${h?.status})`,
     );
-    check(typeof h?.bidCapacity?.availableMinor === 'number', 'health reports bid capacity facts');
     check(
-      h?.amountsToPay?.totalMinor > 0,
-      'health reports amounts to pay (X owes on its purchase)',
+      h?.bidCapacity === null || typeof h?.bidCapacity?.availableMinor === 'string',
+      'health reports bid capacity facts (null when no facility, else precision-safe string)',
     );
     check(
-      h?.sellerProceeds?.settledMinor > 0,
-      `health reports settled seller proceeds (${h?.sellerProceeds?.settledMinor})`,
+      Array.isArray(h?.amountsToPay?.byCurrency) &&
+        h.amountsToPay.byCurrency.some((b) => BigInt(b.total) > 0n),
+      'health reports amounts to pay (X owes on its purchase), grouped by currency',
+    );
+    check(
+      Array.isArray(h?.sellerProceeds?.byCurrency) &&
+        h.sellerProceeds.byCurrency.some((b) => BigInt(b.settled) > 0n),
+      `health reports settled seller proceeds (${JSON.stringify(h?.sellerProceeds?.byCurrency)})`,
     );
     check(
       !('score' in (h ?? {})) && !('creditScore' in (h ?? {})),
@@ -305,11 +310,16 @@ async function main() {
     const ask = async (question) =>
       (await v2post('/me/cockpit/ask', { token: xToken, body: { question } })).json;
     const aCap = await ask('How much can I bid?');
-    check(aCap?.intent === 'bid_capacity' && aCap?.facts?.bidCapacity, 'AI: “how much can I bid?”');
+    check(
+      aCap?.intent === 'bid_capacity' && 'bidCapacity' in (aCap?.facts ?? {}),
+      'AI: “how much can I bid?”',
+    );
     const aOwe = await ask('What money do I owe?');
     check(
-      aOwe?.intent === 'amounts_owed' && aOwe?.facts?.amountsToPay?.totalMinor > 0,
-      'AI: “what do I owe?” → authoritative owed amount',
+      aOwe?.intent === 'amounts_owed' &&
+        Array.isArray(aOwe?.facts?.amountsToPay?.byCurrency) &&
+        aOwe.facts.amountsToPay.byCurrency.some((b) => BigInt(b.total) > 0n),
+      'AI: “what do I owe?” → authoritative owed amount (per-currency)',
     );
     const aProceeds = await ask('What seller proceeds are pending?');
     check(aProceeds?.intent === 'seller_proceeds', 'AI: “what seller proceeds?”');

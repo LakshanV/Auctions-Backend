@@ -200,6 +200,12 @@ jobs:
       - name: E2E (cockpit — unified identity, account health, contextual AI)
         run: pnpm run test:cockpit
 
+      # Cockpit correction pass: multi-currency Account Health (per-currency grouping, no cross-sum,
+      # precision-safe money), authorised organisation context (one human, ≥1 org, never mixed) and
+      # the unified Activity Timeline projection (newest-first, not a second ledger).
+      - name: E2E (cockpit — multi-currency, org context, timeline)
+        run: pnpm run test:cockpit-context
+
       # MANDATORY security gate (pack P1 #13): the P0 negative regression suite —
       # privacy, media IDOR, storage integrity, AAL2/MFA and public-state leakage.
       # A regression here fails the build.

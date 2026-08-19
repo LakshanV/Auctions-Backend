@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CATEGORY_KEYS, isSubcategoryOf } from './categories';
 import { ALL_ROLES } from './rbac';
 import { incotermCodes } from './logistics-domains';
+import { currencyCodeSchema } from './fx-domains';
 
 /**
  * Command DTOs (docs/16). The API exposes business COMMANDS, not raw PATCH of
@@ -1057,6 +1058,24 @@ export const cockpitAskSchema = z.object({
   question: z.string().min(1).max(500),
 });
 export type CockpitAskInput = z.infer<typeof cockpitAskSchema>;
+
+/**
+ * Cockpit context + optional informational display currency (Cockpit correction pass).
+ * `org` selects an ORGANIZATION context the caller is an authorized member of — personal and
+ * organization financial/activity state are never mixed. `display` requests optional, informational
+ * FX-snapshot equivalents (never binding, never replacing the authoritative per-currency amounts).
+ */
+export const cockpitQuerySchema = z.object({
+  org: z.string().min(1).max(200).optional(),
+  display: currencyCodeSchema.optional(),
+});
+export type CockpitQuery = z.infer<typeof cockpitQuerySchema>;
+
+export const cockpitTimelineQuerySchema = z.object({
+  org: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export type CockpitTimelineQuery = z.infer<typeof cockpitTimelineQuerySchema>;
 
 /**
  * Staff CRM customer timeline (completion pass §18) — a bounded, chronological read over the

@@ -53,6 +53,10 @@ async function bootstrap(): Promise<void> {
       { path: 'api/v2/me/dashboard', method: RequestMethod.GET },
       // Dashboard-pilot instrumentation shares the absolute /api/v2/me path (doc 09).
       { path: 'api/v2/me/analytics', method: RequestMethod.POST },
+      // Unified Singha Cockpit owns the absolute /api/v2/me/cockpit path (unified-identity pass).
+      { path: 'api/v2/me/cockpit', method: RequestMethod.GET },
+      { path: 'api/v2/me/cockpit/account-health', method: RequestMethod.GET },
+      { path: 'api/v2/me/cockpit/ask', method: RequestMethod.POST },
     ],
   });
   app.enableShutdownHooks();

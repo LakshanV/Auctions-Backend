@@ -1047,6 +1047,17 @@ export const listCrmNotesQuerySchema = z.object({
 });
 export type ListCrmNotesQuery = z.infer<typeof listCrmNotesQuerySchema>;
 
+// ── Singha Cockpit — contextual assistant (unified-identity pass) ─────────────
+/**
+ * A free-text question the signed-in client asks their own cockpit ("what needs my attention?",
+ * "how much can I bid?", "what do I owe?"). The assistant INTERPRETS intent; authoritative Singha
+ * services provide every fact — the answer is never invented (rule 3/11).
+ */
+export const cockpitAskSchema = z.object({
+  question: z.string().min(1).max(500),
+});
+export type CockpitAskInput = z.infer<typeof cockpitAskSchema>;
+
 /**
  * Staff CRM customer timeline (completion pass §18) — a bounded, chronological read over the
  * authoritative records. It is a PROJECTION, never a second ledger, so it only takes a limit.

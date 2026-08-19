@@ -194,6 +194,12 @@ jobs:
       - name: E2E (connect — Agent Inbox, handoff, channel bid intent)
         run: pnpm run test:connect
 
+      # Unified Singha identity + Cockpit (unified-identity pass): ONE client buys, lists, responds
+      # to an RFQ and receives seller proceeds — the whole history on the SAME Customer + Client ID;
+      # the adaptive Cockpit, deterministic Account Health (no opaque score) and contextual AI.
+      - name: E2E (cockpit — unified identity, account health, contextual AI)
+        run: pnpm run test:cockpit
+
       # MANDATORY security gate (pack P1 #13): the P0 negative regression suite —
       # privacy, media IDOR, storage integrity, AAL2/MFA and public-state leakage.
       # A regression here fails the build.

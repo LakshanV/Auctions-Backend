@@ -192,6 +192,71 @@ async function main() {
     });
     check(sensitiveClose.json?.status === 'done', 'a human can close a sensitive task');
 
+    // ── Staff Customer 360 — transactional history (§3) ────────────────────────
+    const history = await get(`/crm/customers/${customerId}/history`, { token: staff });
+    check(
+      history.status === 200 &&
+        history.json?.customer?.id === customerId &&
+        history.json?.summary &&
+        typeof history.json.summary.openInvoices === 'number',
+      `staff reads a customer's transactional history (${history.status})`,
+    );
+    const custHistory = await get(`/crm/customers/${customerId}/history`, { token: customer });
+    check(
+      custHistory.status === 403,
+      `customer cannot read CRM history -> 403 (${custHistory.status})`,
+    );
+
+    // ── Staff Customer 360 — unified timeline (§18) ────────────────────────────
+    const timeline = await get(`/crm/customers/${customerId}/timeline`, { token: staff });
+    const kinds = Array.isArray(timeline.json?.entries)
+      ? timeline.json.entries.map((e) => e.kind)
+      : [];
+    check(
+      timeline.status === 200 && kinds.includes('note') && kinds.includes('task'),
+      'timeline merges the customer note + tasks chronologically',
+    );
+    // Descending chronological order (newest first).
+    const ordered =
+      Array.isArray(timeline.json?.entries) &&
+      timeline.json.entries.every((e, i, a) => i === 0 || a[i - 1].at >= e.at);
+    check(ordered, 'timeline entries are newest-first');
+    const custTimeline = await get(`/crm/customers/${customerId}/timeline`, { token: customer });
+    check(
+      custTimeline.status === 403,
+      `customer cannot read CRM timeline -> 403 (${custTimeline.status})`,
+    );
+
+    // ── Member 360 fold: contact + channels + CRM strip (§3/§19) ───────────────
+    const m360 = await get(`/members/${customerId}/360`, { token: staff });
+    check(
+      m360.status === 200 && m360.json?.contact && 'email' in m360.json.contact,
+      `member 360 exposes contact to staff (${m360.status})`,
+    );
+    check(Array.isArray(m360.json?.channels), 'member 360 includes channel identities array');
+    check(
+      m360.json?.crm &&
+        Array.isArray(m360.json.crm.openTasks) &&
+        Array.isArray(m360.json.crm.recentNotes),
+      'member 360 folds in the CRM strip (open tasks + recent notes)',
+    );
+    check(
+      (m360.json?.crm?.recentNotes ?? []).some((n) => n.id === noteId),
+      'the internal note appears in the 360 CRM strip',
+    );
+    check(
+      (m360.json?.crm?.openTasks ?? []).every(
+        (t) => t.status !== 'done' && t.status !== 'cancelled',
+      ),
+      'the 360 CRM strip lists only OPEN tasks (closed ones excluded)',
+    );
+    // A customer must never reach the staff 360.
+    const custM360 = await get(`/members/${customerId}/360`, { token: customer });
+    check(
+      custM360.status === 403,
+      `customer cannot read the staff member 360 -> 403 (${custM360.status})`,
+    );
+
     await prisma.$disconnect();
     if (failures > 0) {
       console.error(`\n${failures} CRM E2E check(s) failed.`);

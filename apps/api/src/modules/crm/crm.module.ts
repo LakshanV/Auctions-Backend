@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
 import { CrmController } from './crm.controller';
 import { CrmService } from './crm.service';
+import { CrmCustomerService } from './crm-customer.service';
 
 /**
- * Singha CRM (staff operations) module — internal notes + tasks/follow-ups (CRM completion pass).
- * PrismaService + UnitOfWork are global; the service is exported so the member/360 projection can
- * fold a customer's open tasks + recent notes into the staff Customer 360.
+ * Singha CRM (staff operations) module — internal notes + tasks/follow-ups + the staff Customer
+ * 360 projections (history / unified timeline / CRM strip). PrismaService + UnitOfWork are global;
+ * CrmService and CrmCustomerService are exported so the member/360 view can fold a customer's
+ * channel identities, open tasks and recent notes into the staff Member 360.
  */
 @Module({
   controllers: [CrmController],
-  providers: [CrmService],
-  exports: [CrmService],
+  providers: [CrmService, CrmCustomerService],
+  exports: [CrmService, CrmCustomerService],
 })
 export class CrmModule {}

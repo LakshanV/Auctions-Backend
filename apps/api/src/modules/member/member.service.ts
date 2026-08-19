@@ -32,6 +32,7 @@ import { UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-wo
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 import { CreditExposureService } from './credit-exposure.service';
+import { CrmCustomerService } from '../crm/crm-customer.service';
 
 /**
  * Member identity, credit, security & performance engine (Revision 05). Binding
@@ -45,6 +46,7 @@ export class MemberService {
     private readonly prisma: PrismaService,
     private readonly uow: UnitOfWork,
     private readonly exposure: CreditExposureService,
+    private readonly crmCustomer: CrmCustomerService,
   ) {}
 
   // ---- Security instruments --------------------------------------------------
@@ -624,32 +626,38 @@ export class MemberService {
       throw new ForbiddenException('member:read required');
     }
     const customer = await this.requireCustomer(customerId);
-    const [memberships, grants, securities, facility, flags, performance, org] = await Promise.all([
-      this.prisma.membership.findMany({ where: { customerId }, orderBy: { createdAt: 'desc' } }),
-      this.prisma.membershipAccessGrant.findMany({
-        where: { customerId, status: 'active' },
-        orderBy: { expiresAt: 'desc' },
-      }),
-      this.prisma.securityInstrument.findMany({
-        where: { customerId },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.exposure.availability(customerId),
-      this.prisma.memberFlag.findMany({ where: { customerId }, orderBy: { createdAt: 'desc' } }),
-      this.prisma.performanceSnapshot.findMany({
-        where: { customerId },
-        orderBy: { generatedAt: 'desc' },
-        take: 2,
-      }),
-      this.prisma.organizationMember.findFirst({
-        where: { customerId },
-        include: { organization: true },
-      }),
-    ]);
+    const [memberships, grants, securities, facility, flags, performance, org, crm] =
+      await Promise.all([
+        this.prisma.membership.findMany({ where: { customerId }, orderBy: { createdAt: 'desc' } }),
+        this.prisma.membershipAccessGrant.findMany({
+          where: { customerId, status: 'active' },
+          orderBy: { expiresAt: 'desc' },
+        }),
+        this.prisma.securityInstrument.findMany({
+          where: { customerId },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.exposure.availability(customerId),
+        this.prisma.memberFlag.findMany({ where: { customerId }, orderBy: { createdAt: 'desc' } }),
+        this.prisma.performanceSnapshot.findMany({
+          where: { customerId },
+          orderBy: { generatedAt: 'desc' },
+          take: 2,
+        }),
+        this.prisma.organizationMember.findFirst({
+          where: { customerId },
+          include: { organization: true },
+        }),
+        // CRM strip (completion pass §3/§19): channel identities + open tasks + recent internal
+        // notes. Staff-internal — folded into the staff 360, NEVER into the customer self view.
+        this.crmCustomer.crmStrip(customerId),
+      ]);
     return {
       clientReference: customer.clientReference,
       customerId: customer.id,
       legalName: customer.legalName,
+      // Contact is masked in member SEARCH; the full 360 shows it to staff who opened the record.
+      contact: { email: customer.email, phone: customer.phone },
       kycStatus: customer.kycStatus,
       roles: await this.deriveRoles(customerId),
       organization: org
@@ -675,6 +683,9 @@ export class MemberService {
         components: p.components,
         generatedAt: p.generatedAt,
       })),
+      // Channel identities + open CRM tasks + recent internal notes (staff-only).
+      channels: crm.channels,
+      crm: { openTasks: crm.openTasks, recentNotes: crm.recentNotes },
     };
   }
 

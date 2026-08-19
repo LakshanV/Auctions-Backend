@@ -2,17 +2,20 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import {
   type CreateCrmNoteInput,
   type CreateCrmTaskInput,
+  type CrmTimelineQuery,
   type ListCrmNotesQuery,
   type ListCrmTasksQuery,
   Permission,
   type UpdateCrmTaskInput,
   createCrmNoteSchema,
   createCrmTaskSchema,
+  crmTimelineQuerySchema,
   listCrmNotesQuerySchema,
   listCrmTasksQuerySchema,
   updateCrmTaskSchema,
 } from '@singha/contracts';
 import { CrmService } from './crm.service';
+import { CrmCustomerService } from './crm-customer.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
 import { type Principal } from '../../shared/auth/principal';
@@ -25,7 +28,26 @@ import { ZodBody, ZodQuery } from '../../shared/validation/zod.pipe';
  */
 @Controller('crm')
 export class CrmController {
-  constructor(private readonly crm: CrmService) {}
+  constructor(
+    private readonly crm: CrmService,
+    private readonly crmCustomer: CrmCustomerService,
+  ) {}
+
+  // ── Staff Customer 360 projections (§3/§18) ─────────────────────────────────
+  @Get('customers/:customerId/history')
+  @RequirePermissions(Permission.CrmRead)
+  customerHistory(@Param('customerId') customerId: string) {
+    return this.crmCustomer.history(customerId);
+  }
+
+  @Get('customers/:customerId/timeline')
+  @RequirePermissions(Permission.CrmRead)
+  customerTimeline(
+    @Param('customerId') customerId: string,
+    @Query(new ZodQuery(crmTimelineQuerySchema)) query: CrmTimelineQuery,
+  ) {
+    return this.crmCustomer.timeline(customerId, query);
+  }
 
   @Post('notes')
   @RequirePermissions(Permission.CrmManage)

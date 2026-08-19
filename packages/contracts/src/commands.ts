@@ -1021,3 +1021,12 @@ export const listCrmNotesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 export type ListCrmNotesQuery = z.infer<typeof listCrmNotesQuerySchema>;
+
+/**
+ * Staff CRM customer timeline (completion pass §18) — a bounded, chronological read over the
+ * authoritative records. It is a PROJECTION, never a second ledger, so it only takes a limit.
+ */
+export const crmTimelineQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export type CrmTimelineQuery = z.infer<typeof crmTimelineQuerySchema>;

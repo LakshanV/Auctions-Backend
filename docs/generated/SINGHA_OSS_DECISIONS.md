@@ -102,3 +102,71 @@ The deterministic local tasks are now REAL implementations, not interface+mock:
 
 Weights-licence note re-confirmed: sharp/libvips/exifr carry no model weights (pure algorithms), so
 there is no non-commercial-weights risk for the shipped deterministic layer.
+
+---
+
+# CRM / Operations OSS Completion Pass (§8–§16, §24)
+
+Second OSS evaluation round, for the CRM / operations / analytics enhancement pass. The governing
+constraint is stronger than "prefer permissive": **Singha stays the single source of truth for
+Customer, Singha ID, KYC, orgs, assets, auctions, bids, offers, tenders, procurement, supply,
+payments, logistics, Buyer Twin, conversations, AI provenance, audit and permissions.** Any OSS
+component is adopted **only as a replaceable sidecar / adapter that never becomes a second source
+of truth** — it reads a projection or runs alongside; it never owns an authoritative record.
+
+## Decision summary
+
+| Component                 | Role considered                          | Licence                                       | Verdict (this pass)                          | Rationale                                                                                                                                                                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------- | --------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Twenty CRM**            | generic CRM system of record             | **AGPL-3.0** + separate enterprise licence    | ❌ **DO NOT EMBED / NOT ADOPTED**            | AGPL copyleft is unsafe to embed in proprietary software, and adopting a generic CRM as the customer/company record would create a **second source of truth** competing with Singha's authoritative Customer/Singha ID — the exact anti-goal. Singha-native CRM primitives built instead (see below).                         |
+| **Chatwoot**              | agent inbox / omnichannel helpdesk UI    | MIT (community) + enterprise add-ons          | ⭕ **OPTIONAL sidecar — deferred**           | A capable OSS inbox, but the pilot needs the inbox to act on **Singha's** authoritative conversations, bid-intents and RBAC. Built a **Singha-native Agent Inbox** (§4) over the existing Connect model instead. Chatwoot remains a possible future front-end sidecar via the Connect adapter — never the conversation store. |
+| **Apache Superset**       | staff BI / dashboards / Market Pulse     | **Apache-2.0**                                | ✅ **RECOMMENDED (P2) — owner-deploys**      | Read-only BI over a **read replica / warehouse projection**, never writing to authoritative tables. Permissive licence, self-hostable, no lock-in. Owner-gated (needs infra + a replica). Singha keeps owning the numbers; Superset only visualises them.                                                                     |
+| **OpenTelemetry**         | tracing / metrics / logs standard        | **Apache-2.0**                                | ✅ **ADOPTED (P1d — shipped)**               | Vendor-neutral instrumentation; the OTLP exporter is the single replaceable seam (any collector). Wired disabled-by-default in the API (`apps/api/src/tracing.ts`). No lock-in — see the OpenTelemetry decision detail below.                                                                                                 |
+| **pgvector**              | first vector layer (semantic/dup search) | **PostgreSQL licence** (BSD-like, permissive) | ✅ **RECOMMENDED (P2) — first vector layer** | Vectors live **inside the authoritative Postgres** (one datastore, one backup/restore, one security boundary) — no separate vector store to keep in sync. Adopt when semantic search / duplicate-item / Buyer-Twin similarity needs it.                                                                                       |
+| **Qdrant**                | scale-out vector database                | Apache-2.0                                    | ⏸️ **DEFER (P3) — scale-out only**           | Only if/when pgvector is outgrown (very large vector volume / latency). Adds a second datastore to operate + sync, so it is a scale decision, not a pilot one.                                                                                                                                                                |
+| **Meilisearch**           | typo-tolerant catalogue search           | MIT                                           | ⏸️ **DEFER (P3) — benchmark-gated**          | Current search is Postgres `ILIKE`/FTS, adequate at pilot catalogue scale. Adopt only after a benchmark shows Postgres FTS is the bottleneck; behind a `SearchProvider` adapter so the catalogue domain never changes.                                                                                                        |
+| **PaddleOCR / Tesseract** | OCR (plates, VIN, serial tags)           | Apache-2.0 (both)                             | ✅ **benchmark PaddleOCR vs Tesseract**      | Already covered in the Vision OSS section above. Both permissive, CPU-local, deterministic; PROVIDER_GATED on model weights.                                                                                                                                                                                                  |
+| **Temporal**              | durable long-running workflow engine     | MIT                                           | ⏸️ **DEFER (P3 / optional)**                 | The **transactional outbox + BullMQ** already cover current async needs (settlement, notifications, media). Temporal only earns its operational weight for genuinely long-running, multi-day human-in-the-loop sagas — not yet.                                                                                               |
+
+## What was built Singha-native instead (this pass)
+
+Rather than adopt a generic CRM, the pass added **authoritative, Singha-native** CRM primitives so
+no second source of truth is introduced:
+
+- **CRM Notes + Tasks** (`crm` module) — append-only internal notes (DB-trigger enforced) + polymorphic
+  follow-up tasks linked to existing authoritative records. A sensitive (compliance/financial) task
+  can only be closed by a human; AI may suggest, never silently close.
+- **Staff Customer 360** — the identity/credit Member 360 extended with contact, channel identities,
+  a unified chronological **timeline projection** (a read model over the owning domains — never a
+  second ledger) and a transactional-history summary.
+- **Agent Inbox** — a staff queue over the existing Connect `Conversation` model with filters, SLA
+  signal, explicit assignment, a `resolved` lifecycle state, and an **advisory-only** AI reply
+  suggestion (drafts through the sanctioned, guarded `AI_PROVIDER`; the human sends).
+
+These are all first-party, RBAC-gated (`crm:read`/`crm:manage`/`connect:operate`), audited, and
+staff-internal (never exposed to a customer surface, §19).
+
+## OpenTelemetry decision detail (§12 — ADOPTED, P1d)
+
+- **Selected:** OpenTelemetry (Apache-2.0) — `@opentelemetry/{sdk-node, api, resources,
+semantic-conventions, exporter-trace-otlp-http, instrumentation-http, instrumentation-nestjs-core}`.
+- **Replaceable exporter (no lock-in):** spans export over **OTLP/HTTP** using the standard
+  `OTEL_EXPORTER_OTLP_*` env — point it at Jaeger, Tempo, Grafana Alloy, an OTel Collector, or any
+  OTLP SaaS with **no code change**. The exporter is the single seam; there is no vendor SDK.
+- **Safe by default:** disabled unless `OTEL_ENABLED=true` or an OTLP endpoint is set; when off the
+  SDK never starts (zero cost). A misconfigured exporter degrades to no tracing and never takes the
+  API down (verified by boot test both ways). Health/readiness probes are excluded from tracing.
+- **Fits the existing seam:** the `@singha/observability` metrics layer was already designed as a
+  drop-in point; OTel complements the in-memory registry rather than replacing it.
+
+## Licence guardrails (this pass)
+
+- **No AGPL embedded in the product.** Twenty CRM (AGPL-3.0) is the concrete trap here → not embedded;
+  Singha-native primitives built instead. (Same rule that rejects Ultralytics YOLO in the Vision pass.)
+- **No second source of truth.** Every adopted or deferred component is a sidecar/adapter over a
+  projection or replica; authoritative records never move out of Singha's Postgres.
+- **Permissive-first.** Adopted components this pass (OpenTelemetry, pgvector, Superset) are all
+  Apache-2.0 / PostgreSQL-licence. Deferred ones (Meilisearch MIT, Qdrant Apache-2.0, Temporal MIT)
+  are permissive too — deferral is about operational weight/benefit, not licence.
+- **Replaceable behind an adapter.** Search, vector, BI and inbox all sit behind (or would sit behind)
+  a Singha interface, so swapping engines never touches the domain.

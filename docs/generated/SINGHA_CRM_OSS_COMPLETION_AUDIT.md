@@ -1,5 +1,12 @@
 # SINGHA — CRM / Operations / OSS Completion Audit (§1)
 
+> **STATUS UPDATE:** this is the point-in-time §1 audit that opened the pass. The P1 gaps it
+> flagged (CRM notes/tasks, staff Customer 360 + unified timeline, Agent Inbox, OpenTelemetry) are
+> now **built, tested and wired** — see `SINGHA_CRM_OSS_FINAL_REPORT.md` (§27) for the completed
+> state, the before→after re-classification, and the verdict
+> `ENGINEERING_COMPLETE_FOR_CONTROLLED_PILOT_WITH_OWNER_ACTIONS`. OSS decisions are in
+> `SINGHA_OSS_DECISIONS.md`.
+
 _Directive: CRM, Operations & Open-Source Enhancement Completion Pass. Method: audit → decide →
 integrate → test. Classifications from 6 parallel read-only source audits over both repos
 (backend `Auctions-Backend/apps/api`, frontend `Auctions-New/apps/web`; the frozen `apps/api`/

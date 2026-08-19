@@ -1,3 +1,7 @@
+// OpenTelemetry MUST initialise before any instrumented module (HTTP/Nest) is imported, so this is
+// the very first import. It is a no-op unless OTEL is explicitly enabled, and self-registers its
+// own SIGTERM/SIGINT span flush (see tracing.ts).
+import './tracing';
 import 'reflect-metadata';
 import { Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';

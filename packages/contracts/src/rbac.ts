@@ -92,6 +92,9 @@ export const Permission = {
   PerformanceRead: 'performance:read',
   MemberFlagRead: 'member-flag:read',
   MemberFlagManage: 'member-flag:manage',
+  // Singha CRM (staff operations) — internal notes, tasks, follow-ups (CRM completion pass).
+  CrmRead: 'crm:read',
+  CrmManage: 'crm:manage',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
 export const ALL_PERMISSIONS = Object.values(Permission) as [Permission, ...Permission[]];
@@ -166,6 +169,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.CreditRead,
     P.PerformanceRead,
     P.MemberFlagRead,
+    P.CrmRead,
+    P.CrmManage,
   ],
   // RW6 scoped Singha Live floor roles — each holds exactly its slice (auction staff hold all).
   [Role.Auctioneer]: [P.LiveConduct],
@@ -184,8 +189,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.CreditOverride,
     P.CreditSuspend,
     P.PerformanceRead,
+    P.CrmRead,
+    P.CrmManage,
   ],
-  [Role.Support]: [P.CustomerRead, P.ConnectOperate, P.MemberRead],
+  [Role.Support]: [P.CustomerRead, P.ConnectOperate, P.MemberRead, P.CrmRead, P.CrmManage],
   [Role.Compliance]: [
     P.CustomerRead,
     P.KycManage,
@@ -196,6 +203,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     P.PerformanceRead,
     P.MemberFlagRead,
     P.MemberFlagManage,
+    P.CrmRead,
+    P.CrmManage,
   ],
   [Role.Admin]: [...ALL_PERMISSIONS],
   [Role.SuperAdmin]: [...ALL_PERMISSIONS],

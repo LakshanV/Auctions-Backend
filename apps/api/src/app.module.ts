@@ -47,6 +47,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MediaModule } from './modules/media/media.module';
 import { DevModule } from './modules/dev/dev.module';
 import { MemberModule } from './modules/member/member.module';
+import { CrmModule } from './modules/crm/crm.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { PlatformConfigModule } from './modules/platform-config/platform-config.module';
@@ -108,6 +109,7 @@ import { PrincipalMiddleware } from './shared/auth/principal.middleware';
     MediaModule,
     DevModule,
     MemberModule,
+    CrmModule,
     DiscoveryModule,
     EngagementModule,
     PlatformConfigModule,

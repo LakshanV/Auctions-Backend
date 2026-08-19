@@ -184,6 +184,9 @@ jobs:
       - name: E2E (member — Client ID, credit exposure, security, performance)
         run: pnpm run test:member
 
+      - name: E2E (crm — staff notes + tasks/follow-ups, RBAC, append-only)
+        run: pnpm run test:crm
+
       # MANDATORY security gate (pack P1 #13): the P0 negative regression suite —
       # privacy, media IDOR, storage integrity, AAL2/MFA and public-state leakage.
       # A regression here fails the build.

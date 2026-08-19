@@ -2534,3 +2534,109 @@ model AssetInspectionEvidence {
   @@index([assetId, visibility])
   @@map("asset_inspection_evidence")
 }
+
+// ── Singha CRM (staff operations) — authoritative, Singha-native (CRM completion pass) ────────
+// Notes + tasks are FIRST-CLASS, polymorphic, permissioned and audited. They are staff-internal
+// and NEVER customer-visible (an AI assistant must never quote a private staff note to a customer,
+// directive §19). Singha remains the source of truth — these do not duplicate any customer master.
+
+enum CrmSubjectType {
+  customer
+  organization
+  listing
+  auction
+  sale
+  conversation
+  shipment
+  procurement_request
+}
+
+enum CrmNoteVisibility {
+  staff // any staff holding crm:read
+  restricted // compliance / management only
+}
+
+// Append-only internal note (a DB trigger blocks UPDATE/DELETE — corrections are new notes).
+model CrmNote {
+  id          String            @id
+  subjectType CrmSubjectType    @map("subject_type")
+  subjectId   String            @map("subject_id")
+  body        String
+  visibility  CrmNoteVisibility @default(staff)
+  authorId    String?           @map("author_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@index([subjectType, subjectId])
+  @@map("crm_note")
+}
+
+enum CrmTaskType {
+  call
+  follow_up
+  document_request
+  quality_review
+  post_win_contact
+  shipment_delay
+  payment_action
+  rfq_review
+  inspection
+  general
+}
+
+enum CrmTaskPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum CrmTaskStatus {
+  open
+  in_progress
+  blocked
+  done
+  cancelled
+}
+
+enum CrmTaskSource {
+  human
+  ai_suggested
+}
+
+model CrmTask {
+  id             String          @id
+  title          String
+  description    String?
+  type           CrmTaskType     @default(general)
+  priority       CrmTaskPriority @default(normal)
+  status         CrmTaskStatus   @default(open)
+  // Polymorphic links — a task may relate to any subset of these authoritative records.
+  customerId     String?         @map("customer_id")
+  organizationId String?         @map("organization_id")
+  listingId      String?         @map("listing_id")
+  auctionId      String?         @map("auction_id")
+  saleId         String?         @map("sale_id")
+  conversationId String?         @map("conversation_id")
+  shipmentId     String?         @map("shipment_id")
+  // Assignment.
+  assigneeId     String?         @map("assignee_id")
+  team           String?
+  // Scheduling.
+  dueAt          DateTime?       @map("due_at")
+  remindAt       DateTime?       @map("remind_at")
+  // Provenance: AI may SUGGEST a task, never auto-close it. "sensitive" (compliance/financial)
+  // tasks require an explicit human close — enforced in the service (AI is never a JWT principal).
+  source         CrmTaskSource   @default(human)
+  sensitive      Boolean         @default(false)
+  result         String?
+  createdBy      String?         @map("created_by")
+  completedBy    String?         @map("completed_by")
+  completedAt    DateTime?       @map("completed_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@index([status, dueAt])
+  @@index([assigneeId, status])
+  @@index([customerId, status])
+  @@map("crm_task")
+}

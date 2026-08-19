@@ -917,3 +917,107 @@ export const sellerAuctionPreferenceSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 export type SellerAuctionPreferenceInput = z.infer<typeof sellerAuctionPreferenceSchema>;
+
+// ── Singha CRM (staff operations) DTOs (CRM completion pass) ──────────────────
+export const crmSubjectTypeValues = [
+  'customer',
+  'organization',
+  'listing',
+  'auction',
+  'sale',
+  'conversation',
+  'shipment',
+  'procurement_request',
+] as const;
+export const crmTaskTypeValues = [
+  'call',
+  'follow_up',
+  'document_request',
+  'quality_review',
+  'post_win_contact',
+  'shipment_delay',
+  'payment_action',
+  'rfq_review',
+  'inspection',
+  'general',
+] as const;
+export const crmTaskPriorityValues = ['low', 'normal', 'high', 'urgent'] as const;
+export const crmTaskStatusValues = ['open', 'in_progress', 'blocked', 'done', 'cancelled'] as const;
+export const crmNoteVisibilityValues = ['staff', 'restricted'] as const;
+
+const crmId = z.string().min(1).max(200);
+
+export const createCrmNoteSchema = z.object({
+  subjectType: z.enum(crmSubjectTypeValues),
+  subjectId: crmId,
+  body: z.string().min(1).max(5000),
+  visibility: z.enum(crmNoteVisibilityValues).default('staff'),
+});
+export type CreateCrmNoteInput = z.infer<typeof createCrmNoteSchema>;
+
+export const createCrmTaskSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(5000).optional(),
+    type: z.enum(crmTaskTypeValues).default('general'),
+    priority: z.enum(crmTaskPriorityValues).default('normal'),
+    customerId: crmId.optional(),
+    organizationId: crmId.optional(),
+    listingId: crmId.optional(),
+    auctionId: crmId.optional(),
+    saleId: crmId.optional(),
+    conversationId: crmId.optional(),
+    shipmentId: crmId.optional(),
+    assigneeId: crmId.optional(),
+    team: z.string().max(80).optional(),
+    dueAt: z.string().datetime().optional(),
+    remindAt: z.string().datetime().optional(),
+    source: z.enum(['human', 'ai_suggested']).default('human'),
+    sensitive: z.boolean().default(false),
+  })
+  .refine(
+    (v) =>
+      Boolean(
+        v.customerId ||
+        v.organizationId ||
+        v.listingId ||
+        v.auctionId ||
+        v.saleId ||
+        v.conversationId ||
+        v.shipmentId,
+      ),
+    { message: 'a task must link at least one subject', path: ['customerId'] },
+  );
+export type CreateCrmTaskInput = z.infer<typeof createCrmTaskSchema>;
+
+export const updateCrmTaskSchema = z
+  .object({
+    status: z.enum(crmTaskStatusValues).optional(),
+    priority: z.enum(crmTaskPriorityValues).optional(),
+    assigneeId: crmId.nullable().optional(),
+    team: z.string().max(80).nullable().optional(),
+    dueAt: z.string().datetime().nullable().optional(),
+    remindAt: z.string().datetime().nullable().optional(),
+    result: z.string().max(5000).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'no fields to update',
+  });
+export type UpdateCrmTaskInput = z.infer<typeof updateCrmTaskSchema>;
+
+export const listCrmTasksQuerySchema = z.object({
+  status: z.enum(crmTaskStatusValues).optional(),
+  assigneeId: z.string().max(200).optional(),
+  customerId: z.string().max(200).optional(),
+  type: z.enum(crmTaskTypeValues).optional(),
+  overdue: z.enum(['true', 'false']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type ListCrmTasksQuery = z.infer<typeof listCrmTasksQuerySchema>;
+
+export const listCrmNotesQuerySchema = z.object({
+  subjectType: z.enum(crmSubjectTypeValues),
+  subjectId: crmId,
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export type ListCrmNotesQuery = z.infer<typeof listCrmNotesQuerySchema>;

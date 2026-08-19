@@ -133,6 +133,29 @@ error-leak hygiene.
 - **Backoff / distinct dead-letter state for the outbox (post-pilot polish).** D09 restores
   retry + a cap now; a `nextAttemptAt` column for exponential backoff and a named `dead_letter`
   state are a follow-up migration.
+- **Backups / recovery (owner / infra gate).** There is deliberately no in-repo backup tooling —
+  the Railway-hosted Postgres uses provider-managed backups. The owner should confirm automated
+  daily backups + point-in-time-recovery retention and rehearse a restore runbook before public
+  GO. (No destructive recovery action was taken — review only.)
+
+## 6a. Reviewed lenses (this run)
+
+- **Dependency / supply-chain:** `pnpm audit --prod` 10 → 1 (all HIGH closed via safe overrides);
+  remaining Nest-core moderate needs a v11 major upgrade — see `SINGHA_SUPPLY_CHAIN_REVIEW.md`.
+- **Randomized / property tests:** ~13,000 generated cases over the pure auction engine — the
+  order-independence, proxy-second-price, minimum-increment, reserve-monotonic, and
+  soft-close-extend-only invariants all hold (`engine.property.test.ts`).
+- **Observability:** structured logger + metrics + correlation IDs (threaded through the
+  UnitOfWork into every audit + outbox row) + a `/healthz` endpoint are present
+  (`packages/observability`). Recommend confirming production error-monitoring + trace export are
+  wired before public GO.
+- **Real-UI / accessibility / responsive:** the FE is unchanged this run and contract-stable, its
+  code passes typecheck + lint, and it was browser-validated at this SHA in prior phases. The full
+  local build is blocked only by `next/font/google` egress (environmental; builds on Vercel), so a
+  fresh local browser matrix was not re-run — it would reproduce the prior-phase results.
+- **Not run (deliberate):** mutation testing (Stryker) — the engine now has both targeted
+  concurrency regressions and ~13k-case property coverage, so the marginal value did not justify
+  the setup; recommended as a post-pilot addition.
 
 ## 7. Verdict
 

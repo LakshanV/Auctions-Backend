@@ -6,6 +6,7 @@ import { issueContinuityToken } from '../../shared/auth/continuity-token';
 import { type PrismaService } from '../../prisma/prisma.service';
 import { type UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-work';
 import { type AuctionService } from '../auction/auction.service';
+import { type AiProvider } from '../ai/ai.provider';
 import { type MessageChannelProvider } from './channel.provider';
 import { type Principal } from '../../shared/auth/principal';
 
@@ -121,8 +122,13 @@ function makeHarness(
 
   const auctions = {} as unknown as AuctionService;
   const channel = { name: 'mock', send: vi.fn() } as unknown as MessageChannelProvider;
+  const ai = {
+    name: 'mock',
+    model: 'mock-1',
+    assist: vi.fn(async () => ({ reply: 'draft', confidence: 0.4 })),
+  } as unknown as AiProvider;
 
-  const service = new ConnectService(prisma, uow, auctions, channel);
+  const service = new ConnectService(prisma, uow, auctions, channel, ai);
   return {
     service,
     conversations,

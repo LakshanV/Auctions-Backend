@@ -148,6 +148,101 @@ async function main() {
       'handed off to a human agent',
     );
 
+    // ── Agent Inbox (§4) ──────────────────────────────────────────────────────
+    const anonConversationId = anon.json.conversationId;
+    const inbox = await get('/connect/conversations', { token: staffToken });
+    check(
+      Array.isArray(inbox.json?.conversations) &&
+        inbox.json.conversations.some((c) => c.id === conversationId),
+      'agent inbox lists conversations',
+    );
+    const byChannel = await get('/connect/conversations?channel=whatsapp', { token: staffToken });
+    check(
+      byChannel.json?.conversations?.every((c) => c.channel === 'whatsapp'),
+      'inbox filters by channel',
+    );
+    // wa-thread-1 has only an inbound message → awaiting staff; wa-thread-2's last msg is outbound.
+    const awaiting = await get('/connect/conversations?awaitingReply=true', { token: staffToken });
+    const awaitingIds = (awaiting.json?.conversations ?? []).map((c) => c.id);
+    check(
+      awaitingIds.includes(anonConversationId) && !awaitingIds.includes(conversationId),
+      'awaitingReply filter surfaces only threads whose last message is inbound',
+    );
+    check(
+      (awaiting.json?.conversations ?? []).every((c) => c.waitingOnStaff === true),
+      'every awaiting row is flagged waitingOnStaff with a wait time',
+    );
+    const inboxForbidden = await get('/connect/conversations', { token: buyerToken });
+    check(
+      inboxForbidden.status === 403,
+      `customer cannot read the agent inbox -> 403 (${inboxForbidden.status})`,
+    );
+
+    // Explicit assignment to a named agent (switches to human handling).
+    const assigned = await post(`/connect/conversations/${conversationId}/assign`, {
+      token: staffToken,
+      body: { agentId: 'agent-jenny' },
+    });
+    check(
+      assigned.json?.assignedAgentId === 'agent-jenny' && assigned.json?.aiMode === false,
+      'explicit assign sets the agent + human handling',
+    );
+    const assignForbidden = await post(`/connect/conversations/${conversationId}/assign`, {
+      token: buyerToken,
+      body: {},
+    });
+    check(
+      assignForbidden.status === 403,
+      `customer cannot assign -> 403 (${assignForbidden.status})`,
+    );
+
+    // AI-suggested reply — ADVISORY: returns a draft, sends NOTHING, creates no message.
+    const before = await get(`/connect/conversations/${conversationId}`, { token: staffToken });
+    const suggest = await post(`/connect/conversations/${conversationId}/suggest-reply`, {
+      token: staffToken,
+    });
+    check(
+      suggest.status === 201 &&
+        typeof suggest.json?.suggestion === 'string' &&
+        suggest.json?.sent === false &&
+        suggest.json?.blocked === false,
+      'suggest-reply returns an advisory draft (sent=false)',
+    );
+    const after = await get(`/connect/conversations/${conversationId}`, { token: staffToken });
+    check(
+      after.json?.messages?.length === before.json?.messages?.length,
+      'suggest-reply created NO message (nothing sent to the customer)',
+    );
+    const suggestForbidden = await post(`/connect/conversations/${conversationId}/suggest-reply`, {
+      token: buyerToken,
+    });
+    check(
+      suggestForbidden.status === 403,
+      `customer cannot request an AI suggestion -> 403 (${suggestForbidden.status})`,
+    );
+
+    // Resolve, then a new inbound reopens the thread (§4 lifecycle).
+    const resolved = await post(`/connect/conversations/${conversationId}/resolve`, {
+      token: staffToken,
+    });
+    check(resolved.json?.status === 'resolved', 'agent resolves a conversation');
+    const resolvedList = await get('/connect/conversations?status=resolved', { token: staffToken });
+    check(
+      (resolvedList.json?.conversations ?? []).some((c) => c.id === conversationId),
+      'resolved thread appears under the resolved filter',
+    );
+    await post('/connect/inbound', {
+      token: staffToken,
+      body: {
+        channel: 'whatsapp',
+        externalThreadId: 'wa-thread-2',
+        externalUserId: '94771234567',
+        text: 'One more question',
+      },
+    });
+    const reopened = await get(`/connect/conversations/${conversationId}`, { token: staffToken });
+    check(reopened.json?.status === 'open', 'a new inbound reopens a resolved thread');
+
     // --- Channel bidding: INTENT then explicit CONFIRM (rule 11) ---
     const asset = await post('/assets', {
       token: sellerToken,

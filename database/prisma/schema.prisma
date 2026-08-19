@@ -1212,6 +1212,10 @@ enum ConversationStatus {
   open
   pending
   closed
+  // Agent Inbox (CRM completion pass §4): a human agent has finished handling the thread. Distinct
+  // from `closed` (hard shut) — `resolved` is the normal end state of a worked conversation and can
+  // still be reopened by a new inbound message.
+  resolved
 }
 
 enum MessageDirection {

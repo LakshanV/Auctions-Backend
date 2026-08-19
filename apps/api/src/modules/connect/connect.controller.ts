@@ -1,12 +1,16 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
+  type AssignConversationInput,
   type CreateBidIntentInput,
   type InboundMessageInput,
+  type ListConversationsQuery,
   Permission,
   type SendMessageInput,
   type SetAiModeInput,
+  assignConversationSchema,
   createBidIntentSchema,
   inboundMessageSchema,
+  listConversationsQuerySchema,
   sendMessageSchema,
   setAiModeSchema,
 } from '@singha/contracts';
@@ -14,7 +18,7 @@ import { ConnectService } from './connect.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
 import { type Principal } from '../../shared/auth/principal';
-import { ZodBody } from '../../shared/validation/zod.pipe';
+import { ZodBody, ZodQuery } from '../../shared/validation/zod.pipe';
 
 /**
  * Singha Connect API (docs/09). Channel operations require `connect:operate`
@@ -33,10 +37,42 @@ export class ConnectController {
     return this.connect.inbound(principal, input);
   }
 
+  // Agent Inbox (§4) — the staff queue. Declared before the :id route so 'conversations' is not
+  // captured as an :id.
+  @Get('conversations')
+  @RequirePermissions(Permission.ConnectOperate)
+  listConversations(
+    @Query(new ZodQuery(listConversationsQuerySchema)) query: ListConversationsQuery,
+  ) {
+    return this.connect.listConversations(query);
+  }
+
   @Get('conversations/:id')
   @RequirePermissions(Permission.ConnectOperate)
   conversation(@Param('id') id: string) {
     return this.connect.conversation(id);
+  }
+
+  @Post('conversations/:id/assign')
+  @RequirePermissions(Permission.ConnectOperate)
+  assign(
+    @CurrentActor() principal: Principal,
+    @Param('id') id: string,
+    @Body(new ZodBody(assignConversationSchema)) input: AssignConversationInput,
+  ) {
+    return this.connect.assign(principal, id, input);
+  }
+
+  @Post('conversations/:id/resolve')
+  @RequirePermissions(Permission.ConnectOperate)
+  resolve(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.connect.resolve(principal, id);
+  }
+
+  @Post('conversations/:id/suggest-reply')
+  @RequirePermissions(Permission.ConnectOperate)
+  suggestReply(@CurrentActor() principal: Principal, @Param('id') id: string) {
+    return this.connect.suggestReply(principal, id);
   }
 
   @Post('conversations/:id/messages')

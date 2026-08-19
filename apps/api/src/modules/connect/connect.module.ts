@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuctionModule } from '../auction/auction.module';
+import { AiModule } from '../ai/ai.module';
 import { ConnectController } from './connect.controller';
 import { ConnectService } from './connect.service';
 import { CHANNEL_PROVIDER, MockChannelProvider } from './channel.provider';
@@ -13,7 +14,9 @@ import { VOICE_PROVIDER, MockVoiceProvider } from './voice.provider';
  * WhatsApp channel-request ack — never a second/parallel provider instance (constraint 3).
  */
 @Module({
-  imports: [AuctionModule],
+  // AiModule re-exports the SAME AI_PROVIDER binding (never a second instance) so the Agent Inbox
+  // suggest-reply drafts through the one sanctioned, guarded provider (CRM completion pass §4).
+  imports: [AuctionModule, AiModule],
   controllers: [ConnectController],
   providers: [
     ConnectService,

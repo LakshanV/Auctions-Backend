@@ -396,6 +396,31 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export const setAiModeSchema = z.object({ aiMode: z.boolean() });
 export type SetAiModeInput = z.infer<typeof setAiModeSchema>;
 
+// ── Agent Inbox (CRM completion pass §4) ──────────────────────────────────────
+export const conversationStatusValues = ['open', 'pending', 'closed', 'resolved'] as const;
+
+/** Staff Agent Inbox listing filters. All optional — an empty query lists the whole inbox. */
+export const listConversationsQuerySchema = z.object({
+  channel: z.enum(channelValues).optional(),
+  status: z.enum(conversationStatusValues).optional(),
+  assignedAgentId: z.string().max(200).optional(),
+  aiMode: z.enum(['true', 'false']).optional(),
+  unassigned: z.enum(['true', 'false']).optional(),
+  // `awaitingReply` surfaces only threads where the last message is inbound (customer waiting).
+  awaitingReply: z.enum(['true', 'false']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;
+
+/**
+ * Explicit assignment of a conversation to a human agent (§4). `agentId` omitted means "assign to
+ * me" (the calling agent). Assigning always switches the thread to human handling.
+ */
+export const assignConversationSchema = z.object({
+  agentId: z.string().min(1).max(200).optional(),
+});
+export type AssignConversationInput = z.infer<typeof assignConversationSchema>;
+
 /**
  * Messaging-channel bid INTENT (docs/07, rule 11). Free text becomes an intent —
  * never a bid — until explicitly confirmed and validated by the auction engine.

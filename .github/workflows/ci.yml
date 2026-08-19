@@ -187,6 +187,13 @@ jobs:
       - name: E2E (crm — staff notes + tasks/follow-ups, RBAC, append-only)
         run: pnpm run test:crm
 
+      # Singha Connect + Agent Inbox (CRM completion pass §4): verified-identity
+      # inbound resolution, threaded messages, AI↔human handoff, the staff inbox
+      # (filters + SLA + assign + resolve + reopen), the advisory-only AI reply
+      # suggestion (sends nothing), and the two-step channel bid intent→confirm.
+      - name: E2E (connect — Agent Inbox, handoff, channel bid intent)
+        run: pnpm run test:connect
+
       # MANDATORY security gate (pack P1 #13): the P0 negative regression suite —
       # privacy, media IDOR, storage integrity, AAL2/MFA and public-state leakage.
       # A regression here fails the build.

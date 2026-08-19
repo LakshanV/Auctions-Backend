@@ -7,20 +7,28 @@ import {
 } from '@nestjs/common';
 import {
   type Actor,
+  type AssignConversationInput,
   type CreateBidIntentInput,
   DomainEventName,
   type InboundMessageInput,
+  type ListConversationsQuery,
   type SendMessageInput,
   type SetAiModeInput,
   newId,
 } from '@singha/contracts';
+import { guardAiRequest } from '@singha/domain';
+import { type Prisma } from '@singha/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
 import { type Principal } from '../../shared/auth/principal';
 import { parseContinuityToken } from '../../shared/auth/continuity-token';
 import { AuctionService } from '../auction/auction.service';
+import { AI_PROVIDER, type AiProvider } from '../ai/ai.provider';
 import { CHANNEL_PROVIDER, type MessageChannelProvider } from './channel.provider';
+
+const SUGGEST_REFUSAL =
+  'A Singha specialist should reply here — the customer’s last message could not be safely auto-drafted.';
 
 // Non-web channels map to the 'absentee' bid source in the one ledger (docs/07).
 const CHANNEL_BID_SOURCE: Record<string, 'online' | 'absentee'> = {
@@ -45,7 +53,226 @@ export class ConnectService {
     private readonly uow: UnitOfWork,
     private readonly auctions: AuctionService,
     @Inject(CHANNEL_PROVIDER) private readonly channel: MessageChannelProvider,
+    @Inject(AI_PROVIDER) private readonly ai: AiProvider,
   ) {}
+
+  // ── Agent Inbox (CRM completion pass §4) ────────────────────────────────────
+
+  /**
+   * Staff Agent Inbox listing. A rebuildable read over Conversation + its latest Message: filters
+   * by channel / status / assigned agent / AI-vs-human / unassigned / awaiting-reply, and derives
+   * an SLA signal (`waitingOnStaff` + `waitingMinutes`) from whether the last message is inbound.
+   * Ordered by most-recent activity. Never exposes internal risk/notes — this is the queue, not
+   * the customer record.
+   */
+  async listConversations(query: ListConversationsQuery) {
+    const where: Prisma.ConversationWhereInput = {};
+    if (query.channel) where.channel = query.channel;
+    if (query.status) where.status = query.status;
+    if (query.assignedAgentId) where.assignedAgentId = query.assignedAgentId;
+    if (query.aiMode) where.aiMode = query.aiMode === 'true';
+    if (query.unassigned === 'true') where.assignedAgentId = null;
+    if (query.unassigned === 'false') where.assignedAgentId = { not: null };
+
+    // The awaiting-reply filter is a DERIVED condition (last message direction), so over-fetch a
+    // candidate pool then post-filter + slice — never silently returns more than `limit`.
+    const awaitingFilter = query.awaitingReply;
+    const take = awaitingFilter ? Math.min(query.limit * 4, 400) : query.limit;
+    const conversations = await this.prisma.conversation.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take,
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+
+    const now = Date.now();
+    const rows = conversations.map((c) => {
+      const last = c.messages[0] ?? null;
+      const waitingOnStaff = last?.direction === 'inbound';
+      return {
+        id: c.id,
+        channel: c.channel,
+        customerId: c.customerId,
+        status: c.status,
+        aiMode: c.aiMode,
+        assignedAgentId: c.assignedAgentId,
+        lastMessageAt: last ? last.createdAt.toISOString() : c.createdAt.toISOString(),
+        lastMessagePreview: last?.text ? last.text.slice(0, 140) : null,
+        lastMessageDirection: last?.direction ?? null,
+        waitingOnStaff,
+        waitingMinutes:
+          waitingOnStaff && last ? Math.round((now - last.createdAt.getTime()) / 60_000) : null,
+      };
+    });
+
+    const filtered =
+      awaitingFilter === 'true'
+        ? rows.filter((r) => r.waitingOnStaff)
+        : awaitingFilter === 'false'
+          ? rows.filter((r) => !r.waitingOnStaff)
+          : rows;
+    return {
+      count: Math.min(filtered.length, query.limit),
+      conversations: filtered.slice(0, query.limit),
+    };
+  }
+
+  /** Explicitly assign a conversation to a human agent (§4). Always switches it to human handling. */
+  async assign(principal: Principal, conversationId: string, input: AssignConversationInput) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    const agentId = input.agentId ?? principal.customerId ?? 'staff';
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      const updated = await ctx.tx.conversation.update({
+        where: { id: conversationId },
+        data: {
+          assignedAgentId: agentId,
+          aiMode: false,
+          // Opening the thread to a human moves an untouched 'open' into the agent's work queue.
+          status: conversation.status === 'open' ? 'pending' : conversation.status,
+        },
+      });
+      ctx.audit({
+        action: 'CONVERSATION_ASSIGNED',
+        targetType: 'Conversation',
+        targetId: conversationId,
+        after: { assignedAgentId: agentId },
+      });
+      return {
+        conversationId,
+        assignedAgentId: updated.assignedAgentId,
+        aiMode: updated.aiMode,
+        status: updated.status,
+      };
+    });
+  }
+
+  /** Mark a worked conversation resolved (§4). Reopened automatically by a new inbound message. */
+  async resolve(principal: Principal, conversationId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    const actor = toActor(principal);
+    return this.uow.execute(actor, async (ctx) => {
+      const updated = await ctx.tx.conversation.update({
+        where: { id: conversationId },
+        data: { status: 'resolved' },
+      });
+      ctx.audit({
+        action: 'CONVERSATION_RESOLVED',
+        targetType: 'Conversation',
+        targetId: conversationId,
+      });
+      return { conversationId, status: updated.status };
+    });
+  }
+
+  /**
+   * Conversation-scoped AI-suggested reply (§4, rules 3/11/12). ADVISORY ONLY: it drafts a reply
+   * for the agent to review and send explicitly — it NEVER creates a Message and NEVER contacts the
+   * customer. The customer's free text passes through the SAME injection guard as every AI call
+   * (`guardAiRequest`), a flagged request is refused (recorded, never sent to a provider), and the
+   * suggestion is stored as a derived AiRun with provenance. The agent must POST /messages to send.
+   */
+  async suggestReply(principal: Principal, conversationId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { messages: { orderBy: { createdAt: 'desc' }, take: 8 } },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+
+    const lastCustomer = conversation.messages.find((m) => m.provenance === 'customer');
+    const latestQuestion = lastCustomer?.text ?? '';
+    const itemContext =
+      (lastCustomer?.payload as unknown as { subject?: unknown } | null)?.subject ?? null;
+
+    const actor = toActor(principal);
+    const runId = newId();
+    const guard = guardAiRequest(
+      'assistant',
+      latestQuestion,
+      itemContext ? { subject: itemContext } : undefined,
+    );
+    if (!guard.allowed) {
+      return this.uow.execute(actor, async (ctx) => {
+        await ctx.tx.aiRun.create({
+          data: {
+            id: runId,
+            taskType: 'assistant',
+            model: this.ai.model,
+            provider: this.ai.name,
+            actorId: actor.id,
+            subjectType: 'Conversation',
+            subjectId: conversationId,
+            prompt: latestQuestion,
+            output: {
+              blocked: true,
+              suggestion: true,
+              refusalReason: guard.refusalReason,
+            } as unknown as object,
+            confidence: 0,
+          },
+        });
+        ctx.audit({
+          action: 'AI_SUGGEST_BLOCKED',
+          targetType: 'Conversation',
+          targetId: conversationId,
+          actorType: 'ai',
+        });
+        return {
+          aiRunId: runId,
+          conversationId,
+          suggestion: SUGGEST_REFUSAL,
+          confidence: 0,
+          blocked: true,
+          sent: false,
+        };
+      });
+    }
+
+    const reply = await this.ai.assist(
+      latestQuestion || 'Draft a brief, helpful reply to this customer.',
+      guard.safeContext,
+    );
+    return this.uow.execute(actor, async (ctx) => {
+      await ctx.tx.aiRun.create({
+        data: {
+          id: runId,
+          taskType: 'assistant',
+          model: this.ai.model,
+          provider: this.ai.name,
+          actorId: actor.id,
+          subjectType: 'Conversation',
+          subjectId: conversationId,
+          prompt: latestQuestion,
+          output: { ...reply, suggestion: true, modelTier: guard.tier } as unknown as object,
+          confidence: reply.confidence,
+        },
+      });
+      ctx.audit({
+        action: 'AI_SUGGEST_REPLY',
+        targetType: 'Conversation',
+        targetId: conversationId,
+        actorType: 'ai',
+      });
+      return {
+        aiRunId: runId,
+        conversationId,
+        suggestion: reply.reply,
+        confidence: reply.confidence,
+        blocked: false,
+        // Nothing was sent — the agent reviews and sends explicitly (AI suggests, human sends).
+        sent: false,
+        basedOn: { latestQuestion, itemContext },
+        disclaimer:
+          'AI-suggested draft. Review and send explicitly — nothing has been sent to the customer.',
+      };
+    });
+  }
 
   /** Ingest an inbound message; resolve the customer via a VERIFIED external identity. */
   async inbound(principal: Principal, input: InboundMessageInput) {
@@ -88,6 +315,15 @@ export class ConnectService {
           aiMode: true,
         },
       });
+      // Agent Inbox (§4): a new customer message on a resolved/closed thread puts it back in the
+      // queue. A 'pending' thread a human already owns stays pending (they are mid-handling).
+      if (conversation.status === 'resolved' || conversation.status === 'closed') {
+        await ctx.tx.conversation.update({
+          where: { id: conversation.id },
+          data: { status: 'open' },
+        });
+        conversation.status = 'open';
+      }
       const message = await ctx.tx.message.create({
         data: {
           id: newId(),

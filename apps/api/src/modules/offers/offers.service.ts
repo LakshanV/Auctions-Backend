@@ -9,6 +9,7 @@ import {
   type AwardSealedOfferInput,
   type CounterOfferBody,
   DomainEventName,
+  type MyOffersQuery,
   type OfferProposal,
   Permission,
   type SubmitOfferInput,
@@ -35,6 +36,11 @@ import { UnitOfWork, type UowContext } from '../../shared/persistence/unit-of-wo
 import { sellerOrgForListing } from '../../shared/persistence/seller-org';
 import { toActor } from '../../shared/auth/actor';
 import { type Actor } from '@singha/contracts';
+import {
+  customerScopeFilter,
+  isActingForOrganization,
+  resolveActorContext,
+} from '../../shared/auth/actor-context';
 import { type Principal } from '../../shared/auth/principal';
 import { CreditExposureService } from '../member/credit-exposure.service';
 
@@ -62,6 +68,16 @@ type PriceShape = {
  * server-authoritative: a unique asset cannot sell twice (a row lock + the UNIQUE `Sale` per
  * listing guarantee it), competitor prices never leak before the reveal, and the bound amount is
  * an exact integer of minor units (never a float — D5).
+ *
+ * **Books of record.** An offer belongs to exactly one buyer book: the submitting member's personal
+ * book, or an organization's. The book is chosen by the buyer's EXPLICIT acting context at
+ * submission and stamped durably onto the row (`buyerOrganizationId`); it is never inferred from the
+ * submitter's memberships. Buyer-owned reads and the buyer-owned withdraw then re-derive the book
+ * from the record, so a personal offer is unreachable from an organization context and one
+ * organization's offers are unreachable from another's. The SELLER/counterparty side is deliberately
+ * untouched: counter/reject/accept/reveal/award/roster still authorize through
+ * {@link resolveManageRole} on listing ownership, because a seller's right to answer an offer on
+ * their own listing does not depend on which book the buyer filed it in.
  */
 @Injectable()
 export class OffersService {
@@ -220,6 +236,10 @@ export class OffersService {
     const sealed = input.sealed ?? false;
     if (sealed) this.requireFeature('sealedOffers');
     const buyerId = this.customer(principal);
+    // Authorized BEFORE anything is read or written: an organization context needs real membership
+    // of that organization (or the `organization:manage` grant). The default personal context can
+    // never produce an organization attribution.
+    const context = await resolveActorContext(this.prisma, principal, input);
 
     const listing = await this.prisma.listing.findUnique({ where: { id: input.listingId } });
     if (!listing) throw new NotFoundException('Listing not found');
@@ -233,15 +253,29 @@ export class OffersService {
       });
       if (revealed)
         throw new ConflictException('Sealed offers for this listing are already revealed');
+      const live = { notIn: ['withdrawn', 'rejected', 'expired'] as OfferStatus[] };
+      // One sealed offer per natural person on a listing — UNCHANGED, and deliberately not scoped
+      // to the book: the same human must not be able to bid twice on one sealed tender by wearing a
+      // personal and an organization hat.
       const dupe = await this.prisma.offer.findFirst({
-        where: {
-          listingId: input.listingId,
-          sealed: true,
-          customerId: buyerId,
-          status: { notIn: ['withdrawn', 'rejected', 'expired'] },
-        },
+        where: { listingId: input.listingId, sealed: true, customerId: buyerId, status: live },
       });
       if (dupe) throw new ConflictException('You already have a sealed offer on this listing');
+      // …and one sealed offer per ORGANIZATION, so two colleagues cannot both bid for the same
+      // company. Additive: it can only ever refuse a submission the old rule allowed.
+      if (context.organizationId) {
+        const orgDupe = await this.prisma.offer.findFirst({
+          where: {
+            listingId: input.listingId,
+            sealed: true,
+            buyerOrganizationId: context.organizationId,
+            status: live,
+          },
+        });
+        if (orgDupe) {
+          throw new ConflictException('This organization already has a sealed offer on this listing');
+        }
+      }
     }
 
     const proposal = input.proposal;
@@ -256,6 +290,7 @@ export class OffersService {
           id: offerId,
           listingId: input.listingId,
           customerId: buyerId,
+          buyerOrganizationId: context.organizationId,
           status: 'open',
           amountMinor: headline,
           currency: proposal.currency,
@@ -285,11 +320,23 @@ export class OffersService {
         aggregateId: offerId,
         payload: { offerId, listingId: input.listingId, customerId: buyerId, sealed },
       });
-      ctx.audit({ action: 'OFFER_V2_SUBMITTED', targetType: 'Offer', targetId: offerId });
+      ctx.audit({
+        action: 'OFFER_V2_SUBMITTED',
+        targetType: 'Offer',
+        targetId: offerId,
+        after: { context: context.kind, buyerOrganizationId: context.organizationId },
+      });
       // Sealed submissions return a receipt only — never echo the amount (pack doc 20).
       return sealed
-        ? { id: offer.id, listingId: offer.listingId, sealed: true, status: offer.status }
-        : this.offerView(offer);
+        ? {
+            id: offer.id,
+            listingId: offer.listingId,
+            sealed: true,
+            status: offer.status,
+            context: context.kind,
+            buyerOrganizationId: offer.buyerOrganizationId,
+          }
+        : { ...this.offerView(offer), context: context.kind };
     });
   }
 
@@ -382,14 +429,20 @@ export class OffersService {
     });
   }
 
-  /** A buyer withdraws their own offer. */
+  /**
+   * A buyer withdraws their own offer, authorized against the book the RECORD belongs to.
+   *
+   * - An organization-attributed offer may be withdrawn by any member of THAT organization (or
+   *   `organization:manage` staff), so the company can retract its own bid even after the colleague
+   *   who filed it leaves. Membership of a different organization is never enough.
+   * - A personal offer may be withdrawn only by the individual who made it, so no organization
+   *   membership can reach into someone's private negotiation.
+   */
   async withdrawOffer(principal: Principal, offerId: string) {
     this.requireFeature('commercialOffersV2');
     const offer = await this.prisma.offer.findUnique({ where: { id: offerId } });
     if (!offer) throw new NotFoundException('Offer not found');
-    if (offer.customerId !== principal.customerId) {
-      throw new ForbiddenException('You can only withdraw your own offer');
-    }
+    await this.requireBuyerSide(principal, offer);
     assertOfferTransition(offer.status as OfferStatus, 'withdrawn');
     const actor = toActor(principal);
     return this.uow.execute(actor, async (ctx) => {
@@ -544,9 +597,10 @@ export class OffersService {
    * listing CUID (CX pack doc 05) — never reserve, seller floor, proxy max, competitor or KYC
    * data, which stay entirely absent from this read model.
    */
-  async myOffers(principal: Principal) {
+  async myOffers(principal: Principal, query: MyOffersQuery = { context: 'personal' }) {
+    const context = await resolveActorContext(this.prisma, principal, query);
     const rows = await this.prisma.offer.findMany({
-      where: { customerId: this.customer(principal) },
+      where: customerScopeFilter(context),
       orderBy: { createdAt: 'desc' },
       include: {
         listing: {
@@ -568,10 +622,44 @@ export class OffersService {
         },
       },
     });
-    return rows.map((o) => ({
-      ...this.offerView(o),
-      listing: this.offerListingContext(o.listing),
-    }));
+    return {
+      context: {
+        kind: context.kind,
+        organizationId: context.organizationId,
+        role: context.role,
+        viaStaffPermission: context.viaStaffPermission,
+      },
+      offers: rows.map((o) => ({
+        ...this.offerView(o),
+        buyerOrganizationId: o.buyerOrganizationId,
+        listing: this.offerListingContext(o.listing),
+      })),
+    };
+  }
+
+  /**
+   * Buyer-side authorization for an EXISTING offer, derived from the record's book rather than from
+   * a context the caller supplies — so nobody can pick a favourable context to widen their access.
+   * Shared by every buyer-owned action on an offer.
+   */
+  private async requireBuyerSide(
+    principal: Principal,
+    offer: { customerId: string; buyerOrganizationId: string | null },
+  ): Promise<void> {
+    if (offer.buyerOrganizationId) {
+      const permitted = await isActingForOrganization(
+        this.prisma,
+        principal,
+        offer.buyerOrganizationId,
+      );
+      if (!permitted) {
+        throw new ForbiddenException('Only the buying organization can act on this offer');
+      }
+      return;
+    }
+    if (!principal.customerId || offer.customerId !== principal.customerId) {
+      throw new ForbiddenException('You can only withdraw your own offer');
+    }
   }
 
   /**

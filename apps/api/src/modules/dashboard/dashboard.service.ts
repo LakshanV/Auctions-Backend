@@ -19,6 +19,14 @@ import { resolveActorContext } from '../../shared/auth/actor-context';
 import { type Principal } from '../../shared/auth/principal';
 
 /**
+ * Only offers still on the table are money currently committed; settled/withdrawn/rejected ones are
+ * history. Shared by both contexts so the personal and organization books answer the same question.
+ */
+function liveOffers<T extends { status: string }>(offers: readonly T[]): T[] {
+  return offers.filter((o) => o.status === 'open' || o.status === 'countered');
+}
+
+/**
  * Cockpit (Dashboard) + Control Centre service (Evolution E11b, pack doc 11). Two read-only
  * projections: a member's cross-domain command centre and an operator-scoped admin overview. No
  * authoritative data is owned here — every figure is derived from the domain that owns the record.
@@ -90,8 +98,10 @@ export class DashboardService {
       invoices,
     ] = await Promise.all([
       this.prisma.watch.count({ where: { customerId } }),
+      // Personal book only — an offer filed for an organization lives in that organization's book,
+      // even though this customer is the row's `customerId` (the individual who submitted it).
       this.prisma.offer.findMany({
-        where: { customerId },
+        where: { customerId, buyerOrganizationId: null },
         select: { status: true, amountMinor: true, currency: true },
       }),
       // Personal book only — a request posted for an organization lives in that organization's
@@ -142,8 +152,6 @@ export class DashboardService {
       ),
     }));
 
-    // Only offers still on the table are "committed" money; settled/withdrawn ones are history.
-    const liveOffers = offers.filter((o) => o.status === 'open' || o.status === 'countered');
     const outstandingInvoices = invoices.filter((i) => i.status === 'issued');
 
     return buildDashboard({
@@ -160,7 +168,7 @@ export class DashboardService {
       invoices: invoices.map((i) => ({ status: String(i.status) })),
       money: {
         buying: {
-          openOffers: totalsByCurrency(liveOffers),
+          openOffers: totalsByCurrency(liveOffers(offers)),
           purchases: totalsByCurrency(purchases),
           invoicesOutstanding: totalsByCurrency(
             outstandingInvoices.map((i) => ({
@@ -182,7 +190,7 @@ export class DashboardService {
   private async organizationDashboard(context: DashboardContextDescriptor) {
     const organizationId = context.organizationId;
     if (!organizationId) throw new BadRequestException('organizationId is required');
-    const [consignments, sellingSales, procurementRequests] = await Promise.all([
+    const [consignments, sellingSales, procurementRequests, offers] = await Promise.all([
       this.prisma.asset.findMany({
         where: { sellerOrganizationId: organizationId },
         select: { lifecycle: true },
@@ -197,17 +205,26 @@ export class DashboardService {
         where: { buyerOrganizationId: organizationId },
         select: { status: true },
       }),
+      // Same rule for the buy-side offer book.
+      this.prisma.offer.findMany({
+        where: { buyerOrganizationId: organizationId },
+        select: { status: true, amountMinor: true, currency: true },
+      }),
     ]);
 
     return buildDashboard({
       context,
+      offers: offers.map((o) => ({ status: String(o.status) })),
       procurementRequests: procurementRequests.map((r) => ({ status: String(r.status) })),
       consignments: consignments.map((a) => ({ status: String(a.lifecycle) })),
       sellingSales: sellingSales.map((s) => ({ channel: String(s.channel) })),
-      money: { selling: { sales: totalsByCurrency(sellingSales) } },
+      money: {
+        buying: { openOffers: totalsByCurrency(liveOffers(offers)) },
+        selling: { sales: totalsByCurrency(sellingSales) },
+      },
       notes: [
-        'Watchlist, offers, invoices and purchases are attributed to the individual member, not ' +
-          'to the organization, and are only shown in the personal context.',
+        'Watchlist, invoices and purchases are attributed to the individual member, not to the ' +
+          'organization, and are only shown in the personal context.',
         'Verification/KYC capabilities are held by the individual member and are only shown in ' +
           'the personal context.',
         'Supply programmes and procurement responses are attributed to the individual supplier ' +

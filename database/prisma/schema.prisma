@@ -180,6 +180,7 @@ model Organization {
   sellerSales              Sale[]
   securityInstruments      SecurityInstrument[]
   buyerProcurementRequests ProcurementRequest[]
+  buyerOffers              Offer[]
 
   @@map("organization")
 }
@@ -485,12 +486,21 @@ model Offer {
   revealedAt        DateTime? @map("revealed_at")
   awardPolicy       String?   @map("award_policy")
 
-  listing   Listing         @relation(fields: [listingId], references: [id])
-  events    OfferEvent[]
-  revisions OfferRevision[]
+  // Durable buyer-organization attribution captured at submission from the EXPLICIT acting
+  // context (never inferred from membership). Nullable + additive: null = a personal offer.
+  // `customerId` remains the individual who submitted — the natural person stays on the record for
+  // audit/KYC — while this column says which BOOK the offer belongs to, and survives that person
+  // leaving the organization (mirrors Asset/Sale.sellerOrganizationId, pack 01 doc 09).
+  buyerOrganizationId String? @map("buyer_organization_id")
+
+  listing           Listing         @relation(fields: [listingId], references: [id])
+  events            OfferEvent[]
+  revisions         OfferRevision[]
+  buyerOrganization Organization?   @relation(fields: [buyerOrganizationId], references: [id])
 
   @@index([listingId])
   @@index([customerId])
+  @@index([buyerOrganizationId])
   @@map("offer")
 }
 

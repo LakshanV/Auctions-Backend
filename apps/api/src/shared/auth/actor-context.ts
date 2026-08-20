@@ -37,9 +37,26 @@ export interface ResolvedActorContext {
   viaStaffPermission: boolean;
 }
 
-/** The `where` fragment that selects exactly one book of record for a buyer-attributed table. */
+/**
+ * The `where` fragment that selects exactly one book of record on a buyer-attributed table.
+ *
+ * The rule is the same for every such table and is stated once here:
+ *  - PERSONAL pins `buyerOrganizationId: null` as well as the customer, so an organization-attributed
+ *    row can never appear in a personal list even though the same individual submitted it;
+ *  - ORGANIZATION pins the organization id and drops the customer filter entirely, so a colleague's
+ *    row IS included and the caller's own personal rows are NOT.
+ *
+ * Tables differ only in what they call their buyer column (`buyerCustomerId` on procurement
+ * requests, `customerId` on offers), so there is one narrow filter type per column name.
+ */
 export interface ActorScopeFilter {
   buyerCustomerId?: string;
+  buyerOrganizationId: string | null;
+}
+
+/** {@link ActorScopeFilter} for a table whose buyer column is called `customerId` (Offer). */
+export interface CustomerScopeFilter {
+  customerId?: string;
   buyerOrganizationId: string | null;
 }
 
@@ -135,16 +152,20 @@ export async function isActingForOrganization(
   return membership !== null;
 }
 
-/**
- * The `where` fragment for a buyer-attributed table under this context. Personal pins
- * `buyerOrganizationId: null` so an organization-attributed row can never appear in a personal
- * list; organization pins the organization id and omits the customer entirely, so a colleague's
- * row is included and the caller's own personal rows are not.
- */
+/** {@link ActorScopeFilter} for a `buyerCustomerId` table (ProcurementRequest). */
 export function buyerScopeFilter(context: ResolvedActorContext): ActorScopeFilter {
   if (context.kind === 'organization') {
     return { buyerOrganizationId: context.organizationId };
   }
   if (!context.customerId) throw new ForbiddenException('Authenticated customer required');
   return { buyerCustomerId: context.customerId, buyerOrganizationId: null };
+}
+
+/** {@link ActorScopeFilter} for a `customerId` table (Offer). Same rule, different column name. */
+export function customerScopeFilter(context: ResolvedActorContext): CustomerScopeFilter {
+  if (context.kind === 'organization') {
+    return { buyerOrganizationId: context.organizationId };
+  }
+  if (!context.customerId) throw new ForbiddenException('Authenticated customer required');
+  return { customerId: context.customerId, buyerOrganizationId: null };
 }

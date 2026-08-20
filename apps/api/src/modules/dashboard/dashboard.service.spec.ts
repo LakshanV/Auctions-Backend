@@ -37,7 +37,13 @@ interface Seed {
   organizations?: { id: string }[];
   memberships?: { organizationId: string; customerId: string; role: string }[];
   watches?: { customerId: string }[];
-  offers?: { customerId: string; status: string; amountMinor: bigint; currency: string }[];
+  offers?: {
+    customerId: string;
+    buyerOrganizationId: string | null;
+    status: string;
+    amountMinor: bigint;
+    currency: string;
+  }[];
   procurementRequests?: {
     buyerCustomerId: string;
     buyerOrganizationId: string | null;
@@ -246,8 +252,13 @@ describe('DashboardService personal / organization isolation', () => {
     memberships: [{ organizationId: 'org_1', customerId: 'cust_1', role: 'admin' }],
     watches: [{ customerId: 'cust_1' }, { customerId: 'cust_other' }],
     offers: [
-      { customerId: 'cust_1', status: 'open', amountMinor: 500n, currency: 'USD' },
-      { customerId: 'cust_other', status: 'open', amountMinor: 900n, currency: 'USD' },
+      { customerId: 'cust_1', buyerOrganizationId: null, status: 'open', amountMinor: 500n, currency: 'USD' },
+      // Filed by the same individual but for org_1 — belongs to the ORGANIZATION book, in a
+      // different currency so a scoping bug cannot pass by coincidence.
+      { customerId: 'cust_1', buyerOrganizationId: 'org_1', status: 'open', amountMinor: 7n, currency: 'EUR' },
+      // A colleague's offer for org_1 — the organization sees it; no individual does.
+      { customerId: 'cust_colleague', buyerOrganizationId: 'org_1', status: 'countered', amountMinor: 11n, currency: 'GBP' },
+      { customerId: 'cust_other', buyerOrganizationId: null, status: 'open', amountMinor: 900n, currency: 'USD' },
     ],
     procurementRequests: [
       // Deliberately a status the organization book does NOT contain, so a scoping bug that
@@ -317,13 +328,11 @@ describe('DashboardService personal / organization isolation', () => {
   it('keeps personal buy-side, supply and verification records out of the organization cockpit', async () => {
     const d = await makeService(ALL_ON, seed).getDashboard(member, ORG);
     expect(d.buying.watching).toBe(0);
-    expect(d.buying.offers).toEqual({ total: 0, byStatus: [] });
     expect(d.buying.purchases).toEqual({ total: 0, byChannel: [] });
     expect(d.buying.invoices).toEqual({ total: 0, byStatus: [] });
     expect(d.verification).toEqual({ total: 0, byStatus: [] });
     expect(d.selling.supplyProgrammes.total).toBe(0);
     expect(d.selling.procurementResponses.total).toBe(0);
-    expect(d.money.buying.openOffers.byCurrency).toEqual([]);
     expect(d.money.buying.invoicesOutstanding.byCurrency).toEqual([]);
     expect(d.scope.notes.length).toBeGreaterThan(0);
   });
@@ -363,6 +372,32 @@ describe('DashboardService personal / organization isolation', () => {
     });
   });
 
+  it('shows the organization ONLY its own offers, including a colleague’s', async () => {
+    const d = await makeService(ALL_ON, seed).getDashboard(member, ORG);
+    expect(d.buying.offers).toEqual({
+      total: 2,
+      byStatus: [
+        { status: 'countered', count: 1 },
+        { status: 'open', count: 1 },
+      ],
+    });
+    // Both are still on the table, and EUR 7 + GBP 11 is not "18" — the buckets stay separate.
+    expect(d.money.buying.openOffers.byCurrency).toEqual([
+      { currency: 'EUR', totalMinor: 7, count: 1 },
+      { currency: 'GBP', totalMinor: 11, count: 1 },
+    ]);
+    expect(d.money.buying.openOffers.currencies).toEqual(['EUR', 'GBP']);
+  });
+
+  it('keeps organization-attributed offers and their money out of the personal cockpit', async () => {
+    const d = await makeService(ALL_ON, seed).getDashboard(member, PERSONAL);
+    expect(d.buying.offers).toEqual({ total: 1, byStatus: [{ status: 'open', count: 1 }] });
+    // Only the personal USD offer — the EUR/GBP organization offers are absent entirely.
+    expect(d.money.buying.openOffers.byCurrency).toEqual([
+      { currency: 'USD', totalMinor: 500, count: 1 },
+    ]);
+  });
+
   it('scopes every personal section to the caller and never to other customers', async () => {
     const d = await makeService(ALL_ON, seed).getDashboard(member, PERSONAL);
     expect(d.buying.watching).toBe(1);
@@ -387,11 +422,11 @@ describe('DashboardService currency grouping', () => {
   it('never merges unlike currencies into one total', async () => {
     const s = makeService(ALL_ON, {
       offers: [
-        { customerId: 'cust_1', status: 'open', amountMinor: 1_000n, currency: 'USD' },
-        { customerId: 'cust_1', status: 'countered', amountMinor: 2_500n, currency: 'LKR' },
-        { customerId: 'cust_1', status: 'open', amountMinor: 500n, currency: 'USD' },
+        { customerId: 'cust_1', buyerOrganizationId: null, status: 'open', amountMinor: 1_000n, currency: 'USD' },
+        { customerId: 'cust_1', buyerOrganizationId: null, status: 'countered', amountMinor: 2_500n, currency: 'LKR' },
+        { customerId: 'cust_1', buyerOrganizationId: null, status: 'open', amountMinor: 500n, currency: 'USD' },
         // Settled/withdrawn offers are history, not money currently committed.
-        { customerId: 'cust_1', status: 'withdrawn', amountMinor: 9_999n, currency: 'USD' },
+        { customerId: 'cust_1', buyerOrganizationId: null, status: 'withdrawn', amountMinor: 9_999n, currency: 'USD' },
       ],
       invoices: [
         { buyerCustomerId: 'cust_1', status: 'issued', amountDueMinor: 100n, currency: 'EUR' },
@@ -437,7 +472,9 @@ describe('DashboardService currency grouping', () => {
 
   it('exposes no scalar total on any money aggregate in the response', async () => {
     const d = await makeService(ALL_ON, {
-      offers: [{ customerId: 'cust_1', status: 'open', amountMinor: 1n, currency: 'USD' }],
+      offers: [
+        { customerId: 'cust_1', buyerOrganizationId: null, status: 'open', amountMinor: 1n, currency: 'USD' },
+      ],
     }).getDashboard(member, PERSONAL);
     const aggregates = [
       d.money.buying.openOffers,

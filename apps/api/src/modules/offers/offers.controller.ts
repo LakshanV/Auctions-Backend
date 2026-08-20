@@ -1,18 +1,20 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   type AwardSealedOfferInput,
   type CounterOfferBody,
+  type MyOffersQuery,
   Permission,
   type SubmitOfferInput,
   awardSealedOfferSchema,
   counterOfferBodySchema,
+  myOffersQuerySchema,
   submitOfferSchema,
 } from '@singha/contracts';
 import { OffersService } from './offers.service';
 import { CurrentActor } from '../../shared/auth/current-actor.decorator';
 import { RequirePermissions } from '../../shared/auth/require-permissions.decorator';
 import { type Principal } from '../../shared/auth/principal';
-import { ZodBody } from '../../shared/validation/zod.pipe';
+import { ZodBody, ZodQuery } from '../../shared/validation/zod.pipe';
 
 /**
  * Commercial Offer Engine V2 API (Evolution E4, pack doc 08). Feature-gated in the service
@@ -22,6 +24,12 @@ import { ZodBody } from '../../shared/validation/zod.pipe';
  * platform operator (`exchange:operate`) counter, reject, reveal, accept and award — a seller can
  * only ever touch their own listing's offers. Sealed selection defaults to MANUAL_SELECTION — the highest
  * proposal is never auto-awarded (DECISIONS D4).
+ *
+ * The BUYER side additionally carries an explicit acting context (`personal` by default, or
+ * `organization` + `organizationId`) on submit and on the buyer's own offer console; the organization
+ * is authorized server-side before anything is written or read, and the personal and organization
+ * offer books stay disjoint. The seller/counterparty routes below are unchanged — a seller answers
+ * offers on their own listing regardless of which book the buyer filed them in.
  */
 @Controller('commercial-offers')
 export class OffersController {
@@ -39,8 +47,11 @@ export class OffersController {
   }
 
   @Get('mine')
-  myOffers(@CurrentActor() principal: Principal) {
-    return this.offers.myOffers(principal);
+  myOffers(
+    @CurrentActor() principal: Principal,
+    @Query(new ZodQuery(myOffersQuerySchema)) query: MyOffersQuery,
+  ) {
+    return this.offers.myOffers(principal, query);
   }
 
   @Post(':id/withdraw')

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withActorContext } from './actor-context';
 
 /**
  * Commercial Offer Engine V2 contracts (E4, pack doc 08). A proposal is a full commercial
@@ -41,14 +42,31 @@ export const offerProposalSchema = z
   });
 export type OfferProposal = z.infer<typeof offerProposalSchema>;
 
-/** Submit a new offer (a buyer's first proposal) on a listing. */
-export const submitOfferSchema = z.object({
+/**
+ * Submit a new offer (a buyer's first proposal) on a listing.
+ *
+ * The submission carries an EXPLICIT acting context (`actor-context.ts`): `personal` (the default,
+ * which can never produce an organization attribution) or `organization` + `organizationId`. An
+ * organization-attributed offer is durably stamped with that organization at submission and lives
+ * in the organization's book — it is never inferred from the submitter's memberships, and a
+ * personal offer can never be silently re-attributed. The individual submitter is still recorded,
+ * so audit/KYC keep a natural person.
+ */
+export const submitOfferSchema = withActorContext({
   listingId: z.string().min(1),
   saleMethodCode: z.string().min(1),
   sealed: z.boolean().optional(),
   proposal: offerProposalSchema,
 });
 export type SubmitOfferInput = z.infer<typeof submitOfferSchema>;
+
+/**
+ * Which book of offers to read on the buyer-owned console. Same explicit-context rules as
+ * submission: a personal list never contains organization-attributed offers, and an organization
+ * list never contains a member's personal ones.
+ */
+export const myOffersQuerySchema = withActorContext({});
+export type MyOffersQuery = z.infer<typeof myOffersQuerySchema>;
 
 /** Counter an existing offer — appends a new revision (never overwrites prior terms). */
 export const counterOfferSchema = z.object({

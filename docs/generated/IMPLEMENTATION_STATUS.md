@@ -137,3 +137,41 @@ committed to `main` and locally green.
   organization column in the schema today, so they remain personal-only. Adding a
   `buyerOrganizationId`-style column later populates the already-present, currently-empty sections
   without a contract change.
+
+## Organization-attributed procurement requests (E9 + E11b)
+
+The gap flagged at the end of the Cockpit vertical is closed: procurement requests now carry a real
+organization attribution, so the organization Cockpit's procurement section is populated from the
+organization's own book instead of reporting empty.
+
+- **Schema + migration** — `ProcurementRequest.buyerOrganizationId` (nullable, FK to
+  `organization`, indexed) plus an index on `buyerCustomerId`. Migration
+  `20260820100000_procurement_buyer_organization` is **expand-only**: the column is nullable with no
+  default and no backfill, so every existing row stays exactly what it was — a personal request — and
+  an older application version that does not know the column keeps working (docs/04
+  expand-migrate-verify-contract).
+- **Contract** — `createProcurementRequestSchema` and the new `procurementRequestsQuerySchema` both
+  carry the explicit acting context. The shape rules moved to
+  `packages/contracts/src/actor-context.ts` (`withActorContext`) and are now shared with
+  `dashboardQuerySchema`, so every context-aware route obeys one rule set (D-0061).
+- **Authorization** — `apps/api/src/shared/auth/actor-context.ts` holds the single implementation of
+  `resolveActorContext` (create/read context), `isActingForOrganization` (record-driven management)
+  and `buyerScopeFilter` (the disjoint `where` fragment). `DashboardService` now delegates to it
+  rather than carrying its own copy.
+- **Creation** — `context: 'organization'` is authorized BEFORE the row is written and stamps
+  `buyerOrganizationId` durably (D-0059); `buyerCustomerId` still records who acted. The default
+  personal context can never attribute a request to an organization.
+- **Reads** — `GET /procurement/requests/mine` takes the same context and returns
+  `{ context, requests }`. Personal pins `buyerOrganizationId: null`; organization pins the id and
+  drops the customer filter, so a colleague's request is included and no personal request ever is.
+- **Management** — close / award / read-proposals authorize against the book the RECORD belongs to
+  (D-0060): any member of the attributed organization (or `organization:manage` staff) may act, and
+  no organization membership can reach a personal request.
+- **Cockpit** — the personal context filters `buyerOrganizationId: null`; the organization context
+  reads `buyerOrganizationId = <id>`. The organization cockpit's `scope.notes` no longer claims
+  procurement requests are personal-only.
+- **Tests** — `procurement.service.spec.ts` (25) and `dashboard.service.spec.ts` (23) run against an
+  in-memory Prisma stand-in that applies the services' real `where` clauses;
+  `actor-context.test.ts` (26) runs one rule table across every context-aware schema; the
+  `test:procurement` and `test:dashboard` E2E drivers cover the same invariants over HTTP with a DB
+  assertion on the stamped column.

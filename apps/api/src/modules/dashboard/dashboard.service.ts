@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { type DashboardQuery, Permission } from '@singha/contracts';
+import { type DashboardQuery } from '@singha/contracts';
 import {
   type CapabilityStatus,
   type DashboardContextDescriptor,
@@ -15,6 +15,7 @@ import {
 } from '@singha/domain';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
+import { resolveActorContext } from '../../shared/auth/actor-context';
 import { type Principal } from '../../shared/auth/principal';
 
 /**
@@ -41,75 +42,18 @@ export class DashboardService {
     private readonly config: AppConfigService,
   ) {}
 
-  private customer(principal: Principal): string {
-    if (!principal.customerId) throw new ForbiddenException('Authenticated customer required');
-    return principal.customerId;
-  }
-
   /**
-   * Resolve + AUTHORIZE the requested cockpit context. Personal needs an authenticated customer;
-   * organization needs an explicit `organizationId` the caller is actually entitled to read.
-   *
-   * A caller without membership is refused with 403 whether or not the organization exists — the
-   * cockpit must not become an organization-existence oracle. Only a staff caller holding
-   * `organization:manage` (who is already entitled to enumerate organizations) sees a 404.
+   * Resolve + AUTHORIZE the requested cockpit context. The rules (personal needs an authenticated
+   * customer; organization needs an explicit id the caller is entitled to; a non-member gets 403
+   * whether or not the organization exists, so the cockpit is not an organization-existence oracle)
+   * live in `shared/auth/actor-context.ts` and are shared with procurement, so the two verticals
+   * cannot drift apart on who may act for whom.
    */
-  private async resolveContext(
+  private resolveContext(
     principal: Principal,
     query: DashboardQuery,
   ): Promise<DashboardContextDescriptor> {
-    if (query.context === 'personal') {
-      // Defence in depth: the schema already rejects this pairing, but a service-level caller
-      // must never be able to smuggle an organization id into a personal read.
-      if (query.organizationId) {
-        throw new BadRequestException('organizationId is not permitted in personal context');
-      }
-      return {
-        kind: 'personal',
-        customerId: this.customer(principal),
-        organizationId: null,
-        role: null,
-        viaStaffPermission: false,
-      };
-    }
-
-    const organizationId = query.organizationId;
-    if (!organizationId) {
-      throw new BadRequestException('organizationId is required in organization context');
-    }
-
-    const viaStaffPermission = principal.permissions.has(Permission.OrganizationManage);
-    if (viaStaffPermission) {
-      const org = await this.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { id: true },
-      });
-      if (!org) throw new NotFoundException('Organization not found');
-      return {
-        kind: 'organization',
-        customerId: principal.customerId,
-        organizationId,
-        role: null,
-        viaStaffPermission: true,
-      };
-    }
-
-    const membership = principal.customerId
-      ? await this.prisma.organizationMember.findFirst({
-          where: { organizationId, customerId: principal.customerId },
-          select: { role: true },
-        })
-      : null;
-    if (!membership) {
-      throw new ForbiddenException('Not permitted to read this organization context');
-    }
-    return {
-      kind: 'organization',
-      customerId: principal.customerId,
-      organizationId,
-      role: String(membership.role),
-      viaStaffPermission: false,
-    };
+    return resolveActorContext(this.prisma, principal, query);
   }
 
   /** The caller's cockpit for one explicit context (Buying / Selling / Verification + money). */
@@ -150,8 +94,10 @@ export class DashboardService {
         where: { customerId },
         select: { status: true, amountMinor: true, currency: true },
       }),
+      // Personal book only — a request posted for an organization lives in that organization's
+      // book, even though this customer is the row's `buyerCustomerId` (the poster of record).
       this.prisma.procurementRequest.findMany({
-        where: { buyerCustomerId: customerId },
+        where: { buyerCustomerId: customerId, buyerOrganizationId: null },
         select: { status: true },
       }),
       this.prisma.supplyProgramme.findMany({
@@ -236,7 +182,7 @@ export class DashboardService {
   private async organizationDashboard(context: DashboardContextDescriptor) {
     const organizationId = context.organizationId;
     if (!organizationId) throw new BadRequestException('organizationId is required');
-    const [consignments, sellingSales] = await Promise.all([
+    const [consignments, sellingSales, procurementRequests] = await Promise.all([
       this.prisma.asset.findMany({
         where: { sellerOrganizationId: organizationId },
         select: { lifecycle: true },
@@ -245,19 +191,25 @@ export class DashboardService {
         where: { sellerOrganizationId: organizationId },
         select: { channel: true, amountMinor: true, currency: true },
       }),
+      // Organization book only — keyed on the durable attribution, NOT on which member posted it,
+      // so a colleague's request is included and no member's personal request ever is.
+      this.prisma.procurementRequest.findMany({
+        where: { buyerOrganizationId: organizationId },
+        select: { status: true },
+      }),
     ]);
 
     return buildDashboard({
       context,
+      procurementRequests: procurementRequests.map((r) => ({ status: String(r.status) })),
       consignments: consignments.map((a) => ({ status: String(a.lifecycle) })),
       sellingSales: sellingSales.map((s) => ({ channel: String(s.channel) })),
       money: { selling: { sales: totalsByCurrency(sellingSales) } },
       notes: [
-        'Buying activity (watchlist, offers, procurement requests, invoices and purchases) is ' +
-          'attributed to the individual member, not to the organization, and is only shown in the ' +
-          'personal context.',
-        'Verification/KYC capabilities are held by the individual member and are only shown in the ' +
-          'personal context.',
+        'Watchlist, offers, invoices and purchases are attributed to the individual member, not ' +
+          'to the organization, and are only shown in the personal context.',
+        'Verification/KYC capabilities are held by the individual member and are only shown in ' +
+          'the personal context.',
         'Supply programmes and procurement responses are attributed to the individual supplier ' +
           'and are only shown in the personal context.',
       ],

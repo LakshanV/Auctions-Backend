@@ -8,7 +8,8 @@
  *  - the cockpit context is explicit and server-authorized: an organization context the caller is
  *    not a member of is refused (403), a member's own organization is admitted, and an
  *    `organizationId` smuggled into a personal request is refused (400);
- *  - the personal and organization books never leak into each other;
+ *  - the personal and organization books never leak into each other, and an organization-
+ *    attributed procurement request shows up in the organization cockpit and nowhere else;
  *  - every monetary aggregate is grouped by contractual currency, with no cross-currency total;
  *  - the operator-scoped Control Centre counts records and surfaces attention alerts (pending KYC);
  *  - operator-scoping filters record counts by operatorCode; a non-operator is denied (403).
@@ -195,6 +196,35 @@ async function main() {
         ownedAfter.json?.verification?.total === 0,
       'personal buy-side / verification records do NOT appear in the organization cockpit',
     );
+
+    // An organization-attributed request populates the ORGANIZATION cockpit only.
+    const orgRfq = await post('/procurement/requests', {
+      token: sellerToken,
+      body: {
+        type: 'RFQ',
+        title: 'Org RFQ',
+        currency: 'USD',
+        operatorCode: 'OP1',
+        context: 'organization',
+        organizationId: orgId,
+      },
+    });
+    check(
+      orgRfq.status === 201 && orgRfq.json?.buyerOrganizationId === orgId,
+      `organization-attributed RFQ created (got ${orgRfq.status})`,
+    );
+    const orgCockpit = await get(`/dashboard?context=organization&organizationId=${orgId}`, {
+      token: sellerToken,
+    });
+    check(
+      orgCockpit.json?.buying?.procurementRequests?.total === 1,
+      'the organization cockpit shows the organization-attributed procurement request',
+    );
+    const personalAfterOrgRfq = await get('/dashboard', { token: sellerToken });
+    check(
+      personalAfterOrgRfq.json?.buying?.procurementRequests?.total === 1,
+      'the personal cockpit still shows ONLY the personal request (org one excluded)',
+    );
     check(
       Array.isArray(ownedAfter.json?.scope?.notes) && ownedAfter.json.scope.notes.length > 0,
       'organization cockpit explains which books it excluded',
@@ -239,7 +269,7 @@ async function main() {
     check(
       op1.json?.operatorCode === 'OP1' &&
         op1.json?.counts?.supplyProgrammes === 1 &&
-        op1.json?.counts?.procurementRequests === 2,
+        op1.json?.counts?.procurementRequests === 3,
       'operator-scoped counts include OP1 records',
     );
     const opNone = await get('/control-centre/overview?operatorCode=ZZ_NONE', { token: operator });

@@ -175,10 +175,11 @@ model Organization {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  members             OrganizationMember[]
-  sellerAssets        Asset[]
-  sellerSales         Sale[]
-  securityInstruments SecurityInstrument[]
+  members                  OrganizationMember[]
+  sellerAssets             Asset[]
+  sellerSales              Sale[]
+  securityInstruments      SecurityInstrument[]
+  buyerProcurementRequests ProcurementRequest[]
 
   @@map("organization")
 }
@@ -2227,28 +2228,36 @@ model PaymentWebhookEvent {
 // side: RFQ / Request-Supply / reverse-tender. Suppliers respond with proposals; the buyer awards
 // ONE explicitly (matching never auto-awards). `type`/`status` follow the domain taxonomy.
 model ProcurementRequest {
-  id                 String    @id
-  type               String
-  status             String    @default("open")
-  title              String
-  category           String?
-  specification      String?
-  quantity           Decimal?  @db.Decimal(38, 9)
-  quantityUnitCode   String?   @map("quantity_unit_code")
-  destinationCountry String?   @map("destination_country")
-  deliveryBy         DateTime? @map("delivery_by")
-  currency           String    @default("LKR")
-  paymentTerms       String?   @map("payment_terms")
-  operatorCode       String?   @map("operator_code")
-  buyerCustomerId    String?   @map("buyer_customer_id")
-  submissionCloseAt  DateTime? @map("submission_close_at")
-  awardedProposalId  String?   @map("awarded_proposal_id")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  id                  String    @id
+  type                String
+  status              String    @default("open")
+  title               String
+  category            String?
+  specification       String?
+  quantity            Decimal?  @db.Decimal(38, 9)
+  quantityUnitCode    String?   @map("quantity_unit_code")
+  destinationCountry  String?   @map("destination_country")
+  deliveryBy          DateTime? @map("delivery_by")
+  currency            String    @default("LKR")
+  paymentTerms        String?   @map("payment_terms")
+  operatorCode        String?   @map("operator_code")
+  buyerCustomerId     String?   @map("buyer_customer_id")
+  // Durable buyer-organization attribution captured at creation from the EXPLICIT acting context
+  // (never inferred from membership). Nullable + additive: null = a personal request. An
+  // organization-attributed request stays in the organization's book even if the employee who
+  // posted it later leaves, mirroring Asset/Sale.sellerOrganizationId (pack 01 doc 09).
+  buyerOrganizationId String?   @map("buyer_organization_id")
+  submissionCloseAt   DateTime? @map("submission_close_at")
+  awardedProposalId   String?   @map("awarded_proposal_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  proposals ProcurementProposal[]
+  proposals         ProcurementProposal[]
+  buyerOrganization Organization?         @relation(fields: [buyerOrganizationId], references: [id])
 
   @@index([status])
+  @@index([buyerCustomerId])
+  @@index([buyerOrganizationId])
   @@map("procurement_request")
 }
 

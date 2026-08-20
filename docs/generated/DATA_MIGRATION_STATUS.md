@@ -39,3 +39,16 @@ validation → delta/cutover → verify → optional V1 read-only archive.
 ## Backups
 
 Production backup/PITR/restore drills are a Phase 12 concern; not configured.
+
+## 20260820100000_procurement_buyer_organization (expand-only)
+
+Adds `procurement_request.buyer_organization_id` (nullable TEXT, FK → `organization(id)`, indexed)
+and an index on `procurement_request.buyer_customer_id`.
+
+- **Expand** — nullable column, no default, no backfill, no rewrite of any existing row. Every
+  pre-existing request reads as a PERSONAL request (`buyer_organization_id IS NULL`), which is what
+  it always was.
+- **Backwards compatible** — an application version that does not know the column continues to read
+  and write the table unchanged, so deploy order does not matter.
+- **Nothing to contract** — no column is dropped or narrowed, so there is no contract phase and no
+  destructive step to schedule.

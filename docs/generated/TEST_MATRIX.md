@@ -63,6 +63,26 @@ pnpm run test:member   # ephemeral Postgres: Client ID, credit exposure, securit
 | No monetary aggregate exposes a cross-currency scalar total                           | `dashboard.test.ts` + `dashboard.service.spec.ts` + `test:dashboard`         |
 | A row with no valid ISO currency, or unsafe minor units, is refused (422)             | `currency-totals.test.ts`                                                    |
 
+## Organization-attributed procurement requests
+
+| Invariant proved                                                                         | Where                                                             |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Creating for an organization the caller does not belong to is refused (403)              | `procurement.service.spec.ts` + `test:procurement`                |
+| Membership of a DIFFERENT organization is not accepted as authorization                  | `procurement.service.spec.ts`                                     |
+| Organization existence is not leaked on creation (403 non-member, 404 only for staff)    | `procurement.service.spec.ts` + `test:procurement`                |
+| `organizationId` in a personal creation/read is refused (400, schema AND service)        | `actor-context.test.ts` + both service specs + both E2E drivers   |
+| A member's creation is stamped with a durable `buyer_organization_id`                    | `procurement.service.spec.ts` + `test:procurement` (DB assertion) |
+| A personal creation stays unattributed; the default context can never attribute          | `procurement.service.spec.ts` + `test:procurement`                |
+| The personal list excludes organization-attributed requests                              | `procurement.service.spec.ts` + `test:procurement`                |
+| The organization list excludes personal requests and includes a colleague's              | `procurement.service.spec.ts` + `test:procurement`                |
+| One organization's list never contains another organization's requests                   | `procurement.service.spec.ts` + `test:procurement`                |
+| Reading another organization's book is refused (403)                                     | `procurement.service.spec.ts` + `test:procurement`                |
+| A colleague may manage the organization's request; a rival organization's member may not | `procurement.service.spec.ts` + `test:procurement`                |
+| The original poster loses management once they are no longer a member                    | `procurement.service.spec.ts`                                     |
+| A personal request is unreachable from any organization membership                       | `procurement.service.spec.ts` + `test:procurement`                |
+| The organization Cockpit shows the organization's procurement book only                  | `dashboard.service.spec.ts` + `test:dashboard`                    |
+| The personal Cockpit excludes organization-attributed requests                           | `dashboard.service.spec.ts` + `test:dashboard`                    |
+
 CI runs unit + DB integration against a Postgres service and then the E2E driver.
 
 ## Counts (approx.)

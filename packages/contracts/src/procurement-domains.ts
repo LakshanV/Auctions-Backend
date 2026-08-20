@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withActorContext } from './actor-context';
 import { offerProposalSchema } from './offer-domains';
 
 /**
@@ -17,8 +18,16 @@ export type ProcurementStatus = (typeof procurementStatuses)[number];
 
 export const pricingBasesProcurement = ['total', 'per_unit'] as const;
 
-/** Create a procurement request (the "wanted" side). */
-export const createProcurementRequestSchema = z.object({
+/**
+ * Create a procurement request (the "wanted" side).
+ *
+ * The request carries an EXPLICIT acting context (`actor-context.ts`): `personal` (the default,
+ * which can never produce an organization attribution) or `organization` + `organizationId`. An
+ * organization-attributed request is durably stamped with that organization at creation and lives
+ * in the organization's book — it is never inferred from the poster's memberships, and a personal
+ * request can never be silently re-attributed.
+ */
+export const createProcurementRequestSchema = withActorContext({
   type: z.enum(procurementRequestTypes),
   title: z.string().min(1),
   category: z.string().optional(),
@@ -37,6 +46,14 @@ export const createProcurementRequestSchema = z.object({
   submissionCloseAt: z.string().datetime().optional(),
 });
 export type CreateProcurementRequestInput = z.infer<typeof createProcurementRequestSchema>;
+
+/**
+ * Which book of requests to read. Same explicit-context rules as creation: a personal list never
+ * contains organization-attributed requests, and an organization list never contains a member's
+ * personal ones.
+ */
+export const procurementRequestsQuerySchema = withActorContext({});
+export type ProcurementRequestsQuery = z.infer<typeof procurementRequestsQuerySchema>;
 
 /** A supplier's proposal to a request — the same commercial bundle as an offer (E4). */
 export const submitProcurementProposalSchema = z.object({

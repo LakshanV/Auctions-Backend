@@ -7,6 +7,7 @@ import {
 import {
   type AwardProcurementInput,
   type CreateProcurementRequestInput,
+  type ProcurementRequestsQuery,
   type SubmitProcurementProposalInput,
   newId,
 } from '@singha/contracts';
@@ -22,6 +23,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../../config/config.service';
 import { UnitOfWork } from '../../shared/persistence/unit-of-work';
 import { toActor } from '../../shared/auth/actor';
+import {
+  buyerScopeFilter,
+  isActingForOrganization,
+  resolveActorContext,
+} from '../../shared/auth/actor-context';
 import { type Principal } from '../../shared/auth/principal';
 
 /**
@@ -30,6 +36,13 @@ import { type Principal } from '../../shared/auth/principal';
  * ONE explicitly. The non-negotiable: an award is never automatic — matching ranks/recommends
  * (cheapest first), but the buyer selects (pack §09; consistent with D4). Flag-gated by
  * `procurement`.
+ *
+ * A request belongs to exactly ONE book of record: a member's personal book, or an organization's.
+ * The book is chosen by the caller's EXPLICIT acting context at creation and stamped durably onto
+ * the row (`buyerOrganizationId`); it is never inferred from the poster's memberships. Every read
+ * and every management action then re-derives the book from the record, so a personal request can
+ * never be reached from an organization context, and one organization's requests can never be
+ * reached from another's (shared rules in `shared/auth/actor-context.ts`).
  */
 @Injectable()
 export class ProcurementService {
@@ -50,10 +63,18 @@ export class ProcurementService {
     return principal.customerId;
   }
 
-  /** A buyer posts a procurement request. */
+  /**
+   * A buyer posts a procurement request, in one explicit acting context.
+   *
+   * `context: 'organization'` is authorized BEFORE the row is written (real membership of that
+   * organization, or the `organization:manage` grant) and stamps `buyerOrganizationId` durably, so
+   * the request stays in the organization's book even if this employee later leaves. The default
+   * personal context can never produce an organization attribution.
+   */
   async createRequest(principal: Principal, input: CreateProcurementRequestInput) {
     this.requireFeature();
     const buyerId = this.customer(principal);
+    const context = await resolveActorContext(this.prisma, principal, input);
     const actor = toActor(principal);
     const id = newId();
     return this.uow.execute(actor, async (ctx) => {
@@ -73,6 +94,7 @@ export class ProcurementService {
           paymentTerms: input.paymentTerms,
           operatorCode: input.operatorCode,
           buyerCustomerId: buyerId,
+          buyerOrganizationId: context.organizationId,
           submissionCloseAt: input.submissionCloseAt ? new Date(input.submissionCloseAt) : null,
         },
       });
@@ -80,8 +102,16 @@ export class ProcurementService {
         action: 'PROCUREMENT_REQUEST_CREATED',
         targetType: 'ProcurementRequest',
         targetId: id,
+        after: { context: context.kind, buyerOrganizationId: context.organizationId },
       });
-      return { id: request.id, type: request.type, status: request.status, title: request.title };
+      return {
+        id: request.id,
+        type: request.type,
+        status: request.status,
+        title: request.title,
+        context: context.kind,
+        buyerOrganizationId: request.buyerOrganizationId,
+      };
     });
   }
 
@@ -216,20 +246,63 @@ export class ProcurementService {
     };
   }
 
-  /** The caller's own procurement requests. */
-  async myRequests(principal: Principal) {
+  /**
+   * The requests in ONE book: the caller's personal requests (never organization-attributed ones),
+   * or a named organization's requests (never the caller's personal ones, and never another
+   * organization's). The two lists are disjoint by construction — see `buyerScopeFilter`.
+   */
+  async myRequests(
+    principal: Principal,
+    query: ProcurementRequestsQuery = { context: 'personal' },
+  ) {
     this.requireFeature();
+    const context = await resolveActorContext(this.prisma, principal, query);
     const rows = await this.prisma.procurementRequest.findMany({
-      where: { buyerCustomerId: this.customer(principal) },
+      where: buyerScopeFilter(context),
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((r) => ({ id: r.id, type: r.type, status: r.status, title: r.title }));
+    return {
+      context: {
+        kind: context.kind,
+        organizationId: context.organizationId,
+        role: context.role,
+        viaStaffPermission: context.viaStaffPermission,
+      },
+      requests: rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        status: r.status,
+        title: r.title,
+        buyerOrganizationId: r.buyerOrganizationId,
+      })),
+    };
   }
 
+  /**
+   * Authorize a management action (close / award / read proposals) against the book the RECORD
+   * belongs to, not the book the caller asked for.
+   *
+   * - An organization-attributed request is manageable by any member of THAT organization (or
+   *   `organization:manage` staff) — including a colleague, so the request is not stranded when
+   *   the employee who posted it leaves. Membership of a different organization is never enough.
+   * - A personal request is manageable only by the individual who owns it. No organization context
+   *   can reach it, so a personal request can never be pulled into an organization's book.
+   */
   private async requireOwnedRequest(principal: Principal, requestId: string) {
     const request = await this.prisma.procurementRequest.findUnique({ where: { id: requestId } });
     if (!request) throw new NotFoundException('Procurement request not found');
-    if (request.buyerCustomerId !== principal.customerId) {
+    if (request.buyerOrganizationId) {
+      const permitted = await isActingForOrganization(
+        this.prisma,
+        principal,
+        request.buyerOrganizationId,
+      );
+      if (!permitted) {
+        throw new ForbiddenException('Only the requesting organization can manage this request');
+      }
+      return request;
+    }
+    if (!principal.customerId || request.buyerCustomerId !== principal.customerId) {
       throw new ForbiddenException('Only the requesting buyer can manage this request');
     }
     return request;

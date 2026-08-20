@@ -38,7 +38,11 @@ interface Seed {
   memberships?: { organizationId: string; customerId: string; role: string }[];
   watches?: { customerId: string }[];
   offers?: { customerId: string; status: string; amountMinor: bigint; currency: string }[];
-  procurementRequests?: { buyerCustomerId: string; status: string }[];
+  procurementRequests?: {
+    buyerCustomerId: string;
+    buyerOrganizationId: string | null;
+    status: string;
+  }[];
   supplyProgrammes?: { supplierCustomerId: string; status: string }[];
   procurementProposals?: { supplierCustomerId: string; status: string }[];
   capabilities?: {
@@ -245,7 +249,14 @@ describe('DashboardService personal / organization isolation', () => {
       { customerId: 'cust_1', status: 'open', amountMinor: 500n, currency: 'USD' },
       { customerId: 'cust_other', status: 'open', amountMinor: 900n, currency: 'USD' },
     ],
-    procurementRequests: [{ buyerCustomerId: 'cust_1', status: 'open' }],
+    procurementRequests: [
+      // Deliberately a status the organization book does NOT contain, so a scoping bug that
+      // reverted to "requests this customer posted" changes byStatus and fails loudly.
+      { buyerCustomerId: 'cust_1', buyerOrganizationId: null, status: 'awarded' },
+      { buyerCustomerId: 'cust_1', buyerOrganizationId: 'org_1', status: 'closed' },
+      { buyerCustomerId: 'cust_colleague', buyerOrganizationId: 'org_1', status: 'open' },
+      { buyerCustomerId: 'cust_other', buyerOrganizationId: 'org_other', status: 'open' },
+    ],
     supplyProgrammes: [{ supplierCustomerId: 'cust_1', status: 'active' }],
     procurementProposals: [{ supplierCustomerId: 'cust_1', status: 'open' }],
     capabilities: [
@@ -305,13 +316,10 @@ describe('DashboardService personal / organization isolation', () => {
 
   it('keeps personal buy-side, supply and verification records out of the organization cockpit', async () => {
     const d = await makeService(ALL_ON, seed).getDashboard(member, ORG);
-    expect(d.buying).toEqual({
-      watching: 0,
-      offers: { total: 0, byStatus: [] },
-      procurementRequests: { total: 0, byStatus: [] },
-      purchases: { total: 0, byChannel: [] },
-      invoices: { total: 0, byStatus: [] },
-    });
+    expect(d.buying.watching).toBe(0);
+    expect(d.buying.offers).toEqual({ total: 0, byStatus: [] });
+    expect(d.buying.purchases).toEqual({ total: 0, byChannel: [] });
+    expect(d.buying.invoices).toEqual({ total: 0, byStatus: [] });
     expect(d.verification).toEqual({ total: 0, byStatus: [] });
     expect(d.selling.supplyProgrammes.total).toBe(0);
     expect(d.selling.procurementResponses.total).toBe(0);
@@ -335,11 +343,30 @@ describe('DashboardService personal / organization isolation', () => {
     ]);
   });
 
+  it('shows the organization ONLY its own procurement requests, including a colleague’s', async () => {
+    const d = await makeService(ALL_ON, seed).getDashboard(member, ORG);
+    expect(d.buying.procurementRequests).toEqual({
+      total: 2,
+      byStatus: [
+        { status: 'closed', count: 1 },
+        { status: 'open', count: 1 },
+      ],
+    });
+  });
+
+  it('keeps organization-attributed procurement requests out of the personal cockpit', async () => {
+    const d = await makeService(ALL_ON, seed).getDashboard(member, PERSONAL);
+    // cust_1 posted two requests; only the unattributed one is in their personal book.
+    expect(d.buying.procurementRequests).toEqual({
+      total: 1,
+      byStatus: [{ status: 'awarded', count: 1 }],
+    });
+  });
+
   it('scopes every personal section to the caller and never to other customers', async () => {
     const d = await makeService(ALL_ON, seed).getDashboard(member, PERSONAL);
     expect(d.buying.watching).toBe(1);
     expect(d.buying.offers).toEqual({ total: 1, byStatus: [{ status: 'open', count: 1 }] });
-    expect(d.buying.procurementRequests.total).toBe(1);
     expect(d.buying.purchases).toEqual({ total: 1, byChannel: [{ label: 'live', count: 1 }] });
     expect(d.buying.invoices.total).toBe(1);
     expect(d.verification).toEqual({ total: 1, byStatus: [{ status: 'pending', count: 1 }] });

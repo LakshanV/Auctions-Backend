@@ -49,6 +49,20 @@ pnpm run test:member   # ephemeral Postgres: Client ID, credit exposure, securit
 | Performance deterministic / rebuildable / INSUFFICIENT_HISTORY | `test:member` + 11 domain units |
 | Flags/score private; resolve preserves history                 | `test:member`                   |
 
+## Cockpit / Dashboard context + currency (E11b)
+
+| Invariant proved                                                                      | Where                                                                        |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Unauthorized organization context is rejected (403; non-member, wrong org, anonymous) | `dashboard.service.spec.ts` + `test:dashboard`                               |
+| Organization existence is not leaked to a non-member (403, not 404)                   | `dashboard.service.spec.ts` + `test:dashboard`                               |
+| Staff `organization:manage` is admitted and marked `viaStaffPermission`               | `dashboard.service.spec.ts`                                                  |
+| `organizationId` in a personal request is refused (400, schema AND service)           | `dashboard-domains.test.ts` + `dashboard.service.spec.ts` + `test:dashboard` |
+| Organization-consigned assets/sales never appear in the personal cockpit              | `dashboard.service.spec.ts`                                                  |
+| Personal buy-side / supply / KYC rows never appear in the organization cockpit        | `dashboard.service.spec.ts` + `test:dashboard`                               |
+| Unlike currencies stay in separate buckets and are never summed                       | `currency-totals.test.ts` + `dashboard.service.spec.ts`                      |
+| No monetary aggregate exposes a cross-currency scalar total                           | `dashboard.test.ts` + `dashboard.service.spec.ts` + `test:dashboard`         |
+| A row with no valid ISO currency, or unsafe minor units, is refused (422)             | `currency-totals.test.ts`                                                    |
+
 CI runs unit + DB integration against a Postgres service and then the E2E driver.
 
 ## Counts (approx.)

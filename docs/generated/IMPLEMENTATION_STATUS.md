@@ -101,3 +101,39 @@ _2026-08-12. `main` commits `240ef09` §12, `4c9e3b4` §3, `6b6d269` §5, `45aa2
 **Remaining for a formal GO (§24/§25):** push both repos + **deploy** (Railway/Vercel) and run
 production smoke — owner action; and the optional §6 background recalc worker. All code is
 committed to `main` and locally green.
+
+## Cockpit / Dashboard vertical — explicit context + currency-grouped money (E11b)
+
+`GET /dashboard` is now a complete, context-aware vertical.
+
+- **Contract** — `packages/contracts/src/dashboard-domains.ts`: `dashboardQuerySchema`
+  (`context` = `personal` (default) or `organization`, plus `organizationId`). An organization
+  context REQUIRES `organizationId`; a personal context REJECTS it, so a request is never
+  ambiguous about which book of record it is asking for (D-0055).
+- **Controller** — `dashboard.controller.ts` validates the query through `ZodQuery`, so a bad
+  context is a clean 400 rather than an unhandled error.
+- **Service** — `dashboard.service.ts` resolves and AUTHORIZES the context before reading a row:
+  personal needs an authenticated customer; organization needs a real `OrganizationMember` row for
+  THAT organization, or the explicit `organization:manage` staff grant. A non-member is refused
+  with 403 whether or not the organization exists (D-0056). The two contexts then query disjoint
+  record sets — personal selling filters `sellerOrganizationId: null`, organization selling filters
+  the organization id — so neither leaks into the other (D-0057). The resolved context is echoed
+  back as `context` + `scope`, and sections with no attribution in the active context report empty
+  with an explanatory `scope.notes` entry rather than borrowing the other context's rows.
+- **Money** — new kernel helper `totalsByCurrency` (`packages/domain/src/kernel/currency-totals.ts`)
+  returns `MoneyByCurrency` (`byCurrency[]`, `currencies[]`, `count`) with **no** scalar total, and
+  accumulates through `Money.add`, which throws on a currency mismatch (D-0058). The cockpit's four
+  aggregates — open offers, purchases, outstanding invoices, sales — are all grouped this way.
+- **Preserved** — the personal `buying.watching` / `buying.offers` / `buying.procurementRequests` /
+  `selling.supplyProgrammes` / `selling.procurementResponses` / `verification` sections are
+  unchanged (they were already correctly scoped and carried no monetary totals); everything else is
+  additive (`context`, `scope`, `money`, `buying.purchases`, `buying.invoices`,
+  `selling.consignments`, `selling.sales`).
+- **Tests** — `dashboard-domains.test.ts` (5), `currency-totals.test.ts` (8),
+  `dashboard.test.ts` (9), `dashboard.service.spec.ts` (21, against an in-memory Prisma stand-in
+  that applies the service's real `where` clauses), plus the extended `test:dashboard` E2E driver.
+- **Not organization-attributed yet** — buy-side records (watchlist, offers, procurement requests,
+  invoices, purchases), supply programmes, procurement responses and KYC capabilities carry no
+  organization column in the schema today, so they remain personal-only. Adding a
+  `buyerOrganizationId`-style column later populates the already-present, currently-empty sections
+  without a contract change.
